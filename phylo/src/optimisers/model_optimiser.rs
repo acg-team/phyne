@@ -202,7 +202,7 @@ mod tests {
         let mut opt = ModelOptimiser::new(cost.clone(), FrequencyOptimisation::Estimated);
         assert_matches!(opt.freq_opt, FrequencyOptimisation::Estimated);
 
-        opt.optimise_frequencies();
+        assert!(opt.optimise_frequencies().is_ok());
         assert_eq!(opt.c.freqs(), &opt.c.empirical_freqs());
     }
 
@@ -218,7 +218,7 @@ mod tests {
         let mut opt = ModelOptimiser::new(cost.clone(), FrequencyOptimisation::Estimated);
         assert_matches!(opt.freq_opt, FrequencyOptimisation::Estimated);
 
-        opt.optimise_frequencies();
+        assert!(opt.optimise_frequencies().is_ok());
         assert_eq!(opt.c.freqs(), &opt.c.empirical_freqs());
     }
 
@@ -234,7 +234,7 @@ mod tests {
         let mut opt = ModelOptimiser::new(cost.clone(), FrequencyOptimisation::Estimated);
         assert_matches!(opt.freq_opt, FrequencyOptimisation::Estimated);
 
-        opt.optimise_frequencies();
+        assert!(opt.optimise_frequencies().is_ok());
         assert_eq!(opt.c.freqs().view((0, 0), (4, 1)), opt.c.empirical_freqs());
     }
 
@@ -250,7 +250,7 @@ mod tests {
         let mut opt = ModelOptimiser::new(cost.clone(), FrequencyOptimisation::Estimated);
         assert_matches!(opt.freq_opt, FrequencyOptimisation::Estimated);
 
-        opt.optimise_frequencies();
+        assert!(opt.optimise_frequencies().is_ok());
         assert_eq!(opt.c.freqs().view((0, 0), (20, 1)), opt.c.empirical_freqs());
     }
 }

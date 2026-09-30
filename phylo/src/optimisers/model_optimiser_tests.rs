@@ -48,7 +48,7 @@ fn frequencies_unchanged_k80() {
     let model = SubstModel::<K80>::new(&[], &[4.0, 1.0]);
     let c = SCB::new(model.clone(), info).build().unwrap();
     let initial_logl = c.cost();
-    let o = ModelOptimiser::new(c, FrequencyOptimisation::Empirical)
+    let o = ModelOptimiser::new(c, FrequencyOptimisation::Fixed)
         .run()
         .unwrap();
     assert_eq!(initial_logl, o.initial_cost);
@@ -94,7 +94,7 @@ fn gtr_on_k80_data() {
 
     let model = SubstModel::<K80>::new(&[], &[4.0, 1.0]);
     let c = SCB::new(model.clone(), info.clone()).build().unwrap();
-    let o_k80 = ModelOptimiser::new(c, FrequencyOptimisation::Empirical)
+    let o_k80 = ModelOptimiser::new(c, FrequencyOptimisation::Fixed)
         .run()
         .unwrap();
 
