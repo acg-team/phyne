@@ -23,7 +23,9 @@ use crate::{record_wo_desc as record, tree};
 fn freqs_fixed_template<Q: QMatrix + QMatrixMaker>(params: &[f64]) {
     // freqs should not change for JC69 and K80
     let mut model = SubstModel::<Q>::new(&[], params);
-    model.set_freqs(frequencies!(&[0.1, 0.2, 0.3, 0.4]));
+    assert!(model
+        .set_freqs(frequencies!(&[0.1, 0.2, 0.3, 0.4]))
+        .is_err());
     assert_eq!(model.freqs(), &frequencies!(&[0.25; 4]));
 }
 
@@ -38,7 +40,7 @@ fn freqs_updated_template<Q: QMatrix + QMatrixMaker>(freqs: &[f64], params: &[f6
     // freqs should change for HKY, TN93, and GTR
     let mut model = SubstModel::<Q>::new(freqs, params);
     let new_freqs = frequencies!(&[0.1, 0.2, 0.3, 0.4]);
-    model.set_freqs(new_freqs.clone());
+    assert!(model.set_freqs(new_freqs.clone()).is_ok());
     assert_eq!(model.freqs(), &new_freqs);
     assert_ne!(model.freqs(), &frequencies!(freqs));
 }
@@ -499,7 +501,7 @@ fn change_logl_on_freq_change_template<Q: QMatrix + QMatrixMaker>(freqs: &[f64],
     let mut c = SCB::new(model, info).build().unwrap();
 
     let logl = c.cost();
-    c.set_freqs(frequencies!(&[0.1, 0.2, 0.3, 0.4]));
+    c.set_freqs(frequencies!(&[0.1, 0.2, 0.3, 0.4])).unwrap();
     assert_ne!(logl, c.cost());
 }
 
@@ -517,7 +519,7 @@ fn same_logl_on_freq_change_template<Q: QMatrix + QMatrixMaker>(freqs: &[f64], p
     let model = SubstModel::<Q>::new(freqs, params);
     let mut c = SCB::new(model, info).build().unwrap();
     let logl = c.cost();
-    c.set_freqs(frequencies!(&[0.1, 0.2, 0.3, 0.4]));
+    let _ = c.set_freqs(frequencies!(&[0.1, 0.2, 0.3, 0.4]));
     assert_eq!(logl, c.cost());
 }
 
@@ -1379,7 +1381,7 @@ fn modify_model_freqs_costs_match_template<Q: QMatrix + QMatrixMaker>(freqs: Fre
     let logl = c.cost();
 
     // The likelihood should change if we change model frequencies
-    c.set_freqs(freqs.clone());
+    c.set_freqs(freqs.clone()).unwrap();
 
     let logl2 = c.cost();
     assert_eq!(logl2, c.cost());
