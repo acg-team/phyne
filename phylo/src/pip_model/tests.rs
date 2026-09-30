@@ -550,7 +550,8 @@ fn pip_likelihood_huelsenbeck_example() {
     // Check that model update works
     c.set_param(0, 1.2);
     c.set_param(1, 0.45);
-    c.set_freqs(frequencies!(&[0.25, 0.25, 0.25, 0.25]));
+    c.set_freqs(frequencies!(&[0.25, 0.25, 0.25, 0.25]))
+        .unwrap();
     c.set_param(2, 1.0);
 
     assert_relative_eq!(c.cost(), -361.1613531649497, epsilon = 1e-1); // value from the python script
@@ -998,7 +999,7 @@ fn modify_model_freqs_costs_match_template<Q: QMatrix + QMatrixMaker>(freqs: Fre
     let logl = c.cost();
 
     // The likelihood should change if we change model frequencies
-    c.set_freqs(freqs.clone());
+    c.set_freqs(freqs.clone()).unwrap();
 
     let logl2 = c.cost();
     assert_eq!(logl2, c.cost());
@@ -1030,7 +1031,7 @@ fn modify_model_wo_freqs_costs_match_template<Q: QMatrix + QMatrixMaker>(freqs: 
     let mut c = setup_test_pip_cost::<Q>(&[], &[]);
     let logl = c.cost();
 
-    c.set_freqs(freqs.clone());
+    let _ = c.set_freqs(freqs.clone());
 
     let logl2 = c.cost();
     assert_eq!(logl, logl2);
