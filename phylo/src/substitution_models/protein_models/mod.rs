@@ -4,9 +4,9 @@ use approx::relative_eq;
 use log::warn;
 
 use crate::alphabets::{Alphabet, AMINOACID_INDEX};
-use crate::frequencies;
 use crate::likelihood::{ParamRange, PARAM_RANGE_DUMMY};
 use crate::substitution_models::{FreqVector, QMatrix, QMatrixMaker, SubstMatrix};
+use crate::{bail, Result};
 
 pub(crate) mod protein_generics;
 pub(crate) use protein_generics::*;
@@ -36,8 +36,29 @@ fn make_protein_q(exchangeability: &SubstMatrix, freqs: &FreqVector) -> SubstMat
     q
 }
 
-fn verify_protein_freqs(freqs: &FreqVector) -> bool {
-    freqs.len() == PROTEIN_N && relative_eq!(freqs.sum().abs(), 1.0)
+fn validate_protein_frequencies(freqs: &FreqVector) -> Result<()> {
+    if freqs.len() < PROTEIN_N {
+        bail!(
+            SubstitutionModel,
+            "too few frequencies provided for protein model"
+        );
+    } else if freqs.len() > PROTEIN_N {
+        bail!(
+            SubstitutionModel,
+            "too many frequencies provided for protein model"
+        );
+    } else if freqs.into_iter().any(|x| *x < 0.0) {
+        bail!(
+            SubstitutionModel,
+            "one or more negative frequencies provided for protein model"
+        );
+    } else if !relative_eq!(freqs.into_iter().sum::<f64>().abs(), 1.0) {
+        bail!(
+            SubstitutionModel,
+            "frequencies for protein model do not sum to 1.0"
+        );
+    }
+    Ok(())
 }
 
 macro_rules! define_protein_model {
@@ -51,11 +72,13 @@ macro_rules! define_protein_model {
         }
         impl QMatrixMaker for $name {
             fn create(freqs: &[f64], _: &[f64]) -> $name {
-                let freqs = frequencies!(freqs);
-                let freqs = if verify_protein_freqs(&freqs) {
-                    freqs
+                let freqs = FreqVector::from_column_slice(freqs);
+                let freqs = if let Err(err) = validate_protein_frequencies(&freqs) {
+                    warn!("Invalid protein frequencies: {}", err);
+                    warn!("Falling back to default protein frequencies");
+                    FreqVector::from_column_slice(&$pi)
                 } else {
-                    frequencies!(&$pi)
+                    freqs
                 };
                 let exchangeability = SubstMatrix::from_row_slice(PROTEIN_N, PROTEIN_N, &$exch);
                 let q = make_protein_q(&exchangeability, &freqs);
@@ -70,33 +93,40 @@ macro_rules! define_protein_model {
             fn q(&self) -> &SubstMatrix {
                 &self.q
             }
+
             fn freqs(&self) -> &FreqVector {
                 &self.freqs
             }
-            fn set_freqs(&mut self, freqs: FreqVector) {
-                if !verify_protein_freqs(&freqs) {
-                    warn!("Invalid protein frequencies provided");
-                    return;
-                }
+
+            fn set_freqs(&mut self, freqs: FreqVector) -> Result<()> {
+                validate_protein_frequencies(&freqs)?;
                 self.freqs = freqs;
                 self.q = make_protein_q(&self.exchangeability, &self.freqs);
+                Ok(())
             }
+
             fn param_count(&self) -> usize {
                 0
             }
+
             fn param_range(&self, _: usize) -> ParamRange {
                 PARAM_RANGE_DUMMY
             }
+
             fn set_param(&mut self, _: usize, _: f64) {}
+
             fn params(&self) -> &[f64] {
                 &[]
             }
+
             fn n(&self) -> usize {
                 PROTEIN_N
             }
+
             fn rate(&self, i: u8, j: u8) -> f64 {
                 self.q[(AMINOACID_INDEX[i as usize], AMINOACID_INDEX[j as usize])]
             }
+
             fn alphabet() -> &'static Alphabet {
                 Alphabet::protein()
             }
