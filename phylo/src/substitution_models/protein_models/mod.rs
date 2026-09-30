@@ -148,3 +148,50 @@ macro_rules! define_protein_model {
 define_protein_model!(WAG, WAG_PI, WAG_EXCH);
 define_protein_model!(HIVB, HIVB_PI, make_exchangeability(&HIVB_EXCH_LOWER_TRIAG));
 define_protein_model!(BLOSUM, BLOSUM_PI, BLOSUM_EXCH);
+
+#[cfg(test)]
+#[cfg_attr(coverage, coverage(off))]
+mod tests {
+    use rstest::rstest;
+
+    use assert_matches::assert_matches;
+
+    use crate::{frequencies, Error};
+
+    use super::*;
+
+    #[rstest]
+    #[case::negative_sum_1(&[
+        -10.0, 10.0, 0.2, 0.2, 0.2, 0.2, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    ])]
+    #[case::all_negative(&[-0.1; 20])]
+    #[case::one_negative_sum_1(&[-0.1, 0.5, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])]
+    fn negative_frequencies(#[case] freqs: &[f64]) {
+        assert_matches!(validate_protein_frequencies(&frequencies!(freqs)), Err(Error::SubstitutionModel(msg)) if msg.contains("negative") & msg.contains("protein"));
+    }
+
+    #[rstest]
+    #[case::too_few_sum_1(&[1.0/19.0; 19])]
+    #[case::valid_dna(&[1.0/4.0; 4])]
+    #[case::too_few(&[0.1, 0.4, 0.0])]
+    #[case::empty(&[])]
+    fn too_few_frequencies(#[case] freqs: &[f64]) {
+        assert_matches!(validate_protein_frequencies(&frequencies!(freqs)), Err(Error::SubstitutionModel(msg)) if msg.contains("too few") & msg.contains("protein"));
+    }
+
+    #[rstest]
+    #[case::one_too_many_sum_1(&[1.0/21.0; 21])]
+    #[case::too_many(&[0.1; 30])]
+    fn too_many_frequencies(#[case] freqs: &[f64]) {
+        assert_matches!(validate_protein_frequencies(&frequencies!(freqs)), Err(Error::SubstitutionModel(msg)) if msg.contains("too many") & msg.contains("protein"));
+    }
+
+    #[rstest]
+    #[case::sum_below_1(&[0.001; 20])]
+    #[case::sum_above_1(&[0.1; 20])]
+    #[case::sum_above_1_large(&[1.1; 20])]
+
+    fn frequencies_dont_sum_to_1(#[case] freqs: &[f64]) {
+        assert_matches!(validate_protein_frequencies(&frequencies!(freqs)), Err(Error::SubstitutionModel(msg)) if msg.contains("do not sum to 1") & msg.contains("protein"));
+    }
+}
