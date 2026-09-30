@@ -36,6 +36,22 @@ fn dna_freqs_fixed() {
 }
 
 #[cfg(test)]
+fn freqs_fixed_equal_template<Q: QMatrix + QMatrixMaker>(params: &[f64]) {
+    // freqs should not change for JC69 and K80
+    let mut model = SubstModel::<Q>::new(&[], params);
+    assert!(model
+        .set_freqs(frequencies!(&[0.25, 0.25, 0.25, 0.25]))
+        .is_ok());
+    assert_eq!(model.freqs(), &frequencies!(&[0.25; 4]));
+}
+
+#[test]
+fn dna_freqs_fixed_equal() {
+    freqs_fixed_equal_template::<JC69>(&[]);
+    freqs_fixed_equal_template::<K80>(&[2.0]);
+}
+
+#[cfg(test)]
 fn freqs_updated_template<Q: QMatrix + QMatrixMaker>(freqs: &[f64], params: &[f64]) {
     // freqs should change for HKY, TN93, and GTR
     let mut model = SubstModel::<Q>::new(freqs, params);
@@ -50,6 +66,46 @@ fn dna_freqs_updated() {
     freqs_updated_template::<HKY>(&[0.2, 0.1, 0.5, 0.2], &[2.0]);
     freqs_updated_template::<TN93>(&[0.1, 0.1, 0.44, 0.26], &[2.0, 1.0, 3.0]);
     freqs_updated_template::<GTR>(&[0.7, 0.1, 0.1, 0.1], &[2.0, 2.0, 2.0, 2.0, 2.0]);
+}
+
+#[cfg(test)]
+fn freqs_not_updated_template<Q: QMatrix + QMatrixMaker>() {
+    // freqs should not change when set to invalid values
+    let mut model = SubstModel::<Q>::new(&[], &[]);
+
+    let correct_freqs = model.freqs().clone();
+    assert!(model
+        .set_freqs(frequencies!(&[-1.0, 1.5, -0.3, 0.8]))
+        .is_err());
+
+    assert_eq!(model.freqs(), &correct_freqs);
+}
+
+#[test]
+fn dna_freqs_not_updated() {
+    freqs_not_updated_template::<JC69>();
+    freqs_not_updated_template::<K80>();
+    freqs_not_updated_template::<HKY>();
+    freqs_not_updated_template::<TN93>();
+    freqs_not_updated_template::<GTR>();
+}
+
+#[cfg(test)]
+fn protein_freqs_not_updated_template<Q: QMatrix + QMatrixMaker>() {
+    // freqs should not change when set to invalid values
+    let mut model = SubstModel::<Q>::new(&[], &[]);
+
+    let correct_freqs = model.freqs().clone();
+    assert!(model.set_freqs(frequencies!(&[-0.1; 20])).is_err());
+
+    assert_eq!(model.freqs(), &correct_freqs);
+}
+
+#[test]
+fn protein_freqs_not_updated() {
+    protein_freqs_not_updated_template::<WAG>();
+    protein_freqs_not_updated_template::<HIVB>();
+    protein_freqs_not_updated_template::<BLOSUM>();
 }
 
 #[cfg(test)]
