@@ -118,13 +118,14 @@ impl<Q: QMatrix> EvoModel for PIPModel<Q> {
     }
 
     // This assumes correct dimensions to minimise runtime checks
-    fn set_freqs(&mut self, pi: FreqVector) {
+    fn set_freqs(&mut self, pi: FreqVector) -> Result<()> {
         debug_assert!(self.freqs.nrows() - 1 == pi.nrows() || self.freqs.nrows() == pi.nrows());
-        self.subst_q.set_freqs(pi);
+        self.subst_q.set_freqs(pi)?;
         self.freqs
             .view_mut((0, 0), self.subst_q.freqs().shape())
             .copy_from(self.subst_q.freqs());
         pip_q(&mut self.q, self.subst_q.q(), self.params[1]);
+        Ok(())
     }
 
     fn params(&self) -> &[f64] {
@@ -298,9 +299,10 @@ impl<Q: QMatrix, M: Alignment> ModelSearchCost for PIPCost<Q, M> {
         self.model.param_range(param)
     }
 
-    fn set_freqs(&mut self, freqs: FreqVector) {
-        self.model.set_freqs(freqs);
+    fn set_freqs(&mut self, freqs: FreqVector) -> Result<()> {
+        self.model.set_freqs(freqs)?;
         self.tmp.borrow_mut().models_valid.fill(false);
+        Ok(())
     }
 
     fn empirical_freqs(&self) -> FreqVector {
