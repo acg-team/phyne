@@ -510,7 +510,9 @@ fn tkf_get_and_set_freqs() {
     .build()
     .unwrap();
     assert_eq!(tkf_cost.freqs().as_slice(), &[0.1, 0.2, 0.3, 0.4]);
-    tkf_cost.set_freqs(frequencies!(&[0.4, 0.3, 0.2, 0.1]));
+    tkf_cost
+        .set_freqs(frequencies!(&[0.4, 0.3, 0.2, 0.1]))
+        .unwrap();
     assert_eq!(tkf_cost.freqs().as_slice(), &[0.4, 0.3, 0.2, 0.1]);
 }
 
