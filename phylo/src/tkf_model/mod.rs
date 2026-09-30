@@ -4,6 +4,7 @@ use crate::alignment::AncestralAlignment;
 use crate::likelihood::{ModelSearchCost, ParamRange, TreeSearchCost};
 use crate::substitution_models::{FreqVector, QMatrix, SubstitutionCost};
 use crate::tree::Tree;
+use crate::Result;
 
 pub mod tkf91;
 pub use tkf91::*;
@@ -72,8 +73,8 @@ impl<Q: QMatrix, T: TKFModel, AA: AncestralAlignment> ModelSearchCost for TKFCos
         self.subst_cost.param_range(idx)
     }
 
-    fn set_freqs(&mut self, freqs: FreqVector) {
-        self.subst_cost.set_freqs(freqs);
+    fn set_freqs(&mut self, freqs: FreqVector) -> Result<()> {
+        self.subst_cost.set_freqs(freqs)
     }
 
     fn empirical_freqs(&self) -> FreqVector {

@@ -15,7 +15,7 @@ use crate::substitution_models::FreqVector;
 use crate::tkf_model::reestimate::EdgeSeqsReestimator;
 use crate::tree::NodeIdx::{self, Internal, Leaf};
 use crate::tree::Tree;
-use crate::REPORT_ISSUES_URL;
+use crate::{bail, Result, REPORT_ISSUES_URL};
 
 lazy_static! {
     pub(super) static ref DUMMY_FREQS: DVector<f64> = DVector::<f64>::zeros(0);
@@ -419,7 +419,12 @@ impl<T: TKFModel, AA: AncestralAlignment> ModelSearchCost for TKFIndelCost<T, AA
         self.model.param_range(idx)
     }
 
-    fn set_freqs(&mut self, _: FreqVector) {}
+    fn set_freqs(&mut self, _: FreqVector) -> Result<()> {
+        bail!(
+            EvolutionaryModel,
+            "The TKF indel model does not support setting frequencies"
+        );
+    }
 
     fn empirical_freqs(&self) -> FreqVector {
         // At the time of writing this, this method is only used to set the frequencies of
