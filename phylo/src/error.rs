@@ -12,6 +12,12 @@ pub enum Error {
     #[error("Sequence error: {0}")]
     Sequence(String),
 
+    #[error("Substitution model error: {0}")]
+    SubstitutionModel(String),
+
+    #[error("Evolutionary model error: {0}")]
+    EvolutionaryModel(String),
+
     #[error("Alignment error: {0}")]
     Alignment(String),
 
