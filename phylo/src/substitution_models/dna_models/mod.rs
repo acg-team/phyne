@@ -547,3 +547,67 @@ impl Display for GTR {
         )
     }
 }
+
+#[cfg(test)]
+#[cfg_attr(coverage, coverage(off))]
+mod tests {
+    use rstest::rstest;
+
+    use assert_matches::assert_matches;
+
+    use crate::Error;
+
+    use super::*;
+
+    #[rstest]
+    #[case::negative_sum_1(&[-1.0, 1.5, -0.3, 0.8])]
+    #[case::all_negative(&[-0.1, -0.2, -0.3, -0.4])]
+    #[case::one_negative_sum_1(&[-0.1, 0.5, 0.6, 0.0])]
+    fn negative_frequencies(#[case] freqs: &[f64]) {
+        assert_matches!(validate_dna_frequencies(&frequencies!(freqs)), Err(Error::SubstitutionModel(msg)) if msg.contains("negative") & msg.contains("DNA"));
+    }
+
+    #[rstest]
+    #[case::too_few_sum_1(&[0.5, 0.4, 0.1])]
+    #[case::too_few(&[0.5, 0.4, 0.0])]
+    #[case::empty(&[])]
+    fn too_few_frequencies(#[case] freqs: &[f64]) {
+        assert_matches!(validate_dna_frequencies(&frequencies!(freqs)), Err(Error::SubstitutionModel(msg)) if msg.contains("too few") & msg.contains("DNA"));
+    }
+
+    #[rstest]
+    #[case::one_too_many_sum_1(&[0.4, 0.3, 0.1, 0.1, 0.1])]
+    #[case::too_many(&[0.1, 0.1, 0.1, 0.1, 0.1, 0.1])]
+    fn too_many_frequencies(#[case] freqs: &[f64]) {
+        assert_matches!(validate_dna_frequencies(&frequencies!(freqs)), Err(Error::SubstitutionModel(msg)) if msg.contains("too many") & msg.contains("DNA"));
+    }
+
+    #[rstest]
+    #[case::sum_below_1(&[0.1, 0.2, 0.3, 0.1])]
+    #[case::sum_above_1(&[0.4, 0.3, 0.2, 0.2])]
+    #[case::sum_above_1_large(&[0.4, 1.3, 0.2, 0.2])]
+
+    fn frequencies_dont_sum_to_1(#[case] freqs: &[f64]) {
+        assert_matches!(validate_dna_frequencies(&frequencies!(freqs)), Err(Error::SubstitutionModel(msg)) if msg.contains("do not sum to 1") & msg.contains("DNA"));
+    }
+
+    #[rstest]
+    #[case::valid(&[0.1, 0.2, 0.3, 0.4])]
+    #[case::equal(&[0.25, 0.25, 0.25, 0.25])]
+    fn valid_frequencies_are_preserved(#[case] freqs: &[f64]) {
+        assert_eq!(validate_or_equal_freqs(freqs), frequencies!(freqs));
+    }
+
+    #[rstest]
+    #[case::negative(&[-0.1, 0.5, 0.6, 0.0])]
+    #[case::too_few(&[0.5, 0.4, 0.1])]
+    #[case::too_many(&[0.4, 0.3, 0.1, 0.1, 0.1])]
+    #[case::wrong_sum(&[0.1, 0.2, 0.3, 0.1])]
+    #[case::empty(&[])]
+    fn invalid_frequencies_fall_back_to_equal(#[case] freqs: &[f64]) {
+        assert_eq!(
+            validate_or_equal_freqs(freqs),
+            frequencies!(&[0.25, 0.25, 0.25, 0.25])
+        );
+    }
+}
