@@ -4,6 +4,7 @@ use dyn_clone::DynClone;
 
 use crate::alphabets::Alphabet;
 use crate::substitution_models::{FreqVector, SubstMatrix};
+use crate::Result;
 
 #[derive(Clone, clap::ValueEnum, Debug, Copy)]
 pub enum FrequencyOptimisation {
@@ -21,7 +22,7 @@ pub trait EvoModel: Display + DynClone {
     fn params(&self) -> &[f64];
     fn set_param(&mut self, param: usize, value: f64);
     fn freqs(&self) -> &FreqVector;
-    fn set_freqs(&mut self, pi: FreqVector);
+    fn set_freqs(&mut self, pi: FreqVector) -> Result<()>;
     fn n(&self) -> usize;
     fn alphabet() -> &'static Alphabet
     where

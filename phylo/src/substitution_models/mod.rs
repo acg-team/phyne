@@ -51,7 +51,7 @@ pub trait QMatrix: Debug + Clone + Display {
     /// Returns the valid range for a model parameter [min, max], inclusive.
     fn param_range(&self, param: usize) -> ParamRange;
     fn freqs(&self) -> &FreqVector;
-    fn set_freqs(&mut self, freqs: FreqVector);
+    fn set_freqs(&mut self, freqs: FreqVector) -> Result<()>;
     fn n(&self) -> usize;
     fn alphabet() -> &'static Alphabet;
 }
