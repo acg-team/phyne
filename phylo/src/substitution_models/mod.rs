@@ -109,8 +109,8 @@ impl<Q: QMatrix> EvoModel for SubstModel<Q> {
         self.qmatrix.freqs()
     }
 
-    fn set_freqs(&mut self, pi: FreqVector) {
-        self.qmatrix.set_freqs(pi);
+    fn set_freqs(&mut self, pi: FreqVector) -> Result<()> {
+        self.qmatrix.set_freqs(pi)
     }
 
     fn n(&self) -> usize {
@@ -204,9 +204,10 @@ impl<Q: QMatrix, A: Alignment> ModelSearchCost for SubstitutionCost<Q, A> {
         self.model.qmatrix.param_range(param)
     }
 
-    fn set_freqs(&mut self, freqs: FreqVector) {
-        self.model.set_freqs(freqs);
+    fn set_freqs(&mut self, freqs: FreqVector) -> Result<()> {
+        self.model.set_freqs(freqs)?;
         self.tmp.borrow_mut().node_models_valid.fill(false);
+        Ok(())
     }
 
     fn empirical_freqs(&self) -> FreqVector {
