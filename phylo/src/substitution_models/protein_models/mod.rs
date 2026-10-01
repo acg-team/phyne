@@ -1,7 +1,6 @@
 use std::fmt::Display;
 
 use approx::relative_eq;
-use log::warn;
 
 use crate::alphabets::{Alphabet, AMINOACID_INDEX};
 use crate::likelihood::{ParamRange, PARAM_RANGE_DUMMY};
@@ -63,16 +62,34 @@ macro_rules! define_protein_model {
             exchangeability: SubstMatrix,
         }
 
+        impl Default for $name {
+            fn default() -> Self {
+                let freqs = FreqVector::from_column_slice(&$pi);
+                let exchangeability = SubstMatrix::from_row_slice(PROTEIN_N, PROTEIN_N, &$exch);
+                let q = make_protein_q(&exchangeability, &freqs);
+                $name {
+                    freqs,
+                    q,
+                    exchangeability,
+                }
+            }
+        }
+
         impl QMatrixMaker for $name {
-            fn create(freqs: &[f64], _: &[f64]) -> Result<$name> {
+            fn create(freqs: &[f64], params: &[f64]) -> Result<$name> {
                 let freqs = FreqVector::from_column_slice(freqs);
-                let freqs = if let Err(err) = validate_protein_frequencies(&freqs) {
-                    warn!("Invalid protein frequencies: {}", err);
-                    warn!("Falling back to default protein frequencies");
-                    FreqVector::from_column_slice(&$pi)
-                } else {
-                    freqs
-                };
+                validate_protein_frequencies(&freqs)?;
+
+                if !params.is_empty() {
+                    bail!(
+                        SubstitutionModel,
+                        ParameterCount,
+                        stringify!($name),
+                        0,
+                        params.len()
+                    );
+                }
+
                 let exchangeability = SubstMatrix::from_row_slice(PROTEIN_N, PROTEIN_N, &$exch);
                 let q = make_protein_q(&exchangeability, &freqs);
                 Ok($name {
