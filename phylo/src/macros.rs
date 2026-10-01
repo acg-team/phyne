@@ -173,6 +173,17 @@ macro_rules! bail {
             },
         ))
     };
+    // Usage: bail!(SubstitutionModel, ParameterCount, "JC69", expected, actual)
+    (SubstitutionModel, ParameterCount, $name:expr, $expected:expr, $actual:expr) => {
+        return Err($crate::Error::SubstitutionModel(
+            $crate::error::SubstitutionModelError::ParameterCount {
+                name: $name.to_string(),
+                expected: $expected,
+                actual: $actual,
+            },
+        ))
+    };
+
     // Usage: bail!(SubstitutionModel, UnequalFrequencies, "JC69")
     (SubstitutionModel, UnequalFrequencies, $name:expr) => {
         return Err($crate::Error::SubstitutionModel(
@@ -548,6 +559,27 @@ mod tests {
             fail_negative_frequency(),
             Err(SubstitutionModel(SubstitutionModelError::NegativeFrequency { ref name }))
                 if name == "DNA"
+        );
+
+        fn fail_unequal_frequencies() -> Result<()> {
+            bail!(SubstitutionModel, UnequalFrequencies, "K80");
+        }
+        assert_matches!(
+            fail_unequal_frequencies(),
+            Err(SubstitutionModel(SubstitutionModelError::UnequalFrequencies { ref name }))
+                if name == "K80"
+        );
+
+        fn fail_parameter_count() -> Result<()> {
+            bail!(SubstitutionModel, ParameterCount, "JC69", 1, 0);
+        }
+        assert_matches!(
+            fail_parameter_count(),
+            Err(SubstitutionModel(SubstitutionModelError::ParameterCount {
+                ref name,
+                expected: 1,
+                actual: 0,
+            })) if name == "JC69"
         );
 
         fn fail_other() -> Result<()> {

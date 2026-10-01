@@ -70,4 +70,11 @@ pub enum SubstitutionModelError {
 
     #[error("{name}: expects equal frequencies")]
     UnequalFrequencies { name: String },
+
+    #[error("{name}: expected {expected} parameter values, got {actual}")]
+    ParameterCount {
+        name: String,
+        expected: usize,
+        actual: usize,
+    },
 }
