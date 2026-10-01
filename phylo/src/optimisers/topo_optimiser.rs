@@ -98,7 +98,7 @@ where
     ///
     /// # fn main() -> Result<()> {
     /// let info = PhyloInfoBuilder::new("./examples/data/K80.fasta").build()?;
-    /// let k80 = SubstModel::<K80>::new(&[], &[4.0, 1.0]);
+    /// let k80 = SubstModel::<K80>::new(&[], &[4.0, 1.0])?;
     /// let c = SubstitutionCostBuilder::new(k80, info).build()?;
     /// let unopt_cost = c.cost();
     /// let result = TopologyOptimiser::new(c, SprOptimiser {}, &mut DefaultGenerator::default()).run()?;
