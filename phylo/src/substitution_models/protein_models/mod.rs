@@ -37,26 +37,18 @@ fn make_protein_q(exchangeability: &SubstMatrix, freqs: &FreqVector) -> SubstMat
 }
 
 fn validate_protein_frequencies(freqs: &FreqVector) -> Result<()> {
-    if freqs.len() < PROTEIN_N {
+    if freqs.len() != PROTEIN_N {
         bail!(
             SubstitutionModel,
-            "too few frequencies provided for protein model"
-        );
-    } else if freqs.len() > PROTEIN_N {
-        bail!(
-            SubstitutionModel,
-            "too many frequencies provided for protein model"
+            FrequencyCount,
+            "protein",
+            PROTEIN_N,
+            freqs.len()
         );
     } else if freqs.into_iter().any(|x| *x < 0.0) {
-        bail!(
-            SubstitutionModel,
-            "one or more negative frequencies provided for protein model"
-        );
+        bail!(SubstitutionModel, NegativeFrequency, "protein");
     } else if !relative_eq!(freqs.into_iter().sum::<f64>().abs(), 1.0) {
-        bail!(
-            SubstitutionModel,
-            "frequencies for protein model do not sum to 1.0"
-        );
+        bail!(SubstitutionModel, FrequencySum, "protein");
     }
     Ok(())
 }
@@ -158,7 +150,7 @@ mod tests {
 
     use assert_matches::assert_matches;
 
-    use crate::{frequencies, Error};
+    use crate::{frequencies, Error, SubstitutionModelError};
 
     use super::*;
 
@@ -169,7 +161,12 @@ mod tests {
     #[case::all_negative(&[-0.1; 20])]
     #[case::one_negative_sum_1(&[-0.1, 0.5, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])]
     fn negative_frequencies(#[case] freqs: &[f64]) {
-        assert_matches!(validate_protein_frequencies(&frequencies!(freqs)), Err(Error::SubstitutionModel(msg)) if msg.contains("negative") & msg.contains("protein"));
+        assert_matches!(
+            validate_protein_frequencies(&frequencies!(freqs)),
+            Err(Error::SubstitutionModel(
+                SubstitutionModelError::NegativeFrequency { .. }
+            ))
+        );
     }
 
     #[rstest]
@@ -177,23 +174,36 @@ mod tests {
     #[case::valid_dna(&[1.0/4.0; 4])]
     #[case::too_few(&[0.1, 0.4, 0.0])]
     #[case::empty(&[])]
-    fn too_few_frequencies(#[case] freqs: &[f64]) {
-        assert_matches!(validate_protein_frequencies(&frequencies!(freqs)), Err(Error::SubstitutionModel(msg)) if msg.contains("too few") & msg.contains("protein"));
-    }
-
-    #[rstest]
     #[case::one_too_many_sum_1(&[1.0/21.0; 21])]
     #[case::too_many(&[0.1; 30])]
-    fn too_many_frequencies(#[case] freqs: &[f64]) {
-        assert_matches!(validate_protein_frequencies(&frequencies!(freqs)), Err(Error::SubstitutionModel(msg)) if msg.contains("too many") & msg.contains("protein"));
+    fn wrong_number_of_frequencies(#[case] freqs: &[f64]) {
+        match validate_protein_frequencies(&frequencies!(freqs)) {
+            Err(Error::SubstitutionModel(SubstitutionModelError::FrequencyCount {
+                name,
+                actual,
+                expected,
+            })) => {
+                assert_eq!(name, "protein");
+                assert_eq!(actual, freqs.len());
+                assert_eq!(expected, 20);
+            }
+            _ => panic!(
+                "Expected FrequencyCount error for protein with actual = {} and expected = 20",
+                freqs.len()
+            ),
+        }
     }
 
     #[rstest]
     #[case::sum_below_1(&[0.001; 20])]
     #[case::sum_above_1(&[0.1; 20])]
     #[case::sum_above_1_large(&[1.1; 20])]
-
     fn frequencies_dont_sum_to_1(#[case] freqs: &[f64]) {
-        assert_matches!(validate_protein_frequencies(&frequencies!(freqs)), Err(Error::SubstitutionModel(msg)) if msg.contains("do not sum to 1") & msg.contains("protein"));
+        match validate_protein_frequencies(&frequencies!(freqs)) {
+            Err(Error::SubstitutionModel(SubstitutionModelError::FrequencySum { name })) => {
+                assert_eq!(name, "protein");
+            }
+            _ => panic!("Expected FrequencySum error for protein"),
+        }
     }
 }
