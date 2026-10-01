@@ -133,20 +133,20 @@ impl Default for K80 {
 }
 
 impl QMatrixMaker for K80 {
-    fn create(_: &[f64], params: &[f64]) -> Result<K80> {
-        let kappa = match params.len().cmp(&1) {
-            Ordering::Less => {
-                warn!("Too few values provided for K80, required one value for kappa");
-                warn!("Falling back to default value");
-                2.0
-            }
-            Ordering::Greater => {
-                warn!("Too many values provided for K80, required one value for kappa");
-                warn!("Will only use the first value provided");
-                params[0]
-            }
-            Ordering::Equal => params[0],
+    fn create(freqs: &[f64], params: &[f64]) -> Result<K80> {
+        let freqs = FreqVector::from_column_slice(freqs);
+        validate_dna_frequencies(&freqs)?;
+
+        if freqs != frequencies!(&EQUAL_FREQS) {
+            bail!(SubstitutionModel, UnequalFrequencies, "K80");
+        }
+
+        let kappa = if params.len() != 1 {
+            bail!(SubstitutionModel, ParameterCount, "K80", 1, params.len());
+        } else {
+            params[0]
         };
+
         let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
         k80_q(&mut q, kappa);
         Ok(K80 {
@@ -180,7 +180,7 @@ impl QMatrix for K80 {
     fn set_freqs(&mut self, freqs: FreqVector) -> Result<()> {
         validate_dna_frequencies(&freqs)?;
         if freqs != frequencies!(&EQUAL_FREQS) {
-            bail!(SubstitutionModel, "Frequencies for K80 must be equal");
+            bail!(SubstitutionModel, UnequalFrequencies, "K80");
         }
         Ok(())
     }
