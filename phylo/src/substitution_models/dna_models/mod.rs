@@ -41,14 +41,13 @@ fn validate_dna_frequencies(freqs: &FreqVector) -> Result<()> {
 
 fn validate_or_equal_freqs(freqs: &[f64]) -> FreqVector {
     let freqs = FreqVector::from_column_slice(freqs);
-    let freqs = if let Err(err) = validate_dna_frequencies(&freqs) {
+    if let Err(err) = validate_dna_frequencies(&freqs) {
         warn!("Invalid DNA frequencies: {}", err);
         warn!("Falling back to equal frequencies");
         FreqVector::from_column_slice(&EQUAL_FREQS)
     } else {
         freqs
-    };
-    freqs
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
