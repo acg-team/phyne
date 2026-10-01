@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
 use std::iter;
-use std::marker::PhantomData;
+use std::marker::{PhantomData, Sized};
 use std::ops::Mul;
 use std::vec;
 
@@ -68,7 +68,10 @@ impl<Q: QMatrix> PIPModel<Q> {
 }
 
 impl<Q: QMatrix + QMatrixMaker> PIPModel<Q> {
-    pub fn new(frequencies: &[f64], params: &[f64]) -> Self {
+    pub fn new(frequencies: &[f64], params: &[f64]) -> Result<Self>
+    where
+        Self: Sized,
+    {
         let mut params = params.to_vec();
         if params.len() < 2 {
             warn!("Too few values provided for PIP, 2 values required, lambda and mu");
@@ -77,17 +80,17 @@ impl<Q: QMatrix + QMatrixMaker> PIPModel<Q> {
         }
         let mu = params[1];
 
-        let subst_q = Q::create(frequencies, &params[2..]);
+        let subst_q = Q::create(frequencies, &params[2..])?;
         let n = subst_q.n();
         let freqs = subst_q.freqs().clone().insert_row(n, 0.0);
         let mut q = SubstMatrix::zeros(n + 1, n + 1);
         pip_q(&mut q, subst_q.q(), mu);
-        PIPModel {
+        Ok(PIPModel {
             subst_q,
             q,
             freqs,
             params: params.to_vec(),
-        }
+        })
     }
 }
 
