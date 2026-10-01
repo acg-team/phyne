@@ -67,7 +67,7 @@ impl QMatrixMaker for JC69 {
         }
 
         if !params.is_empty() {
-            bail!(SubstitutionModel, "JC69 does not accept any parameters");
+            bail!(SubstitutionModel, ParameterCount, "JC69", 0, params.len());
         }
 
         Ok(JC69::default())
