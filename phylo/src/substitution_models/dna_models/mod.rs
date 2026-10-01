@@ -1,4 +1,3 @@
-use std::cmp::Ordering;
 use std::fmt::Display;
 use std::iter;
 
@@ -349,28 +348,32 @@ pub struct TN93 {
     params: Vec<f64>,
 }
 
+impl Default for TN93 {
+    fn default() -> Self {
+        let params = vec![1.0, 1.0];
+        let freqs = frequencies!(&EQUAL_FREQS);
+        let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
+        tn93_q(&mut q, &freqs, &params);
+        TN93 { freqs, q, params }
+    }
+}
+
 impl QMatrixMaker for TN93 {
     fn create(freqs: &[f64], params: &[f64]) -> Result<TN93> {
-        let freqs = validate_or_equal_freqs(freqs);
+        let freqs = FreqVector::from_column_slice(freqs);
+        validate_dna_frequencies(&freqs)?;
 
-        let mut params = params.to_vec();
-        match params.len().cmp(&3) {
-            Ordering::Less => {
-                warn!("Too few values provided for TN93, required 3 values");
-                warn!("Falling back to default values");
-                params.extend(iter::repeat_n(1.0, 3 - params.len()));
-            }
-            Ordering::Greater => {
-                warn!("Too many values provided for TN93, required three values");
-                warn!("Will only use the first values provided");
-                params.truncate(3);
-            }
-            Ordering::Equal => {}
+        if params.len() != 2 {
+            bail!(SubstitutionModel, ParameterCount, "TN93", 2, params.len());
         }
 
         let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
-        tn93_q(&mut q, &freqs, &params);
-        Ok(TN93 { freqs, q, params })
+        tn93_q(&mut q, &freqs, params);
+        Ok(TN93 {
+            freqs,
+            q,
+            params: params.to_vec(),
+        })
     }
 }
 
@@ -415,7 +418,7 @@ fn tn93_q(q: &mut SubstMatrix, pi: &FreqVector, params: &[f64]) {
     let fg = pi[3];
     let a1 = params[0];
     let a2 = params[1];
-    let b = params[2];
+    let b = 1.0;
 
     let scaler = 1.0
         / ((a1 * fc + b * fa + b * fg) * ft
@@ -450,8 +453,8 @@ impl Display for TN93 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "TN93 with [alpha1 = {:.5}, alpha2 = {:.5}, beta = {:.5}, freqs = {}]",
-            self.params[0], self.params[1], self.params[2], self.freqs
+            "TN93 with [kappa1 = {:.5}, kappa2 = {:.5}, freqs = {}]",
+            self.params[0], self.params[1], self.freqs
         )
     }
 }
