@@ -668,4 +668,43 @@ mod tests {
             ))
         );
     }
+
+    #[test]
+    fn jc69_default_params() {
+        let model = JC69::default();
+        assert_eq!(model.freqs().as_slice(), &EQUAL_FREQS);
+        assert_eq!(model.params().len(), JC69_PARAM_N);
+    }
+
+    #[test]
+    fn k80_default_params() {
+        let model = K80::default();
+        assert_eq!(model.freqs().as_slice(), &EQUAL_FREQS);
+        assert_eq!(model.params().len(), K80_PARAM_N);
+        assert_eq!(model.params(), &[2.0]);
+    }
+
+    #[test]
+    fn hky_default_params() {
+        let model = HKY::default();
+        assert_eq!(model.freqs().as_slice(), &EQUAL_FREQS);
+        assert_eq!(model.params().len(), HKY_PARAM_N);
+        assert_eq!(model.params(), &[2.0]);
+    }
+
+    #[test]
+    fn tn93_default_params() {
+        let model = TN93::default();
+        assert_eq!(model.freqs().as_slice(), &EQUAL_FREQS);
+        assert_eq!(model.params().len(), TN93_PARAM_N);
+        assert_eq!(model.params(), &[1.0, 1.0]);
+    }
+
+    #[test]
+    fn gtr_default_params() {
+        let model = GTR::default();
+        assert_eq!(model.freqs().as_slice(), &EQUAL_FREQS);
+        assert_eq!(model.params().len(), GTR_PARAM_N);
+        assert_eq!(model.params(), &[1.0; 5]);
+    }
 }

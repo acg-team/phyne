@@ -223,4 +223,25 @@ mod tests {
             _ => panic!("Expected FrequencySum error for protein"),
         }
     }
+
+    #[test]
+    fn wag_default_params() {
+        let model = WAG::default();
+        assert_eq!(model.freqs().as_slice(), &WAG_PI);
+        assert!(model.params().is_empty());
+    }
+
+    #[test]
+    fn hivb_default_params() {
+        let model = HIVB::default();
+        assert_eq!(model.freqs().as_slice(), &HIVB_PI);
+        assert!(model.params().is_empty());
+    }
+
+    #[test]
+    fn blosum_default_params() {
+        let model = BLOSUM::default();
+        assert_eq!(model.freqs().as_slice(), &BLOSUM_PI);
+        assert!(model.params().is_empty());
+    }
 }
