@@ -147,6 +147,38 @@ macro_rules! bail {
     (Other, $err:expr) => {
         return Err($crate::Error::Other($err.into()))
     };
+    // Usage: bail!(SubstitutionModel, FrequencyCount, "DNA", 4, actual)
+    (SubstitutionModel, FrequencyCount, $name:expr, $expected:expr, $actual:expr) => {
+        return Err($crate::Error::SubstitutionModel(
+            $crate::error::SubstitutionModelError::FrequencyCount {
+                name: $name.to_string(),
+                expected: $expected,
+                actual: $actual,
+            },
+        ))
+    };
+    // Usage: bail!(SubstitutionModel, FrequencySum, "DNA")
+    (SubstitutionModel, FrequencySum, $name:expr) => {
+        return Err($crate::Error::SubstitutionModel(
+            $crate::error::SubstitutionModelError::FrequencySum {
+                name: $name.to_string(),
+            },
+        ))
+    };
+    // Usage: bail!(SubstitutionModel, NegativeFrequency, "DNA")
+    (SubstitutionModel, NegativeFrequency, $name:expr) => {
+        return Err($crate::Error::SubstitutionModel(
+            $crate::error::SubstitutionModelError::NegativeFrequency {
+                name: $name.to_string(),
+            },
+        ))
+    };
+    // Usage: bail!(SubstitutionModel, message)
+    (SubstitutionModel, $err:expr) => {
+        return Err($crate::Error::SubstitutionModel(
+            $crate::error::SubstitutionModelError::Other($err.to_string()),
+        ))
+    };
     // Usage: bail!(Alignment, "Sequences must be aligned")
     ($variant:ident, $fmt:literal $(, $arg:expr)*) => {
         return Err($crate::Error::$variant(format!($fmt $(, $arg)*)))
