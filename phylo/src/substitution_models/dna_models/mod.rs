@@ -230,23 +230,31 @@ pub struct HKY {
     kappa: Vec<f64>,
 }
 
+impl Default for HKY {
+    fn default() -> Self {
+        let kappa = 2.0;
+        let freqs = frequencies!(&EQUAL_FREQS);
+        let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
+        hky_q(&mut q, &freqs, kappa);
+        HKY {
+            freqs,
+            q,
+            kappa: vec![kappa],
+        }
+    }
+}
+
 impl QMatrixMaker for HKY {
     fn create(freqs: &[f64], params: &[f64]) -> Result<HKY> {
-        let freqs = validate_or_equal_freqs(freqs);
+        let freqs = FreqVector::from_column_slice(freqs);
+        validate_dna_frequencies(&freqs)?;
 
-        let kappa = match params.len().cmp(&1) {
-            Ordering::Less => {
-                warn!("Too few values provided for HKY, required one value for kappa");
-                warn!("Falling back to default value");
-                2.0
-            }
-            Ordering::Greater => {
-                warn!("Too many values provided for HKY, required one value for kappa");
-                warn!("Will only use the first value provided");
-                params[0]
-            }
-            Ordering::Equal => params[0],
+        let kappa = if params.len() != 1 {
+            bail!(SubstitutionModel, ParameterCount, "HKY", 1, params.len());
+        } else {
+            params[0]
         };
+
         let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
         hky_q(&mut q, &freqs, kappa);
         Ok(HKY {
