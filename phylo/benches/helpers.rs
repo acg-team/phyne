@@ -52,7 +52,7 @@ pub fn black_box_pip_cost<Model: QMatrix + QMatrixMaker>(
     freq_opt: FrequencyOptimisation,
 ) -> PIPCost<Model, MSA> {
     let info = black_box_deterministic_phylo_info(path);
-    let pip_cost = PIPCostBuilder::new(PIPModel::<Model>::new(&[], &[]), info)
+    let pip_cost = PIPCostBuilder::new(PIPModel::<Model>::new(&[], &[]).unwrap(), info)
         .build()
         .expect("failed to build pip cost optimiser");
 
@@ -88,7 +88,7 @@ pub fn black_box_raw_pip_cost_with_config<Model: QMatrix + QMatrixMaker>(
     });
 
     let pip_cost = black_box(PIPCostBuilder::new(
-        PIPModel::<Model>::new(&cfg.freqs, &cfg.params),
+        PIPModel::<Model>::new(&cfg.freqs, &cfg.params).unwrap(),
         info,
     ))
     .build()
