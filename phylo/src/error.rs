@@ -13,7 +13,7 @@ pub enum Error {
     Sequence(String),
 
     #[error("Substitution model error: {0}")]
-    SubstitutionModel(String),
+    SubstitutionModel(#[from] SubstitutionModelError),
 
     #[error("Evolutionary model error: {0}")]
     EvolutionaryModel(String),
@@ -48,4 +48,23 @@ impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Self {
         Error::Io(err.to_string())
     }
+}
+
+#[derive(Error, Debug)]
+pub enum SubstitutionModelError {
+    #[error("Other substitution model error")]
+    Other(String),
+
+    #[error("{name}: expected {expected} frequencies, got {actual}")]
+    FrequencyCount {
+        name: String,
+        expected: usize,
+        actual: usize,
+    },
+
+    #[error("{name}: frequencies must sum to 1.0")]
+    FrequencySum { name: String },
+
+    #[error("{name}: one or more frequency values is negative")]
+    NegativeFrequency { name: String },
 }
