@@ -22,8 +22,8 @@ const UNNORMALIZED_PIP_HKY_Q: [f64; 25] = [
 
 #[cfg(test)]
 fn compare_pip_subst_rates_template<Q: QMatrix + QMatrixMaker>(chars: &[u8]) {
-    let pip_model = PIPModel::<Q>::new(&[], &[0.1, 0.4]);
-    let subst_model = SubstModel::<Q>::new(&[], &[]);
+    let pip_model = PIPModel::<Q>::new(&[], &[0.1, 0.4]).unwrap();
+    let subst_model = SubstModel::<Q>::new(&[], &[]).unwrap();
     for (i, &char) in chars.iter().enumerate() {
         assert!(pip_model.rate(char, char) < 0.0);
         assert_relative_eq!(pip_model.q.row(i).sum(), 0.0, epsilon = 1e-10);
@@ -44,7 +44,7 @@ fn compare_pip_subst_rates_template<Q: QMatrix + QMatrixMaker>(chars: &[u8]) {
 
 #[test]
 fn pip_dna_jc69_correct() {
-    let pip_jc69 = PIPModel::<JC69>::new(&[], &[0.1, 0.4]);
+    let pip_jc69 = PIPModel::<JC69>::new(&[], &[0.1, 0.4]).unwrap();
     assert_eq!(pip_jc69.lambda(), 0.1);
     assert_eq!(pip_jc69.mu(), 0.4);
     assert_eq!(
@@ -64,7 +64,7 @@ fn pip_dna_k80_correct() {
     let lambda = 0.3;
     let mu = 0.7;
     let kappa = 0.5;
-    let pip_k80 = PIPModel::<K80>::new(&[], &[lambda, mu, kappa]);
+    let pip_k80 = PIPModel::<K80>::new(&[], &[lambda, mu, kappa]).unwrap();
     assert_eq!(pip_k80.lambda(), lambda);
     assert_eq!(pip_k80.mu(), mu);
     assert_eq!(
@@ -86,7 +86,7 @@ fn pip_dna_hky_correct() {
     let mu = 0.7;
     let kappa = 0.5;
     let freqs = &[0.22, 0.26, 0.33, 0.19];
-    let pip_hky = PIPModel::<HKY>::new(freqs, &[lambda, mu, kappa]);
+    let pip_hky = PIPModel::<HKY>::new(freqs, &[lambda, mu, kappa]).unwrap();
     assert_eq!(pip_hky.lambda(), lambda);
     assert_eq!(pip_hky.mu(), mu);
     assert_eq!(pip_hky.freqs(), &frequencies!(freqs).insert_row(4, 0.0));
@@ -98,8 +98,8 @@ fn pip_dna_hky_as_k80() {
     let lambda = 0.3;
     let mu = 0.7;
     let kappa = 0.5;
-    let pip_k80 = PIPModel::<K80>::new(&[], &[lambda, mu, kappa]);
-    let pip_hky = PIPModel::<HKY>::new(&[0.25; 4], &[lambda, mu, kappa]);
+    let pip_k80 = PIPModel::<K80>::new(&[], &[lambda, mu, kappa]).unwrap();
+    let pip_hky = PIPModel::<HKY>::new(&[0.25; 4], &[lambda, mu, kappa]).unwrap();
     assert_eq!(pip_k80.lambda(), pip_hky.lambda());
     assert_eq!(pip_k80.mu(), pip_hky.mu());
     assert_eq!(pip_k80.freqs(), pip_hky.freqs());
@@ -118,7 +118,7 @@ fn pip_too_few_params_template<Q: QMatrix + QMatrixMaker>(
     params: &[f64],
     expected: &[f64],
 ) {
-    let model = PIPModel::<Q>::new(freqs, params);
+    let model = PIPModel::<Q>::new(freqs, params).unwrap();
     assert_eq!(model.params().len(), 2);
     assert_eq!(model.params(), expected);
 }
@@ -161,7 +161,7 @@ fn pip_normalised_check_template<Q: QMatrix + QMatrixMaker>(
     freqs: &[f64],
     params: &[f64],
 ) {
-    let pip = PIPModel::<Q>::new(freqs, params);
+    let pip = PIPModel::<Q>::new(freqs, params).unwrap();
     assert_eq!(pip.lambda(), params[0]);
     assert_eq!(pip.mu(), params[1]);
     let stat_dist = frequencies!(freqs).insert_row(freqs.len(), 0.0);
@@ -196,7 +196,7 @@ fn pip_protein_normalised() {
 
 #[cfg(test)]
 fn pip_infinity_p_template<Q: QMatrix + QMatrixMaker>(freqs: &[f64], params: &[f64]) {
-    let model = PIPModel::<Q>::new(freqs, params);
+    let model = PIPModel::<Q>::new(freqs, params).unwrap();
     let p_inf = model.p(10000.0);
     assert_eq!(p_inf.shape(), model.q().shape());
     for row in p_inf.row_iter() {
@@ -233,8 +233,10 @@ fn pip_dna_tn93_correct() {
     let pip_tn93 = PIPModel::<TN93>::new(
         &[0.22, 0.26, 0.33, 0.19],
         &[0.2, 0.5, 0.5970915, 0.2940435, 0.00135],
-    );
-    let tn93 = SubstModel::<TN93>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5970915, 0.2940435, 0.00135]);
+    )
+    .unwrap();
+    let tn93 = SubstModel::<TN93>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5970915, 0.2940435, 0.00135])
+        .unwrap();
     let mut diff = SubstMatrix::zeros(4, 4);
     diff.fill_diagonal(-0.5);
     diff = diff.insert_column(4, 0.5).insert_row(4, 0.0);
@@ -250,7 +252,7 @@ fn pip_dna_tn93_correct() {
 fn pip_p_example_matrix() {
     // PIP matrix example from the PIP likelihood tutorial, rounded to 3 decimal values
     let epsilon = 1e-3;
-    let mut pip_hky = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]);
+    let mut pip_hky = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]).unwrap();
     pip_hky.q = SubstMatrix::from_column_slice(5, 5, &UNNORMALIZED_PIP_HKY_Q);
     let expected_p = SubstMatrix::from_row_slice(
         5,
@@ -321,7 +323,7 @@ fn assert_values<Q: QMatrix>(
 fn pip_hky_likelihood_example_leaf_values() {
     let info = setup_example_phylo_info();
     let tree = info.tree.clone();
-    let mut model = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]);
+    let mut model = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]).unwrap();
     model.q = SubstMatrix::from_column_slice(5, 5, &UNNORMALIZED_PIP_HKY_Q);
 
     let nu = 7.5;
@@ -368,7 +370,7 @@ fn pip_hky_likelihood_example_leaf_values() {
 #[test]
 fn pip_hky_likelihood_example_internals() {
     let info = setup_example_phylo_info();
-    let mut model = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]);
+    let mut model = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]).unwrap();
     model.q = SubstMatrix::from_column_slice(5, 5, &UNNORMALIZED_PIP_HKY_Q);
 
     let c = PIPB::new(model, info.clone()).build().unwrap();
@@ -428,7 +430,7 @@ fn assert_c0_values<Q: QMatrix>(tmp: &PIPModelInfo<Q>, idx: usize, exp_f1: f64, 
 #[test]
 fn pip_hky_likelihood_example_c0() {
     let info = setup_example_phylo_info();
-    let mut model = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]);
+    let mut model = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]).unwrap();
     model.q = SubstMatrix::from_column_slice(5, 5, &UNNORMALIZED_PIP_HKY_Q);
 
     let c = PIPB::new(model, info.clone()).build().unwrap();
@@ -483,7 +485,7 @@ fn pip_hky_likelihood_example_c0() {
 #[test]
 fn pip_hky_likelihood_example_final() {
     let info = setup_example_phylo_info();
-    let mut model = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]);
+    let mut model = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]).unwrap();
     model.q = SubstMatrix::from_column_slice(5, 5, &UNNORMALIZED_PIP_HKY_Q);
 
     let c = PIPB::new(model, info.clone()).build().unwrap();
@@ -528,7 +530,7 @@ fn setup_example_phylo_info_2() -> PhyloInfo<MSA> {
 
 #[test]
 fn pip_hky_likelihood_example_2() {
-    let mut model = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]);
+    let mut model = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]).unwrap();
     model.q = SubstMatrix::from_column_slice(5, 5, &UNNORMALIZED_PIP_HKY_Q);
     let info = setup_example_phylo_info_2();
     let c = PIPB::new(model, info).build().unwrap();
@@ -543,7 +545,7 @@ fn pip_likelihood_huelsenbeck_example() {
     )
     .build()
     .unwrap();
-    let model = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]);
+    let model = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]).unwrap();
     let mut c = PIPB::new(model, info.clone()).build().unwrap();
     assert_relative_eq!(c.cost(), -372.1419415285655, epsilon = 1e-4);
 
@@ -559,7 +561,8 @@ fn pip_likelihood_huelsenbeck_example() {
     let model = PIPModel::<GTR>::new(
         &[0.22, 0.26, 0.33, 0.19],
         &[0.5, 0.25, 1.25453, 1.07461, 1.0, 1.14689, 1.53244, 1.47031],
-    );
+    )
+    .unwrap();
     let c = PIPB::new(model, info).build().unwrap();
 
     assert_relative_eq!(c.cost(), -359.2343309917135, epsilon = 1e-4);
@@ -574,10 +577,10 @@ fn pip_likelihood_huelsenbeck_example_model_comp() {
     .build()
     .unwrap();
 
-    let jc69 = PIPModel::<JC69>::new(&[], &[1.1, 0.55]);
+    let jc69 = PIPModel::<JC69>::new(&[], &[1.1, 0.55]).unwrap();
     let c = PIPB::new(jc69, info.clone()).build().unwrap();
 
-    let hky_as_jc = PIPModel::<HKY>::new(&[0.25, 0.25, 0.25, 0.25], &[1.1, 0.55, 1.0]);
+    let hky_as_jc = PIPModel::<HKY>::new(&[0.25, 0.25, 0.25, 0.25], &[1.1, 0.55, 1.0]).unwrap();
     let c_hky = PIPB::new(hky_as_jc, info.clone()).build().unwrap();
     assert_relative_eq!(c.cost(), c_hky.cost());
 }
@@ -593,7 +596,8 @@ fn pip_likelihood_huelsenbeck_example_reroot() {
     let model_gtr = PIPModel::<GTR>::new(
         &[0.22, 0.26, 0.33, 0.19],
         &[0.5, 0.25, 1.25453, 1.07461, 1.0, 1.14689, 1.53244, 1.47031],
-    );
+    )
+    .unwrap();
     let phylo_rerooted = PIB::with_attrs(
         "./data/Huelsenbeck_example_long_DNA.fasta",
         "./data/Huelsenbeck_example_reroot.newick",
@@ -616,22 +620,25 @@ fn pip_likelihood_protein_example() {
     .build()
     .unwrap();
 
-    let model_wag = PIPModel::<WAG>::new(&WAG_PI, &[0.5, 0.25]);
+    let model_wag = PIPModel::<WAG>::new(&WAG_PI, &[0.5, 0.25]).unwrap();
     let c = PIPB::new(model_wag, info.clone()).build().unwrap();
     assert!(c.cost() <= 0.0);
     // The cost is the same when initialising the model with default frequencies
     assert_eq!(
-        PIPB::new(PIPModel::<WAG>::new(&[], &[0.5, 0.25]), info.clone())
-            .build()
-            .unwrap()
-            .cost(),
+        PIPB::new(
+            PIPModel::<WAG>::new(&[], &[0.5, 0.25]).unwrap(),
+            info.clone()
+        )
+        .build()
+        .unwrap()
+        .cost(),
         c.cost(),
     );
 
     // The cost is different when initialising the model with equal frequencies
     assert_ne!(
         PIPB::new(
-            PIPModel::<WAG>::new(&[0.05; 20], &[0.5, 0.25]),
+            PIPModel::<WAG>::new(&[0.05; 20], &[0.5, 0.25]).unwrap(),
             info.clone()
         )
         .build()
@@ -642,57 +649,66 @@ fn pip_likelihood_protein_example() {
 
     // The cost is different when initialising the model with default frequencies but different mu/lambda
     assert_ne!(
-        PIPB::new(PIPModel::<WAG>::new(&[], &[0.5, 0.2]), info.clone())
-            .build()
-            .unwrap()
-            .cost(),
+        PIPB::new(
+            PIPModel::<WAG>::new(&[], &[0.5, 0.2]).unwrap(),
+            info.clone()
+        )
+        .build()
+        .unwrap()
+        .cost(),
         c.cost(),
     );
     assert_ne!(
-        PIPB::new(PIPModel::<WAG>::new(&[], &[0.1, 0.25]), info.clone())
-            .build()
-            .unwrap()
-            .cost(),
+        PIPB::new(
+            PIPModel::<WAG>::new(&[], &[0.1, 0.25]).unwrap(),
+            info.clone()
+        )
+        .build()
+        .unwrap()
+        .cost(),
         c.cost(),
     );
     assert_ne!(
-        PIPB::new(PIPModel::<WAG>::new(&[], &[0.1, 0.2]), info.clone())
-            .build()
-            .unwrap()
-            .cost(),
+        PIPB::new(
+            PIPModel::<WAG>::new(&[], &[0.1, 0.2]).unwrap(),
+            info.clone()
+        )
+        .build()
+        .unwrap()
+        .cost(),
         c.cost(),
     );
 }
 
 #[test]
 fn designation() {
-    let model = PIPModel::<JC69>::new(&[], &[]);
+    let model = PIPModel::<JC69>::new(&[], &[]).unwrap();
     assert!(format!("{model}").contains("PIP"));
     assert!(format!("{model}").contains("lambda = 1.5"));
     assert!(format!("{model}").contains("mu = 1.5"));
     assert!(format!("{model}").contains("JC69"));
 
-    let model = PIPModel::<JC69>::new(&[], &[2.0, 1.0]);
+    let model = PIPModel::<JC69>::new(&[], &[2.0, 1.0]).unwrap();
     assert!(format!("{model}").contains("PIP"));
     assert!(format!("{model}").contains("lambda = 2.0"));
     assert!(format!("{model}").contains("mu = 1.0"));
     assert!(format!("{model}").contains("JC69"));
 
-    let model = PIPModel::<K80>::new(&[], &[2.0, 5.0, 1.3]);
+    let model = PIPModel::<K80>::new(&[], &[2.0, 5.0, 1.3]).unwrap();
     assert!(format!("{model}").contains("PIP"));
     assert!(format!("{model}").contains("lambda = 2.0"));
     assert!(format!("{model}").contains("mu = 5.0"));
     assert!(format!("{model}").contains("K80"));
     assert!(format!("{model}").contains("kappa = 1.3"));
 
-    let model = PIPModel::<HKY>::new(&[], &[2.0, 5.0, 2.5]);
+    let model = PIPModel::<HKY>::new(&[], &[2.0, 5.0, 2.5]).unwrap();
     assert!(format!("{model}").contains("PIP"));
     assert!(format!("{model}").contains("lambda = 2.0"));
     assert!(format!("{model}").contains("mu = 5.0"));
     assert!(format!("{model}").contains("HKY"));
     assert!(format!("{model}").contains("kappa = 2.5"));
 
-    let model = PIPModel::<TN93>::new(&[], &[2.5, 0.3, 0.1]);
+    let model = PIPModel::<TN93>::new(&[], &[2.5, 0.3, 0.1]).unwrap();
     assert!(format!("{model}").contains("PIP"));
     assert!(format!("{model}").contains("lambda = 2.5"));
     assert!(format!("{model}").contains("mu = 0.3"));
@@ -700,18 +716,18 @@ fn designation() {
     assert!(format!("{model}").contains("0.1"));
     assert!(format!("{model}").contains("1.0"));
 
-    let model = PIPModel::<GTR>::new(&[], &[1.4, 1.7]);
+    let model = PIPModel::<GTR>::new(&[], &[1.4, 1.7]).unwrap();
     assert!(format!("{model}").contains("GTR"));
 
-    let model = PIPModel::<WAG>::new(&[], &[2.0, 1.0]);
+    let model = PIPModel::<WAG>::new(&[], &[2.0, 1.0]).unwrap();
     assert!(format!("{model}").contains("PIP"));
     assert!(format!("{model}").contains("WAG"));
 
-    let model = PIPModel::<HIVB>::new(&[], &[2.0, 1.0]);
+    let model = PIPModel::<HIVB>::new(&[], &[2.0, 1.0]).unwrap();
     assert!(format!("{model}").contains("PIP"));
     assert!(format!("{model}").contains("HIVB"));
 
-    let model = PIPModel::<BLOSUM>::new(&[], &[2.0, 1.0]);
+    let model = PIPModel::<BLOSUM>::new(&[], &[2.0, 1.0]).unwrap();
     assert!(format!("{model}").contains("PIP"));
     assert!(format!("{model}").contains("BLOSUM"));
 }
@@ -737,7 +753,7 @@ fn pip_logl_correct_w_diff_info() {
         tree: tree2,
     };
 
-    let pip_wag = PIPModel::<WAG>::new(&[], &[50.0, 0.1]);
+    let pip_wag = PIPModel::<WAG>::new(&[], &[50.0, 0.1]).unwrap();
 
     let c1 = PIPB::new(pip_wag.clone(), info1).build().unwrap();
     let c2 = PIPB::new(pip_wag, info2).build().unwrap();
@@ -756,7 +772,8 @@ fn hiv_subset_valid_pip_likelihood() {
     let pip = PIPModel::<GTR>::new(
         &[0.25, 0.25, 0.25, 0.25],
         &[0.1, 0.1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
-    );
+    )
+    .unwrap();
     let c = PIPB::new(pip, info).build().unwrap();
     let logl = c.cost();
     assert_ne!(logl, f64::NEG_INFINITY);
@@ -766,7 +783,7 @@ fn hiv_subset_valid_pip_likelihood() {
 #[cfg(test)]
 fn avg_rate_template<Q: QMatrix + QMatrixMaker>(freqs: &[f64], params: &[f64]) {
     let mu = params[1];
-    let model = PIPModel::<Q>::new(freqs, params);
+    let model = PIPModel::<Q>::new(freqs, params).unwrap();
     let n = model.q().nrows();
     let avg_rate = model
         .q()
@@ -807,7 +824,7 @@ fn logl_not_inf_for_empty_col() {
     .unwrap();
 
     let info = PhyloInfo { msa, tree };
-    let model = PIPModel::<WAG>::new(&[], &[0.5, 0.5]);
+    let model = PIPModel::<WAG>::new(&[], &[0.5, 0.5]).unwrap();
     let c = PIPB::new(model, info).build().unwrap();
     let logl = c.cost();
     assert_ne!(logl, f64::NEG_INFINITY);
@@ -821,7 +838,7 @@ fn blen_leading_to_small_probs() {
     let tree_file = fldr.join("p105.newick");
     let info = PIB::with_attrs(seq_file, tree_file).build().unwrap();
 
-    let model = PIPModel::<WAG>::new(&[], &[]);
+    let model = PIPModel::<WAG>::new(&[], &[]).unwrap();
     let c = PIPB::new(model, info).build().unwrap();
     let logl = c.cost();
     assert_ne!(logl, f64::NEG_INFINITY);
@@ -849,7 +866,7 @@ fn blen_leading_to_minusinf() {
 
     let info = PhyloInfo { msa, tree };
 
-    let model = PIPModel::<WAG>::new(&[], &[]);
+    let model = PIPModel::<WAG>::new(&[], &[]).unwrap();
     let c = PIPB::new(model, info).build().unwrap();
     let logl = c.cost();
     assert_ne!(logl, f64::NEG_INFINITY);
@@ -881,7 +898,7 @@ fn setup_test_pip_cost<Q: QMatrix + QMatrixMaker>(
     params: &[f64],
 ) -> PIPCost<Q, MSA> {
     let info = setup_test_info(Q::alphabet());
-    let model = PIPModel::<Q>::new(freqs, params);
+    let model = PIPModel::<Q>::new(freqs, params).unwrap();
     PIPB::new(model, info).build().unwrap()
 }
 
@@ -925,7 +942,7 @@ fn dirty_branch_costs_match_template<Q: QMatrix + QMatrixMaker>() {
 
     let info = setup_test_info(Q::alphabet());
 
-    let model = PIPModel::<Q>::new(&[], &[]);
+    let model = PIPModel::<Q>::new(&[], &[]).unwrap();
     let mut c = PIPB::new(model.clone(), info.clone()).build().unwrap();
     let logl = TreeSearchCost::cost(&c);
 

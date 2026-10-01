@@ -37,7 +37,7 @@ fn test_subst_model<Q: QMatrix + QMatrixMaker>(
     .unwrap();
     let info = PhyloInfo { msa, tree };
 
-    let model = SubstModel::<Q>::new(freqs, params);
+    let model = SubstModel::<Q>::new(freqs, params).unwrap();
     SCB::new(model, info).build().unwrap()
 }
 
@@ -81,7 +81,7 @@ fn test_pip_model<Q: QMatrix + QMatrixMaker>(freqs: &[f64], params: &[f64]) -> P
     .unwrap();
     let info = PhyloInfo { msa, tree };
 
-    let model = PIPModel::<Q>::new(freqs, params);
+    let model = PIPModel::<Q>::new(freqs, params).unwrap();
     PIPCB::new(model, info).build().unwrap()
 }
 
@@ -127,7 +127,7 @@ fn alphabet_mismatch_subst_model_template<Q: QMatrix + QMatrixMaker>(
     let msa = MSA::from_aligned(Sequences::with_alphabet_unchecked(records, alpha), &tree).unwrap();
     let info = PhyloInfo { msa, tree };
 
-    let model = SubstModel::<Q>::new(freqs, params);
+    let model = SubstModel::<Q>::new(freqs, params).unwrap();
     let res = SCB::new(model, info).build();
 
     assert_matches!(
@@ -177,7 +177,7 @@ fn alphabet_mismatch_subst_pip_template<Q: QMatrix + QMatrixMaker>(
     .unwrap();
 
     let info = PhyloInfo { msa, tree };
-    let model = PIPModel::<Q>::new(freqs, params);
+    let model = PIPModel::<Q>::new(freqs, params).unwrap();
     let res = PIPCB::new(model, info).build();
 
     assert_matches!(

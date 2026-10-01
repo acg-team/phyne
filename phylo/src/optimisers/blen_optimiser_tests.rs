@@ -21,7 +21,8 @@ fn branch_opt_likelihood_increase_pip() {
     let model = PIPModel::<GTR>::new(
         &[0.25, 0.25, 0.25, 0.25],
         &[14.142_1, 0.1414, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
-    );
+    )
+    .unwrap();
     let c = PIPCB::new(model.clone(), info.clone()).build().unwrap();
     assert_relative_eq!(c.cost(), -5664.780425829528, epsilon = 1e-6);
     let o = BranchOptimiser::new(c.clone()).run().unwrap();
@@ -55,7 +56,8 @@ fn branch_opt_likelihood_increase_gtr() {
     let info = PIB::with_attrs(fldr.join("GTR/gtr.fasta"), fldr.join("tree.newick"))
         .build()
         .unwrap();
-    let gtr = SubstModel::<GTR>::new(&[0.25, 0.25, 0.25, 0.25], &[1.0, 1.0, 1.0, 1.0, 1.0, 1.0]);
+    let gtr =
+        SubstModel::<GTR>::new(&[0.25, 0.25, 0.25, 0.25], &[1.0, 1.0, 1.0, 1.0, 1.0, 1.0]).unwrap();
     let o = BranchOptimiser::new(SCB::new(gtr.clone(), info.clone()).build().unwrap())
         .run()
         .unwrap();
@@ -81,7 +83,7 @@ fn branch_optimiser_against_phyml() {
     let info = PIB::with_attrs(fldr.join("GTR/gtr.fasta"), fldr.join("tree.newick"))
         .build()
         .unwrap();
-    let model = SubstModel::<JC69>::new(&[], &[]);
+    let model = SubstModel::<JC69>::new(&[], &[]).unwrap();
     let o = BranchOptimiser::new(SCB::new(model.clone(), info.clone()).build().unwrap())
         .run()
         .unwrap();
@@ -122,7 +124,7 @@ fn repeated_optimisation_limit() {
     let seq_file = fldr.join("p105.msa.fa");
     let info = PIB::new(seq_file).build().unwrap();
 
-    let model = PIPModel::<WAG>::new(&[], &[]);
+    let model = PIPModel::<WAG>::new(&[], &[]).unwrap();
 
     let mut cost = PIPCB::new(model, info).build().unwrap();
     let mut prev_cost = f64::NEG_INFINITY;
@@ -153,7 +155,7 @@ fn only_gap_sequence() {
     )
     .unwrap();
     let info = PhyloInfo { msa, tree };
-    let model = SubstModel::<WAG>::new(&[], &[]);
+    let model = SubstModel::<WAG>::new(&[], &[]).unwrap();
     let c = SCB::new(model, info).build().unwrap();
 
     let o = BranchOptimiser::new(c).run().unwrap();
@@ -170,7 +172,8 @@ fn max_iter() {
     let model = PIPModel::<GTR>::new(
         &[0.25, 0.25, 0.25, 0.25],
         &[14.142_1, 0.1414, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
-    );
+    )
+    .unwrap();
     let c = PIPCB::new(model.clone(), info.clone()).build().unwrap();
     let unopt_cost = c.cost();
     let epsilon = DEFAULT_EPSILON;
@@ -207,7 +210,8 @@ fn precision() {
     let model = PIPModel::<GTR>::new(
         &[0.25, 0.25, 0.25, 0.25],
         &[14.142_1, 0.1414, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
-    );
+    )
+    .unwrap();
     let c = PIPCB::new(model.clone(), info.clone()).build().unwrap();
     let unopt_cost = c.cost();
     let epsilon = 1e-10;
@@ -236,7 +240,8 @@ fn fix_iter() {
     let model = SubstModel::<GTR>::new(
         &[0.25, 0.25, 0.25, 0.25],
         &[0.1414, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
-    );
+    )
+    .unwrap();
     let c = SCB::new(model, info).build().unwrap();
     let unopt_cost = c.cost();
 

@@ -197,7 +197,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let model = SubstModel::<GTR>::new(&[], &[]);
+        let model = SubstModel::<GTR>::new(&[], &[]).unwrap();
         let cost = SCB::new(model, info).build().unwrap();
         let mut opt = ModelOptimiser::new(cost.clone(), FrequencyOptimisation::Estimated);
         assert_matches!(opt.freq_opt, FrequencyOptimisation::Estimated);
@@ -213,7 +213,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let model = SubstModel::<WAG>::new(&[], &[]);
+        let model = SubstModel::<WAG>::new(&[], &[]).unwrap();
         let cost = SCB::new(model, info).build().unwrap();
         let mut opt = ModelOptimiser::new(cost.clone(), FrequencyOptimisation::Estimated);
         assert_matches!(opt.freq_opt, FrequencyOptimisation::Estimated);
@@ -229,7 +229,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let model = PIPModel::<GTR>::new(&[], &[]);
+        let model = PIPModel::<GTR>::new(&[], &[]).unwrap();
         let cost = PIPCB::new(model, info).build().unwrap();
         let mut opt = ModelOptimiser::new(cost.clone(), FrequencyOptimisation::Estimated);
         assert_matches!(opt.freq_opt, FrequencyOptimisation::Estimated);
@@ -245,7 +245,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let model = PIPModel::<WAG>::new(&[], &[]);
+        let model = PIPModel::<WAG>::new(&[], &[]).unwrap();
         let cost = PIPCB::new(model, info).build().unwrap();
         let mut opt = ModelOptimiser::new(cost.clone(), FrequencyOptimisation::Estimated);
         assert_matches!(opt.freq_opt, FrequencyOptimisation::Estimated);

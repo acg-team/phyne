@@ -204,7 +204,7 @@ mod private_tests {
 
     #[cfg(test)]
     fn single_iter_pip_template<Q: QMatrix + QMatrixMaker>(info: PhyloInfo<MSA>) {
-        let model = PIPModel::<Q>::new(&[], &[]);
+        let model = PIPModel::<Q>::new(&[], &[]).unwrap();
         let c = PIPCB::new(model.clone(), info.clone()).build().unwrap();
         let init_cost = c.cost();
 
@@ -245,7 +245,7 @@ mod private_tests {
 
     #[cfg(test)]
     fn single_iter_substitution_template<Q: QMatrix + QMatrixMaker>(info: PhyloInfo<MSA>) {
-        let model = SubstModel::<Q>::new(&[], &[]);
+        let model = SubstModel::<Q>::new(&[], &[]).unwrap();
         let c = SCB::new(model.clone(), info.clone()).build().unwrap();
         let init_cost = c.cost();
 
