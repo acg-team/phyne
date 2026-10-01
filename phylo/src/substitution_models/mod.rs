@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
-use std::marker::PhantomData;
+use std::marker::{PhantomData, Sized};
 use std::ops::Mul;
 
 use hashbrown::HashMap;
@@ -34,7 +34,9 @@ macro_rules! frequencies {
 }
 
 pub trait QMatrixMaker {
-    fn create(frequencies: &[f64], params: &[f64]) -> Self;
+    fn create(frequencies: &[f64], params: &[f64]) -> Result<Self>
+    where
+        Self: Sized;
 }
 
 pub trait QMatrix: Debug + Clone + Display {
@@ -68,13 +70,13 @@ impl<Q: QMatrix + Display> Display for SubstModel<Q> {
 }
 
 impl<Q: QMatrix + QMatrixMaker> SubstModel<Q> {
-    pub fn new(frequencies: &[f64], params: &[f64]) -> Self
+    pub fn new(frequencies: &[f64], params: &[f64]) -> Result<Self>
     where
         Self: Sized,
     {
-        SubstModel {
-            qmatrix: Q::create(frequencies, params),
-        }
+        Ok(SubstModel {
+            qmatrix: Q::create(frequencies, params)?,
+        })
     }
 }
 

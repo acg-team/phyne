@@ -70,8 +70,9 @@ macro_rules! define_protein_model {
             q: SubstMatrix,
             exchangeability: SubstMatrix,
         }
+
         impl QMatrixMaker for $name {
-            fn create(freqs: &[f64], _: &[f64]) -> $name {
+            fn create(freqs: &[f64], _: &[f64]) -> Result<$name> {
                 let freqs = FreqVector::from_column_slice(freqs);
                 let freqs = if let Err(err) = validate_protein_frequencies(&freqs) {
                     warn!("Invalid protein frequencies: {}", err);
@@ -82,13 +83,14 @@ macro_rules! define_protein_model {
                 };
                 let exchangeability = SubstMatrix::from_row_slice(PROTEIN_N, PROTEIN_N, &$exch);
                 let q = make_protein_q(&exchangeability, &freqs);
-                $name {
+                Ok($name {
                     freqs,
                     q,
                     exchangeability,
-                }
+                })
             }
         }
+
         impl QMatrix for $name {
             fn q(&self) -> &SubstMatrix {
                 &self.q

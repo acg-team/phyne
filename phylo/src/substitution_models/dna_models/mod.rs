@@ -57,17 +57,17 @@ pub struct JC69 {
 }
 
 impl QMatrixMaker for JC69 {
-    fn create(_: &[f64], _: &[f64]) -> JC69 {
+    fn create(_: &[f64], _: &[f64]) -> Result<JC69> {
         let r = 1.0 / 3.0;
         let q = SubstMatrix::from_row_slice(
             DNA_N,
             DNA_N,
             &[-1.0, r, r, r, r, -1.0, r, r, r, r, -1.0, r, r, r, r, -1.0],
         );
-        JC69 {
+        Ok(JC69 {
             freqs: frequencies!(&EQUAL_FREQS),
             q,
-        }
+        })
     }
 }
 
@@ -117,7 +117,7 @@ pub struct K80 {
 }
 
 impl QMatrixMaker for K80 {
-    fn create(_: &[f64], params: &[f64]) -> K80 {
+    fn create(_: &[f64], params: &[f64]) -> Result<K80> {
         let kappa = match params.len().cmp(&1) {
             Ordering::Less => {
                 warn!("Too few values provided for K80, required one value for kappa");
@@ -133,11 +133,11 @@ impl QMatrixMaker for K80 {
         };
         let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
         k80_q(&mut q, kappa);
-        K80 {
+        Ok(K80 {
             freqs: frequencies!(&EQUAL_FREQS),
             q,
             kappa: vec![kappa],
-        }
+        })
     }
 }
 
@@ -215,7 +215,7 @@ pub struct HKY {
 }
 
 impl QMatrixMaker for HKY {
-    fn create(freqs: &[f64], params: &[f64]) -> HKY {
+    fn create(freqs: &[f64], params: &[f64]) -> Result<HKY> {
         let freqs = validate_or_equal_freqs(freqs);
 
         let kappa = match params.len().cmp(&1) {
@@ -233,11 +233,11 @@ impl QMatrixMaker for HKY {
         };
         let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
         hky_q(&mut q, &freqs, kappa);
-        HKY {
+        Ok(HKY {
             freqs,
             q,
             kappa: vec![kappa],
-        }
+        })
     }
 }
 
@@ -326,7 +326,7 @@ pub struct TN93 {
 }
 
 impl QMatrixMaker for TN93 {
-    fn create(freqs: &[f64], params: &[f64]) -> TN93 {
+    fn create(freqs: &[f64], params: &[f64]) -> Result<TN93> {
         let freqs = validate_or_equal_freqs(freqs);
 
         let mut params = params.to_vec();
@@ -346,7 +346,7 @@ impl QMatrixMaker for TN93 {
 
         let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
         tn93_q(&mut q, &freqs, &params);
-        TN93 { freqs, q, params }
+        Ok(TN93 { freqs, q, params })
     }
 }
 
@@ -441,7 +441,7 @@ pub struct GTR {
 }
 
 impl QMatrixMaker for GTR {
-    fn create(freqs: &[f64], params: &[f64]) -> GTR {
+    fn create(freqs: &[f64], params: &[f64]) -> Result<GTR> {
         let freqs = validate_or_equal_freqs(freqs);
 
         let mut params = params.to_vec();
@@ -458,7 +458,7 @@ impl QMatrixMaker for GTR {
         }
         let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
         gtr_q(&mut q, &freqs, &params);
-        GTR { freqs, q, params }
+        Ok(GTR { freqs, q, params })
     }
 }
 
