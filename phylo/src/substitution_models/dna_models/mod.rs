@@ -56,18 +56,35 @@ pub struct JC69 {
     q: SubstMatrix,
 }
 
-impl QMatrixMaker for JC69 {
-    fn create(_: &[f64], _: &[f64]) -> Result<JC69> {
+impl Default for JC69 {
+    fn default() -> Self {
         let r = 1.0 / 3.0;
         let q = SubstMatrix::from_row_slice(
             DNA_N,
             DNA_N,
             &[-1.0, r, r, r, r, -1.0, r, r, r, r, -1.0, r, r, r, r, -1.0],
         );
-        Ok(JC69 {
+        JC69 {
             freqs: frequencies!(&EQUAL_FREQS),
             q,
-        })
+        }
+    }
+}
+
+impl QMatrixMaker for JC69 {
+    fn create(freqs: &[f64], params: &[f64]) -> Result<JC69> {
+        let freqs = FreqVector::from_column_slice(freqs);
+        validate_dna_frequencies(&freqs)?;
+
+        if freqs != frequencies!(&EQUAL_FREQS) {
+            bail!(SubstitutionModel, "JC69 frequencies must be equal");
+        }
+
+        if !params.is_empty() {
+            bail!(SubstitutionModel, "JC69 does not accept any parameters");
+        }
+
+        Ok(JC69::default())
     }
 }
 
