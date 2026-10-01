@@ -1,8 +1,6 @@
 use std::fmt::Display;
-use std::iter;
 
 use approx::relative_eq;
-use log::warn;
 
 use crate::alphabets::{Alphabet, NUCLEOTIDE_INDEX};
 use crate::frequencies;
