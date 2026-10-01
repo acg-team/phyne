@@ -13,6 +13,8 @@ use crate::{bail, Result};
 const DNA_N: usize = 4;
 const EQUAL_FREQS: [f64; DNA_N] = [0.25, 0.25, 0.25, 0.25];
 
+const GTR_PARAM_N: usize = 5;
+
 fn validate_dna_frequencies(freqs: &FreqVector) -> Result<()> {
     if freqs.len() != DNA_N {
         bail!(SubstitutionModel, FrequencyCount, "DNA", DNA_N, freqs.len());
@@ -467,25 +469,38 @@ pub struct GTR {
     params: Vec<f64>,
 }
 
-impl QMatrixMaker for GTR {
-    fn create(freqs: &[f64], params: &[f64]) -> Result<GTR> {
-        let freqs = validate_or_equal_freqs(freqs);
-
-        let mut params = params.to_vec();
-        if params.len() < 5 {
-            warn!("Too few values provided for GTR, required five values");
-            warn!("Falling back to default values");
-            params.extend(iter::repeat_n(1.0, 5 - params.len()));
-        } else if params.len() > 6 {
-            warn!("Too many values provided for GTR, required five values");
-            warn!("Will only use the first values provided");
-            params.truncate(5);
-        } else if params.len() == 6 {
-            warn!("Allowing all rates to vary for GTR");
-        }
+impl Default for GTR {
+    fn default() -> Self {
+        let params = vec![1.0; GTR_PARAM_N];
+        let freqs = frequencies!(&EQUAL_FREQS);
         let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
         gtr_q(&mut q, &freqs, &params);
-        Ok(GTR { freqs, q, params })
+        GTR { freqs, q, params }
+    }
+}
+
+impl QMatrixMaker for GTR {
+    fn create(freqs: &[f64], params: &[f64]) -> Result<GTR> {
+        let freqs = FreqVector::from_column_slice(freqs);
+        validate_dna_frequencies(&freqs)?;
+
+        if params.len() != GTR_PARAM_N {
+            bail!(
+                SubstitutionModel,
+                ParameterCount,
+                "GTR",
+                GTR_PARAM_N,
+                params.len()
+            );
+        }
+
+        let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
+        gtr_q(&mut q, &freqs, params);
+        Ok(GTR {
+            freqs,
+            q,
+            params: params.to_vec(),
+        })
     }
 }
 
@@ -533,7 +548,7 @@ fn gtr_q(q: &mut SubstMatrix, pi: &FreqVector, params: &[f64]) {
     let rtg = params[2];
     let rca = params[3];
     let rcg = params[4];
-    let rag = if params.len() == 6 { params[5] } else { 1.0 };
+    let rag = 1.0;
 
     let scaler = 1.0
         / ((rtc * fc + rta * fa + rtg * fg) * ft
@@ -568,8 +583,8 @@ impl Display for GTR {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "GTR with [rtc = {:.5}, rta = {:.5}, rtg = {:.5}, rca = {:.5}, rcg = {:.5}, rag = {:.5}, freqs = {}]",
-            self.params[0], self.params[1], self.params[2],self.params[3],self.params[4], if self.params.len() == 6 { self.params[5] } else { 1.0 }, self.freqs
+            "GTR with [rtc = {:.5}, rta = {:.5}, rtg = {:.5}, rca = {:.5}, rcg = {:.5}, rag = 1.0, freqs = {}]",
+            self.params[0], self.params[1], self.params[2],self.params[3],self.params[4], self.freqs
         )
     }
 }
