@@ -63,7 +63,7 @@ impl QMatrixMaker for JC69 {
         validate_dna_frequencies(&freqs)?;
 
         if freqs != frequencies!(&EQUAL_FREQS) {
-            bail!(SubstitutionModel, "JC69 frequencies must be equal");
+            bail!(SubstitutionModel, UnequalFrequencies, "JC69");
         }
 
         if !params.is_empty() {
@@ -94,7 +94,7 @@ impl QMatrix for JC69 {
     fn set_freqs(&mut self, freqs: FreqVector) -> Result<()> {
         validate_dna_frequencies(&freqs)?;
         if freqs != frequencies!(&EQUAL_FREQS) {
-            bail!(SubstitutionModel, "Frequencies for JC69 must be equal");
+            bail!(SubstitutionModel, UnequalFrequencies, "JC69");
         }
         Ok(())
     }
