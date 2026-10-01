@@ -30,17 +30,6 @@ fn validate_dna_frequencies(freqs: &FreqVector) -> Result<()> {
     Ok(())
 }
 
-fn validate_or_equal_freqs(freqs: &[f64]) -> FreqVector {
-    let freqs = FreqVector::from_column_slice(freqs);
-    if let Err(err) = validate_dna_frequencies(&freqs) {
-        warn!("Invalid DNA frequencies: {}", err);
-        warn!("Falling back to equal frequencies");
-        FreqVector::from_column_slice(&EQUAL_FREQS)
-    } else {
-        freqs
-    }
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct JC69 {
     freqs: FreqVector,
@@ -679,26 +668,6 @@ mod tests {
             Err(Error::SubstitutionModel(
                 SubstitutionModelError::FrequencySum { .. }
             ))
-        );
-    }
-
-    #[rstest]
-    #[case::valid(&[0.1, 0.2, 0.3, 0.4])]
-    #[case::equal(&[0.25, 0.25, 0.25, 0.25])]
-    fn valid_frequencies_are_preserved(#[case] freqs: &[f64]) {
-        assert_eq!(validate_or_equal_freqs(freqs), frequencies!(freqs));
-    }
-
-    #[rstest]
-    #[case::negative(&[-0.1, 0.5, 0.6, 0.0])]
-    #[case::too_few(&[0.5, 0.4, 0.1])]
-    #[case::too_many(&[0.4, 0.3, 0.1, 0.1, 0.1])]
-    #[case::wrong_sum(&[0.1, 0.2, 0.3, 0.1])]
-    #[case::empty(&[])]
-    fn invalid_frequencies_fall_back_to_equal(#[case] freqs: &[f64]) {
-        assert_eq!(
-            validate_or_equal_freqs(freqs),
-            frequencies!(&[0.25, 0.25, 0.25, 0.25])
         );
     }
 }
