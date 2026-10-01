@@ -63,6 +63,14 @@ pub struct SubstModel<Q: QMatrix> {
     pub(crate) qmatrix: Q,
 }
 
+impl<Q: QMatrix + Default> Default for SubstModel<Q> {
+    fn default() -> Self {
+        SubstModel {
+            qmatrix: Q::default(),
+        }
+    }
+}
+
 impl<Q: QMatrix + Display> Display for SubstModel<Q> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.qmatrix)
