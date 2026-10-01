@@ -15,26 +15,12 @@ const DNA_N: usize = 4;
 const EQUAL_FREQS: [f64; DNA_N] = [0.25, 0.25, 0.25, 0.25];
 
 fn validate_dna_frequencies(freqs: &FreqVector) -> Result<()> {
-    if freqs.len() < DNA_N {
-        bail!(
-            SubstitutionModel,
-            "too few frequencies provided for DNA model"
-        );
-    } else if freqs.len() > DNA_N {
-        bail!(
-            SubstitutionModel,
-            "too many frequencies provided for DNA model"
-        );
+    if freqs.len() != DNA_N {
+        bail!(SubstitutionModel, FrequencyCount, "DNA", DNA_N, freqs.len());
     } else if freqs.into_iter().any(|x| *x < 0.0) {
-        bail!(
-            SubstitutionModel,
-            "one or more negative frequencies provided for DNA model"
-        );
+        bail!(SubstitutionModel, NegativeFrequency, "DNA");
     } else if !relative_eq!(freqs.into_iter().sum::<f64>().abs(), 1.0) {
-        bail!(
-            SubstitutionModel,
-            "frequencies for DNA model do not sum to 1.0"
-        );
+        bail!(SubstitutionModel, FrequencySum, "DNA");
     }
     Ok(())
 }
@@ -571,6 +557,7 @@ mod tests {
 
     use assert_matches::assert_matches;
 
+    use crate::error::SubstitutionModelError;
     use crate::Error;
 
     use super::*;
@@ -580,22 +567,38 @@ mod tests {
     #[case::all_negative(&[-0.1, -0.2, -0.3, -0.4])]
     #[case::one_negative_sum_1(&[-0.1, 0.5, 0.6, 0.0])]
     fn negative_frequencies(#[case] freqs: &[f64]) {
-        assert_matches!(validate_dna_frequencies(&frequencies!(freqs)), Err(Error::SubstitutionModel(msg)) if msg.contains("negative") & msg.contains("DNA"));
+        assert_matches!(
+            validate_dna_frequencies(&frequencies!(freqs)),
+            Err(Error::SubstitutionModel(
+                SubstitutionModelError::NegativeFrequency { .. }
+            ))
+        );
     }
 
     #[rstest]
     #[case::too_few_sum_1(&[0.5, 0.4, 0.1])]
     #[case::too_few(&[0.5, 0.4, 0.0])]
     #[case::empty(&[])]
-    fn too_few_frequencies(#[case] freqs: &[f64]) {
-        assert_matches!(validate_dna_frequencies(&frequencies!(freqs)), Err(Error::SubstitutionModel(msg)) if msg.contains("too few") & msg.contains("DNA"));
-    }
-
-    #[rstest]
     #[case::one_too_many_sum_1(&[0.4, 0.3, 0.1, 0.1, 0.1])]
     #[case::too_many(&[0.1, 0.1, 0.1, 0.1, 0.1, 0.1])]
-    fn too_many_frequencies(#[case] freqs: &[f64]) {
-        assert_matches!(validate_dna_frequencies(&frequencies!(freqs)), Err(Error::SubstitutionModel(msg)) if msg.contains("too many") & msg.contains("DNA"));
+    #[case::valid_protein(&[1.0 / 20.0; 20])]
+    fn wrong_number_of_frequencies(#[case] freqs: &[f64]) {
+        match validate_dna_frequencies(&frequencies!(freqs)) {
+            Err(Error::SubstitutionModel(SubstitutionModelError::FrequencyCount {
+                name,
+                actual,
+                expected,
+            })) => {
+                assert_eq!(name, "DNA");
+                assert_eq!(actual, freqs.len());
+                assert_eq!(expected, DNA_N);
+            }
+            _ => panic!(
+                "Expected FrequencyCount error for DNA with actual = {} and expected = {}",
+                freqs.len(),
+                DNA_N
+            ),
+        }
     }
 
     #[rstest]
@@ -604,7 +607,12 @@ mod tests {
     #[case::sum_above_1_large(&[0.4, 1.3, 0.2, 0.2])]
 
     fn frequencies_dont_sum_to_1(#[case] freqs: &[f64]) {
-        assert_matches!(validate_dna_frequencies(&frequencies!(freqs)), Err(Error::SubstitutionModel(msg)) if msg.contains("do not sum to 1") & msg.contains("DNA"));
+        assert_matches!(
+            validate_dna_frequencies(&frequencies!(freqs)),
+            Err(Error::SubstitutionModel(
+                SubstitutionModelError::FrequencySum { .. }
+            ))
+        );
     }
 
     #[rstest]
