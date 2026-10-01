@@ -13,6 +13,10 @@ use crate::{bail, Result};
 const DNA_N: usize = 4;
 const EQUAL_FREQS: [f64; DNA_N] = [0.25, 0.25, 0.25, 0.25];
 
+const JC69_PARAM_N: usize = 0;
+const K80_PARAM_N: usize = 1;
+const HKY_PARAM_N: usize = 1;
+const TN93_PARAM_N: usize = 2;
 const GTR_PARAM_N: usize = 5;
 
 fn validate_dna_frequencies(freqs: &FreqVector) -> Result<()> {
@@ -68,7 +72,13 @@ impl QMatrixMaker for JC69 {
         }
 
         if !params.is_empty() {
-            bail!(SubstitutionModel, ParameterCount, "JC69", 0, params.len());
+            bail!(
+                SubstitutionModel,
+                ParameterCount,
+                "JC69",
+                JC69_PARAM_N,
+                params.len()
+            );
         }
 
         Ok(JC69::default())
@@ -142,8 +152,14 @@ impl QMatrixMaker for K80 {
             bail!(SubstitutionModel, UnequalFrequencies, "K80");
         }
 
-        let kappa = if params.len() != 1 {
-            bail!(SubstitutionModel, ParameterCount, "K80", 1, params.len());
+        let kappa = if params.len() != K80_PARAM_N {
+            bail!(
+                SubstitutionModel,
+                ParameterCount,
+                "K80",
+                K80_PARAM_N,
+                params.len()
+            );
         } else {
             params[0]
         };
@@ -250,8 +266,14 @@ impl QMatrixMaker for HKY {
         let freqs = FreqVector::from_column_slice(freqs);
         validate_dna_frequencies(&freqs)?;
 
-        let kappa = if params.len() != 1 {
-            bail!(SubstitutionModel, ParameterCount, "HKY", 1, params.len());
+        let kappa = if params.len() != HKY_PARAM_N {
+            bail!(
+                SubstitutionModel,
+                ParameterCount,
+                "HKY",
+                HKY_PARAM_N,
+                params.len()
+            );
         } else {
             params[0]
         };
@@ -352,7 +374,7 @@ pub struct TN93 {
 
 impl Default for TN93 {
     fn default() -> Self {
-        let params = vec![1.0, 1.0];
+        let params = vec![1.0; TN93_PARAM_N];
         let freqs = frequencies!(&EQUAL_FREQS);
         let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
         tn93_q(&mut q, &freqs, &params);
@@ -365,8 +387,14 @@ impl QMatrixMaker for TN93 {
         let freqs = FreqVector::from_column_slice(freqs);
         validate_dna_frequencies(&freqs)?;
 
-        if params.len() != 2 {
-            bail!(SubstitutionModel, ParameterCount, "TN93", 2, params.len());
+        if params.len() != TN93_PARAM_N {
+            bail!(
+                SubstitutionModel,
+                ParameterCount,
+                "TN93",
+                TN93_PARAM_N,
+                params.len()
+            );
         }
 
         let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
