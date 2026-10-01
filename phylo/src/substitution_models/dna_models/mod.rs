@@ -119,6 +119,19 @@ pub struct K80 {
     kappa: Vec<f64>,
 }
 
+impl Default for K80 {
+    fn default() -> Self {
+        let kappa = 2.0;
+        let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
+        k80_q(&mut q, kappa);
+        K80 {
+            freqs: frequencies!(&EQUAL_FREQS),
+            q,
+            kappa: vec![kappa],
+        }
+    }
+}
+
 impl QMatrixMaker for K80 {
     fn create(_: &[f64], params: &[f64]) -> Result<K80> {
         let kappa = match params.len().cmp(&1) {
