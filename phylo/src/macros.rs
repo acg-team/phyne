@@ -530,7 +530,7 @@ mod tests {
     }
 
     #[test]
-    fn bail_macro_substitution_model_variants() {
+    fn bail_subst_model_frequency_count() {
         fn fail_frequency_count() -> Result<()> {
             bail!(SubstitutionModel, FrequencyCount, "DNA", 4, 3);
         }
@@ -542,7 +542,10 @@ mod tests {
                 actual: 3,
             })) if name == "DNA"
         );
+    }
 
+    #[test]
+    fn bail_subst_model_frequency_sum() {
         fn fail_frequency_sum() -> Result<()> {
             bail!(SubstitutionModel, FrequencySum, "DNA");
         }
@@ -551,7 +554,10 @@ mod tests {
             Err(SubstitutionModel(SubstitutionModelError::FrequencySum { ref name }))
                 if name == "DNA"
         );
+    }
 
+    #[test]
+    fn bail_subst_model_negative_frequencies() {
         fn fail_negative_frequency() -> Result<()> {
             bail!(SubstitutionModel, NegativeFrequency, "DNA");
         }
@@ -560,7 +566,10 @@ mod tests {
             Err(SubstitutionModel(SubstitutionModelError::NegativeFrequency { ref name }))
                 if name == "DNA"
         );
+    }
 
+    #[test]
+    fn bail_subst_model_frequency_unequal() {
         fn fail_unequal_frequencies() -> Result<()> {
             bail!(SubstitutionModel, UnequalFrequencies, "K80");
         }
@@ -569,7 +578,10 @@ mod tests {
             Err(SubstitutionModel(SubstitutionModelError::UnequalFrequencies { ref name }))
                 if name == "K80"
         );
+    }
 
+    #[test]
+    fn bail_subst_model_parameter_count() {
         fn fail_parameter_count() -> Result<()> {
             bail!(SubstitutionModel, ParameterCount, "JC69", 1, 0);
         }
@@ -581,7 +593,10 @@ mod tests {
                 actual: 0,
             })) if name == "JC69"
         );
+    }
 
+    #[test]
+    fn bail_subst_model_other() {
         fn fail_other() -> Result<()> {
             bail!(SubstitutionModel, "test error");
         }
