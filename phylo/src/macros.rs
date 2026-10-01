@@ -196,6 +196,7 @@ mod tests {
 
     use assert_matches::assert_matches;
 
+    use crate::error::SubstitutionModelError;
     use crate::parsimony::{ParsimonySite, SiteFlag};
     use crate::tree::Tree;
     use crate::{Error::*, Record, Result};
@@ -507,6 +508,44 @@ mod tests {
             fail_variable(),
             Err(Io(msg)) if msg == "Variable error"
         );
+    }
+
+    #[test]
+    fn bail_macro_substitution_model_variants() {
+        fn fail_frequency_count() -> Result<()> {
+            bail!(SubstitutionModel, FrequencyCount, "DNA", 4, 3);
+        }
+        assert_matches!(
+            fail_frequency_count(),
+            Err(SubstitutionModel(SubstitutionModelError::FrequencyCount {
+                ref name,
+                expected: 4,
+                actual: 3,
+            })) if name == "DNA"
+        );
+
+        fn fail_frequency_sum() -> Result<()> {
+            bail!(SubstitutionModel, FrequencySum, "DNA");
+        }
+        assert_matches!(
+            fail_frequency_sum(),
+            Err(SubstitutionModel(SubstitutionModelError::FrequencySum { ref name }))
+                if name == "DNA"
+        );
+
+        fn fail_negative_frequency() -> Result<()> {
+            bail!(SubstitutionModel, NegativeFrequency, "DNA");
+        }
+        assert_matches!(
+            fail_negative_frequency(),
+            Err(SubstitutionModel(SubstitutionModelError::NegativeFrequency { ref name }))
+                if name == "DNA"
+        );
+
+        fn fail_other() -> Result<()> {
+            bail!(SubstitutionModel, "test error");
+        }
+        assert_matches!(fail_other(), Err(SubstitutionModel(SubstitutionModelError::Other(ref msg))) if msg == "test error");
     }
 
     #[test]
