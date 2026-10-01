@@ -173,6 +173,14 @@ macro_rules! bail {
             },
         ))
     };
+    // Usage: bail!(SubstitutionModel, UnequalFrequencies, "JC69")
+    (SubstitutionModel, UnequalFrequencies, $name:expr) => {
+        return Err($crate::Error::SubstitutionModel(
+            $crate::error::SubstitutionModelError::UnequalFrequencies {
+                name: $name.to_string(),
+            },
+        ))
+    };
     // Usage: bail!(SubstitutionModel, message)
     (SubstitutionModel, $err:expr) => {
         return Err($crate::Error::SubstitutionModel(

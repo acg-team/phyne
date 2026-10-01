@@ -67,4 +67,7 @@ pub enum SubstitutionModelError {
 
     #[error("{name}: one or more frequency values is negative")]
     NegativeFrequency { name: String },
+
+    #[error("{name}: expects equal frequencies")]
+    UnequalFrequencies { name: String },
 }
