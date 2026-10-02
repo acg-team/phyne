@@ -1,9 +1,21 @@
+use lazy_static::lazy_static;
+
 pub(crate) type ProteinExch = [f64; 400];
 pub(crate) type ProteinExchLowerTriangle = [f64; 190];
 pub(super) type ProteinFrequencies = [f64; 20];
 
 // AA order matches MrBayes and PhyML
 // ARNDCQEGHILKMFPSTWYV
+
+// Normalises a protein frequency array so that the sum of all frequencies equals 1.
+// Frequency arrays are copied from different tools with varying precision.
+fn normalised_protein_pi(mut freqs: [f64; 20]) -> ProteinFrequencies {
+    let scale: f64 = freqs.iter().sum();
+    for freq in &mut freqs {
+        *freq /= scale;
+    }
+    freqs
+}
 
 // Full WAG exchangeability matrix from MrBayes
 pub(crate) const WAG_EXCH: ProteinExch = [
@@ -59,12 +71,14 @@ pub(crate) const WAG_EXCH: ProteinExch = [
     2.0584500, 0.6498920, 0.3148870, 0.2327390, 1.3882300, 0.3653690, 0.3147300, 0.0000000,
 ];
 
+lazy_static! {
 // WAG stationary frequencies from MrBayes
-pub(crate) const WAG_PI: ProteinFrequencies = [
-    0.08662790, 0.04397200, 0.03908940, 0.05704510, 0.01930780, 0.03672810, 0.05805890, 0.08325180,
-    0.02443130, 0.04846600, 0.08620970, 0.06202860, 0.01950273, 0.03843190, 0.04576310, 0.06951790,
-    0.06101270, 0.01438590, 0.03527420, 0.07089560,
-];
+pub(crate) static ref WAG_PI: ProteinFrequencies = normalised_protein_pi([
+        0.08662790, 0.04397200, 0.03908940, 0.05704510, 0.01930780, 0.03672810, 0.05805890,
+        0.08325180, 0.02443130, 0.04846600, 0.08620970, 0.06202860, 0.01950273, 0.03843190,
+        0.04576310, 0.06951790, 0.06101270, 0.01438590, 0.03527420, 0.07089560,
+    ]);
+}
 
 // BLOSUM62 exchangeability matrix from MrBayes
 pub(crate) const BLOSUM_EXCH: ProteinExch = [
@@ -470,11 +484,13 @@ pub(crate) const BLOSUM_EXCH: ProteinExch = [
     0.000000000000,
 ];
 
-// BLOSUM62 stationary frequencies from MrBayes
-pub(crate) const BLOSUM_PI: ProteinFrequencies = [
+lazy_static! {
+// WAG stationary frequencies from MrBayes
+pub(crate) static ref BLOSUM_PI: ProteinFrequencies = normalised_protein_pi([
     0.074, 0.052, 0.045, 0.054, 0.025, 0.034, 0.054, 0.074, 0.026, 0.068, 0.099, 0.058, 0.025,
     0.047, 0.039, 0.057, 0.051, 0.013, 0.032, 0.073,
-];
+]);
+}
 
 // HIVB exchangeability matrix from PhyML
 // The code only contains the lower triangle of the matrix, the rest is symmetric
@@ -671,8 +687,9 @@ pub(crate) const HIVB_EXCH_LOWER_TRIAG: ProteinExchLowerTriangle = [
     0.041059300000,
 ];
 
+lazy_static! {
 // HIVB stationary frequencies from PhyML
-pub(crate) const HIVB_PI: ProteinFrequencies = [
+pub(crate) static ref HIVB_PI: ProteinFrequencies = normalised_protein_pi([
     0.060490222,
     0.066039665,
     0.044127815,
@@ -693,4 +710,5 @@ pub(crate) const HIVB_PI: ProteinFrequencies = [
     0.033011601,
     0.028350243,
     0.061625237,
-];
+]);
+}

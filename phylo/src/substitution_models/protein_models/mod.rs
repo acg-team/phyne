@@ -64,7 +64,7 @@ macro_rules! define_protein_model {
 
         impl Default for $name {
             fn default() -> Self {
-                let freqs = FreqVector::from_column_slice(&$pi);
+                let freqs = FreqVector::from_column_slice($pi.as_slice());
                 let exchangeability = SubstMatrix::from_row_slice(PROTEIN_N, PROTEIN_N, &$exch);
                 let q = make_protein_q(&exchangeability, &freqs);
                 $name {
