@@ -1,4 +1,3 @@
-use std::f64;
 use std::fmt::Display;
 
 use crate::likelihood::TreeSearchCost;
