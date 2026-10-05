@@ -44,13 +44,30 @@ pub struct PIPModel<Q: QMatrix> {
     params: Vec<f64>,
 }
 
-impl<Q: QMatrix + Default> Default for PIPModel<Q> {
-    fn default() -> Self {
-        let subst_q = Q::default();
+const DEFAULT_PIP_PARAM: f64 = 1.5;
 
-        let mut params = vec![1.5, 1.5];
-        params.extend(subst_q.params());
+fn pip_q(q: &mut SubstMatrix, subst_q: &SubstMatrix, mu: f64) {
+    let n = subst_q.ncols();
+    q.view_mut((0, 0), (n, n)).copy_from(subst_q);
+    q.fill_column(n, mu);
+    for i in 0..(n + 1) {
+        q[(i, i)] -= mu;
+    }
+}
 
+/// Copies the given PIP parameters (lambda, mu), filling in defaults if too few are given.
+fn pip_params_or_default(params: &[f64]) -> Vec<f64> {
+    let mut params = params.to_vec();
+    if params.len() < 2 {
+        warn!("Too few values provided for PIP, 2 values required, lambda and mu");
+        warn!("Falling back to default values");
+        params.extend(iter::repeat_n(DEFAULT_PIP_PARAM, 2 - params.len()));
+    }
+    params
+}
+
+impl<Q: QMatrix> PIPModel<Q> {
+    fn from_substitution_with_params(subst_q: Q, params: Vec<f64>) -> Self {
         let n = subst_q.n();
         let freqs = subst_q.freqs().clone().insert_row(n, 0.0);
         let mut q = SubstMatrix::zeros(n + 1, n + 1);
@@ -62,18 +79,7 @@ impl<Q: QMatrix + Default> Default for PIPModel<Q> {
             params,
         }
     }
-}
 
-fn pip_q(q: &mut SubstMatrix, subst_q: &SubstMatrix, mu: f64) {
-    let n = subst_q.ncols();
-    q.view_mut((0, 0), (n, n)).copy_from(subst_q);
-    q.fill_column(n, mu);
-    for i in 0..(n + 1) {
-        q[(i, i)] -= mu;
-    }
-}
-
-impl<Q: QMatrix> PIPModel<Q> {
     fn lambda(&self) -> f64 {
         self.params[0]
     }
@@ -87,57 +93,34 @@ impl<Q: QMatrix> PIPModel<Q> {
     }
 }
 
-impl<Q: QMatrix + QMatrixMaker> PIPModel<Q> {
-    pub fn new(frequencies: &[f64], params: &[f64]) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        let mut params = params.to_vec();
-        if params.len() < 2 {
-            warn!("Too few values provided for PIP, 2 values required, lambda and mu");
-            warn!("Falling back to default values");
-            params.extend(iter::repeat_n(1.5, 2 - params.len()));
-        }
-        let mu = params[1];
-
-        let subst_q = Q::create(frequencies, &params[2..])?;
-        let n = subst_q.n();
-        let freqs = subst_q.freqs().clone().insert_row(n, 0.0);
-        let mut q = SubstMatrix::zeros(n + 1, n + 1);
-        pip_q(&mut q, subst_q.q(), mu);
-        Ok(PIPModel {
-            subst_q,
-            q,
-            freqs,
-            params: params.to_vec(),
-        })
+impl<Q: QMatrix + Default> Default for PIPModel<Q> {
+    fn default() -> Self {
+        let subst_q = Q::default();
+        let mut params = vec![DEFAULT_PIP_PARAM; 2];
+        params.extend(subst_q.params());
+        Self::from_substitution_with_params(subst_q, params)
     }
 }
 
 impl<Q: QMatrix + Default> PIPModel<Q> {
     pub fn with_default_substitution(params: &[f64]) -> Result<Self> {
-        let mut params = params.to_vec();
-        if params.len() < 2 {
-            warn!("Too few values provided for PIP, 2 values required, lambda and mu");
-            warn!("Falling back to default values");
-            params.extend(iter::repeat_n(1.5, 2 - params.len()));
-        }
-
-        let mu = params[1];
-
         let subst_q = Q::default();
+        let mut params = pip_params_or_default(params);
         params.extend(subst_q.params());
+        Ok(Self::from_substitution_with_params(subst_q, params))
+    }
+}
 
-        let n = subst_q.n();
-        let freqs = subst_q.freqs().clone().insert_row(n, 0.0);
-        let mut q = SubstMatrix::zeros(n + 1, n + 1);
-        pip_q(&mut q, subst_q.q(), mu);
-        Ok(PIPModel {
-            subst_q,
-            q,
-            freqs,
+impl<Q: QMatrix + QMatrixMaker> PIPModel<Q> {
+    pub fn new(frequencies: &[f64], params: &[f64]) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        let params = pip_params_or_default(params);
+        Ok(Self::from_substitution_with_params(
+            Q::create(frequencies, &params[2..])?,
             params,
-        })
+        ))
     }
 }
 
