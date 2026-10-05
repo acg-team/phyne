@@ -44,19 +44,22 @@ pub struct PIPModel<Q: QMatrix> {
     params: Vec<f64>,
 }
 
-impl<Q: QMatrix + QMatrixMaker + Default> Default for PIPModel<Q> {
+impl<Q: QMatrix + Default> Default for PIPModel<Q> {
     fn default() -> Self {
         let subst_q = Q::default();
-        let mu = 1.5;
+
+        let mut params = vec![1.5, 1.5];
+        params.extend(subst_q.params());
+
         let n = subst_q.n();
         let freqs = subst_q.freqs().clone().insert_row(n, 0.0);
         let mut q = SubstMatrix::zeros(n + 1, n + 1);
-        pip_q(&mut q, subst_q.q(), mu);
+        pip_q(&mut q, subst_q.q(), params[1]);
         PIPModel {
             subst_q,
             q,
             freqs,
-            params: vec![mu, 1.5],
+            params,
         }
     }
 }
