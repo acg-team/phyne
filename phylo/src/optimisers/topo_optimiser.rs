@@ -98,7 +98,7 @@ where
     ///
     /// # fn main() -> Result<()> {
     /// let info = PhyloInfoBuilder::new("./examples/data/K80.fasta").build()?;
-    /// let k80 = SubstModel::<K80>::new(&[], &[4.0, 1.0])?;
+    /// let k80 = SubstModel::<K80>::default();
     /// let c = SubstitutionCostBuilder::new(k80, info).build()?;
     /// let unopt_cost = c.cost();
     /// let result = TopologyOptimiser::new(c, SprOptimiser {}, &mut DefaultGenerator::default()).run()?;
@@ -261,7 +261,7 @@ mod private_tests {
 
     #[cfg(test)]
     fn single_iter_pip_template<
-        Q: QMatrix + QMatrixMaker + Send,
+        Q: QMatrix + QMatrixMaker + Default + Send,
         MO: MoveOptimiser + Clone + Send + 'static,
     >(
         info: PhyloInfo<MSA>,
@@ -270,7 +270,7 @@ mod private_tests {
         PIPCost<Q, MSA>: Compatible<MO>,
     {
         let mut rng = FakeGenerator::default();
-        let model = PIPModel::<Q>::new(&[], &[]).unwrap();
+        let model = PIPModel::<Q>::default();
         let c = PIPCB::new(model.clone(), info.clone()).build().unwrap();
         let init_cost = c.cost();
 
@@ -342,7 +342,7 @@ mod private_tests {
 
     #[cfg(test)]
     fn single_iter_substitution_template<
-        Q: QMatrix + QMatrixMaker + Send,
+        Q: QMatrix + QMatrixMaker + Default + Send,
         MO: MoveOptimiser + Clone + Send + 'static,
     >(
         info: PhyloInfo<MSA>,
@@ -351,7 +351,7 @@ mod private_tests {
         SubstitutionCost<Q, MSA>: Compatible<MO>,
     {
         let mut rng = FakeGenerator::default();
-        let model = SubstModel::<Q>::new(&[], &[]).unwrap();
+        let model = SubstModel::<Q>::default();
         let c = SCB::new(model.clone(), info.clone()).build().unwrap();
         let init_cost = c.cost();
 

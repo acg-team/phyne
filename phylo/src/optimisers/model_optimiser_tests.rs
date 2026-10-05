@@ -21,7 +21,7 @@ fn likelihood_improves_k80() {
     let info = PIB::with_attrs(fldr.join("K80/K80.fasta"), fldr.join("tree.newick"))
         .build()
         .unwrap();
-    let model = SubstModel::<K80>::new(&[], &[4.0, 1.0]).unwrap();
+    let model = SubstModel::<K80>::new(&[0.25; 4], &[4.0]).unwrap();
 
     let c = SCB::new(model, info.clone()).build().unwrap();
     let unopt_logl = c.cost();
@@ -45,7 +45,7 @@ fn frequencies_unchanged_k80() {
     let info = PIB::with_attrs(fldr.join("K80/K80.fasta"), fldr.join("tree.newick"))
         .build()
         .unwrap();
-    let model = SubstModel::<K80>::new(&[], &[4.0, 1.0]).unwrap();
+    let model = SubstModel::<K80>::new(&[0.25; 4], &[4.0]).unwrap();
     let c = SCB::new(model.clone(), info).build().unwrap();
     let initial_logl = c.cost();
     let o = ModelOptimiser::new(c, FrequencyOptimisation::Fixed)
@@ -65,7 +65,7 @@ fn parameter_change_k80() {
     let info = PIB::with_attrs(fldr.join("K80/K80.fasta"), fldr.join("tree.newick"))
         .build()
         .unwrap();
-    let model = SubstModel::<K80>::new(&[], &[4.0, 1.0]).unwrap();
+    let model = SubstModel::<K80>::new(&[0.25; 4], &[4.0]).unwrap();
     let c = SCB::new(model.clone(), info).build().unwrap();
     let initial_logl = c.cost();
     let o = ModelOptimiser::new(c, FrequencyOptimisation::Fixed)
@@ -93,7 +93,7 @@ fn gtr_on_k80_data() {
         .run()
         .unwrap();
 
-    let model = SubstModel::<K80>::new(&[], &[4.0, 1.0]).unwrap();
+    let model = SubstModel::<K80>::new(&[0.25; 4], &[4.0]).unwrap();
     let c = SCB::new(model.clone(), info.clone()).build().unwrap();
     let o_k80 = ModelOptimiser::new(c, FrequencyOptimisation::Fixed)
         .run()
@@ -108,12 +108,12 @@ fn gtr_on_k80_data() {
 }
 
 #[cfg(test)]
-fn improved_logl_fixed_freqs_template<Q: QMatrix + QMatrixMaker>() {
+fn improved_logl_fixed_freqs_template<Q: QMatrix + Default>() {
     let fldr = Path::new("./data/sim");
     let info = PIB::with_attrs(fldr.join("GTR/gtr.fasta"), fldr.join("tree.newick"))
         .build()
         .unwrap();
-    let model = SubstModel::<Q>::new(&[], &[]).unwrap();
+    let model = SubstModel::<Q>::default();
 
     let c = SCB::new(model.clone(), info).build().unwrap();
     let initial_logl = c.cost();
@@ -138,12 +138,12 @@ fn improved_logl_fixed_freqs() {
 }
 
 #[cfg(test)]
-fn improved_logl_empirical_freqs_template<Q: QMatrix + QMatrixMaker>() {
+fn improved_logl_empirical_freqs_template<Q: QMatrix + Default>() {
     let fldr = Path::new("./data/sim");
     let info = PIB::with_attrs(fldr.join("GTR/gtr.fasta"), fldr.join("tree.newick"))
         .build()
         .unwrap();
-    let model = SubstModel::<Q>::new(&[], &[]).unwrap();
+    let model = SubstModel::<Q>::default();
 
     let c = SCB::new(model.clone(), info).build().unwrap();
     let initial_logl = c.cost();
@@ -168,12 +168,12 @@ fn improved_logl_empirical_freqs() {
 }
 
 #[cfg(test)]
-fn improved_logl_empirical_freqs_pip_template<Q: QMatrix + QMatrixMaker>() {
+fn improved_logl_empirical_freqs_pip_template<Q: QMatrix + QMatrixMaker + Default>() {
     let fldr = Path::new("./data/sim");
     let info = PIB::with_attrs(fldr.join("GTR/gtr.fasta"), fldr.join("tree.newick"))
         .build()
         .unwrap();
-    let model = PIPModel::<Q>::new(&[], &[1.4, 0.6]).unwrap();
+    let model = PIPModel::<Q>::with_default_substitution(&[1.4, 0.6]).unwrap();
 
     let c = PIPCostBuilder::new(model.clone(), info).build().unwrap();
     let initial_logl = c.cost();
@@ -210,7 +210,7 @@ fn gtr_vs_phyml() {
     // Optimized parameters from PhyML
     let phyml_model = SubstModel::<GTR>::new(
         &[0.24720, 0.35320, 0.29540, 0.10420],
-        &[1.0, 0.031184397, 0.000100000, 0.077275972, 0.041508690, 1.0],
+        &[1.0, 0.031184397, 0.000100000, 0.077275972, 0.041508690],
     )
     .unwrap();
     let phyml_logl = SCB::new(phyml_model, info.clone()).build().unwrap().cost();
@@ -218,7 +218,7 @@ fn gtr_vs_phyml() {
 
     let paml_model = SubstModel::<GTR>::new(
         &[0.25318, 0.32894, 0.31196, 0.10592],
-        &[0.88892, 0.03190, 0.00001, 0.07102, 0.02418, 1.0],
+        &[0.88892, 0.03190, 0.00001, 0.07102, 0.02418],
     )
     .unwrap(); // Original input to paml
     let paml_logl = SCB::new(paml_model, info.clone()).build().unwrap().cost();
@@ -226,7 +226,7 @@ fn gtr_vs_phyml() {
 
     let model = SubstModel::<GTR>::new(
         &[0.24720, 0.35320, 0.29540, 0.10420],
-        &[1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+        &[1.0, 1.0, 1.0, 1.0, 1.0],
     )
     .unwrap();
     let c = SCB::new(model, info.clone()).build().unwrap();
@@ -250,14 +250,14 @@ fn k80_vs_phyml() {
         .build()
         .unwrap();
     // Optimized parameters from PhyML
-    let phyml_model = SubstModel::<K80>::new(&[], &[19.432093]).unwrap();
+    let phyml_model = SubstModel::<K80>::new(&[0.25; 4], &[19.432093]).unwrap();
     let phyml_logl = SCB::new(phyml_model.clone(), info.clone())
         .build()
         .unwrap()
         .cost();
     assert_relative_eq!(phyml_logl, -3629.2205979421, epsilon = 1.0e-5);
 
-    let model = SubstModel::<K80>::new(&[], &[2.0, 1.0]).unwrap();
+    let model = SubstModel::<K80>::new(&[0.25; 4], &[2.0]).unwrap();
     let o = ModelOptimiser::new(
         SCB::new(model, info.clone()).build().unwrap(),
         FrequencyOptimisation::Fixed,
@@ -282,7 +282,7 @@ fn hky_vs_phyml() {
     let info = PIB::with_attrs(fldr.join("GTR/gtr.fasta"), fldr.join("tree.newick"))
         .build()
         .unwrap();
-    let model = SubstModel::<HKY>::new(&[0.25, 0.25, 0.25, 0.25], &[2.0]).unwrap();
+    let model = SubstModel::<HKY>::default();
     let o = ModelOptimiser::new(
         SCB::new(model, info.clone()).build().unwrap(),
         FrequencyOptimisation::Empirical,
@@ -328,7 +328,7 @@ fn frequencies_fixed_opt_gtr() {
 }
 
 #[cfg(test)]
-fn frequencies_fixed_protein_template<Q: QMatrix + QMatrixMaker>() {
+fn frequencies_fixed_protein_template<Q: QMatrix + Default>() {
     let fldr = Path::new("./data");
     let info = PIB::with_attrs(
         fldr.join("sequences_protein1.fasta"),
@@ -336,7 +336,7 @@ fn frequencies_fixed_protein_template<Q: QMatrix + QMatrixMaker>() {
     )
     .build()
     .unwrap();
-    let model = SubstModel::<Q>::new(&[], &[]).unwrap();
+    let model = SubstModel::<Q>::default();
     let c = SCB::new(model.clone(), info).build().unwrap();
 
     let initial_llik = c.cost();
@@ -357,7 +357,7 @@ fn frequencies_fixed_protein() {
 }
 
 #[cfg(test)]
-fn frequencies_empirical_protein_template<Q: QMatrix + QMatrixMaker>() {
+fn frequencies_empirical_protein_template<Q: QMatrix + Default>() {
     let fldr = Path::new("./data");
     let info = PIB::with_attrs(
         fldr.join("sequences_protein1.fasta"),
@@ -365,7 +365,7 @@ fn frequencies_empirical_protein_template<Q: QMatrix + QMatrixMaker>() {
     )
     .build()
     .unwrap();
-    let model = SubstModel::<Q>::new(&[], &[]).unwrap();
+    let model = SubstModel::<Q>::default();
     let c = SCB::new(model.clone(), info).build().unwrap();
 
     let initial_llik = c.cost();
@@ -390,11 +390,7 @@ fn arpip_example() {
     let info = PIB::with_attrs(fldr.join("msa.fasta"), fldr.join("tree.nwk"))
         .build()
         .unwrap();
-    let pip_gtr = PIPModel::<GTR>::new(
-        &[0.25, 0.25, 0.25, 0.25],
-        &[0.1, 0.1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
-    )
-    .unwrap();
+    let pip_gtr = PIPModel::<GTR>::with_default_substitution(&[0.1, 0.1]).unwrap();
     let c = PIPCostBuilder::new(pip_gtr.clone(), info.clone())
         .build()
         .unwrap();
@@ -427,11 +423,7 @@ fn pip_propip_example() {
         .build()
         .unwrap();
 
-    let pip_gtr = PIPModel::<GTR>::new(
-        &[0.25, 0.25, 0.25, 0.25],
-        &[14.142_1, 0.1414, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
-    )
-    .unwrap();
+    let pip_gtr = PIPModel::<GTR>::with_default_substitution(&[14.142_1, 0.1414]).unwrap();
     let c = PIPCostBuilder::new(pip_gtr.clone(), info).build().unwrap();
     let initial_logl = c.cost();
 
@@ -457,7 +449,7 @@ fn pip_vs_python_no_gaps() {
     .build()
     .unwrap();
 
-    let pip_hky = PIPModel::<HKY>::new(&[0.25; 4], &[1.2, 0.45, 1.0]).unwrap();
+    let pip_hky = PIPModel::<JC69>::with_default_substitution(&[1.2, 0.45]).unwrap();
 
     let c = PIPCostBuilder::new(pip_hky, info).build().unwrap();
     assert_relative_eq!(c.cost(), -361.18634412281443, epsilon = 1e-7); // value from the python script
@@ -482,7 +474,7 @@ fn pip_gtr_optimisation() {
         .unwrap();
     let pip_gtr = PIPModel::<GTR>::new(
         &[0.24720, 0.35320, 0.29540, 0.10420],
-        &[0.1, 0.1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+        &[0.1, 0.1, 1.0, 1.0, 1.0, 1.0, 1.0],
     )
     .unwrap();
     let c = PIPCostBuilder::new(pip_gtr, info.clone()).build().unwrap();
@@ -516,7 +508,7 @@ fn pip_gtr_vs_gtr_params() {
         .unwrap();
     let pip_gtr = PIPModel::<GTR>::new(
         &[0.24720, 0.35320, 0.29540, 0.10420],
-        &[0.1, 0.1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+        &[0.1, 0.1, 1.0, 1.0, 1.0, 1.0, 1.0],
     )
     .unwrap();
     let c = PIPCostBuilder::new(pip_gtr, info.clone()).build().unwrap();
@@ -526,7 +518,7 @@ fn pip_gtr_vs_gtr_params() {
 
     let gtr = SubstModel::<GTR>::new(
         &[0.24720, 0.35320, 0.29540, 0.10420],
-        &[1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+        &[1.0, 1.0, 1.0, 1.0, 1.0],
     )
     .unwrap();
     let c = SCB::new(gtr, info).build().unwrap();
@@ -547,7 +539,7 @@ fn pip_protein_example() {
     let info = PIB::with_attrs(fldr.join("seqs.fasta"), fldr.join("example_tree.newick"))
         .build()
         .unwrap();
-    let pip = PIPModel::<WAG>::new(&[], &[2.0, 0.1]).unwrap();
+    let pip = PIPModel::<WAG>::with_default_substitution(&[2.0, 0.1]).unwrap();
     let c = PIPCostBuilder::new(pip, info).build().unwrap();
     let initial_logl = c.cost();
     let o = ModelOptimiser::new(c, FrequencyOptimisation::Empirical)
@@ -568,7 +560,7 @@ fn stop_condition_epsilon() {
     let info = PIB::with_attrs(fldr.join("seqs.fasta"), fldr.join("example_tree.newick"))
         .build()
         .unwrap();
-    let pip = PIPModel::<WAG>::new(&[], &[2.0, 0.1]).unwrap();
+    let pip = PIPModel::<WAG>::with_default_substitution(&[2.0, 0.1]).unwrap();
     let c = PIPCostBuilder::new(pip, info).build().unwrap();
     let initial_logl = c.cost();
     let result = ModelOptimiser::with_stop_condition(
@@ -626,7 +618,7 @@ fn tkf91_model_opti() {
     let info = PIB::with_attrs(fldr.join("msa.fasta"), fldr.join("tree.nwk"))
         .build_with_ancestors()
         .unwrap();
-    let subst_model = SubstModel::<HKY>::new(&[], &[2.0]).unwrap();
+    let subst_model = SubstModel::<HKY>::default();
     let tkf91 = TKF91CostBuilder::new(&[0.8, 1.0], subst_model.clone(), info.clone())
         .build()
         .unwrap();
@@ -640,7 +632,7 @@ fn tkf92_model_opti() {
     let info = PIB::with_attrs(fldr.join("msa.fasta"), fldr.join("tree.nwk"))
         .build_with_ancestors()
         .unwrap();
-    let subst_model = SubstModel::<HKY>::new(&[], &[2.0]).unwrap();
+    let subst_model = SubstModel::<HKY>::default();
     let tkf92 = TKF92CostBuilder::new(&[0.8, 1.0, 0.2], subst_model, info)
         .build()
         .unwrap();

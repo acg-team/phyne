@@ -86,7 +86,7 @@ fn k80_simple() {
     .unwrap();
     let info = PhyloInfo { msa, tree };
 
-    let k80 = SubstModel::<K80>::new(&[], &[4.0, 1.0]).unwrap();
+    let k80 = SubstModel::<K80>::new(&[0.25; 4], &[4.0]).unwrap();
     let c = SCB::new(k80.clone(), info).build().unwrap();
     let unopt_logl = c.cost();
     let o = TopologyOptimiser::new(c, SprOptimiser {}, &mut FakeGenerator::default())
@@ -118,7 +118,7 @@ fn k80_simple_nni() {
     .unwrap();
     let info = PhyloInfo { msa, tree };
 
-    let k80 = SubstModel::<K80>::new(&[], &[4.0, 1.0]).unwrap();
+    let k80 = SubstModel::<K80>::new(&[0.25; 4], &[4.0]).unwrap();
     let c = SCB::new(k80.clone(), info).build().unwrap();
     let unopt_logl = c.cost();
     let o = TopologyOptimiser::new(c, NniOptimiser {}, &mut FakeGenerator::default())
@@ -141,7 +141,7 @@ fn k80_sim_data_from_given() {
     let info = PIB::with_attrs(fldr.join("K80.fasta"), fldr.join("../tree.newick"))
         .build()
         .unwrap();
-    let k80 = SubstModel::<K80>::new(&[], &[4.0, 1.0]).unwrap();
+    let k80 = SubstModel::<K80>::new(&[0.25; 4], &[4.0]).unwrap();
     let c = SCB::new(k80.clone(), info).build().unwrap();
     let unopt_logl = c.cost();
     let o = TopologyOptimiser::new(c, SprOptimiser {}, &mut FakeGenerator::default())
@@ -166,7 +166,7 @@ fn k80_sim_data_from_nj() {
     let info = PIB::new(fldr.join("K80.fasta"))
         .build_w_rng(&mut fake_rng)
         .unwrap();
-    let k80 = SubstModel::<K80>::new(&[], &[4.0, 1.0]).unwrap();
+    let k80 = SubstModel::<K80>::new(&[0.25; 4], &[4.0]).unwrap();
     let c = SCB::new(k80.clone(), info).build().unwrap();
     let unopt_logl = c.cost();
     let o = TopologyOptimiser::new(c, SprOptimiser {}, &mut fake_rng)
@@ -191,7 +191,7 @@ fn k80_sim_data_vs_phyml() {
     let info = PIB::with_attrs(fldr.join("K80/K80.fasta"), fldr.join("tree.newick"))
         .build_w_rng(&mut FakeGenerator::default())
         .unwrap();
-    let jc69 = SubstModel::<JC69>::new(&[], &[]).unwrap();
+    let jc69 = SubstModel::<JC69>::default();
     let c = SCB::new(jc69.clone(), info).build().unwrap();
     let unopt_logl = c.cost();
     let o = TopologyOptimiser::new(c, SprOptimiser {}, &mut FakeGenerator::default())
@@ -240,7 +240,7 @@ fn k80_sim_data_vs_phyml_wrong_start() {
     let info = PIB::with_attrs(fldr.join("K80/K80.fasta"), fldr.join("wrong_tree.newick"))
         .build()
         .unwrap();
-    let jc69 = SubstModel::<JC69>::new(&[], &[]).unwrap();
+    let jc69 = SubstModel::<JC69>::default();
     let c = SCB::new(jc69.clone(), info).build().unwrap();
     let unopt_logl = c.cost();
     let o = TopologyOptimiser::new(c, SprOptimiser {}, &mut FakeGenerator::default())
@@ -295,7 +295,7 @@ fn wag_no_gaps_vs_phyml_nj_tree_start_nni() {
     let tree_file = fldr.join("jati_wag_nogap_nj_start.newick");
     let rng = &mut FakeGenerator::default();
 
-    let wag = SubstModel::<WAG>::new(&[], &[]).unwrap();
+    let wag = SubstModel::<WAG>::default();
     let res = optimise_tree_nni(&seq_file, &tree_file, wag.clone(), rng);
     assert!(res.final_cost >= res.initial_cost);
     let wag_tree = res.cost.tree();
@@ -321,7 +321,7 @@ fn wag_no_gaps_vs_phyml_nj_tree_start_spr() {
     let tree_file = fldr.join("jati_wag_nogap_nj_start.newick");
     let rng = &mut FakeGenerator::default();
 
-    let wag = SubstModel::<WAG>::new(&[], &[]).unwrap();
+    let wag = SubstModel::<WAG>::default();
     let res = optimise_tree(&seq_file, &tree_file, wag.clone(), rng);
     assert!(res.final_cost >= res.initial_cost);
     let wag_tree = res.cost.tree();
@@ -347,7 +347,7 @@ fn test_nni_and_spr_find_same_tree() {
     let tree_file = fldr.join("jati_wag_nogap_nj_start.newick");
     let rng = &mut FakeGenerator::default();
 
-    let wag = SubstModel::<WAG>::new(&[], &[]).unwrap();
+    let wag = SubstModel::<WAG>::default();
     let res_nni = optimise_tree_nni(&seq_file, &tree_file, wag.clone(), rng);
     let res_spr = optimise_tree(&seq_file, &tree_file, wag.clone(), rng);
     assert!(res_nni.final_cost >= res_nni.initial_cost);
@@ -371,7 +371,7 @@ fn pip_vs_subst_dna_tree() {
         .unwrap();
     let rng = &mut FakeGenerator::default();
 
-    let k80 = SubstModel::<K80>::new(&[], &[4.0]).unwrap();
+    let k80 = SubstModel::<K80>::new(&[0.25; 4], &[4.0]).unwrap();
     let k80_res = TopologyOptimiser::new(
         SCB::new(k80.clone(), info.clone()).build().unwrap(),
         SprOptimiser {},
@@ -380,7 +380,7 @@ fn pip_vs_subst_dna_tree() {
     .run()
     .unwrap();
 
-    let pip = PIPModel::<K80>::new(&[], &[0.5, 0.4, 4.0]).unwrap();
+    let pip = PIPModel::<K80>::new(&[0.25; 4], &[0.5, 0.4, 4.0]).unwrap();
     let pip_res = TopologyOptimiser::new(
         PIPCB::new(pip.clone(), info).build().unwrap(),
         SprOptimiser {},
@@ -424,8 +424,8 @@ fn wag_nogaps_pip_vs_subst_tree_nj_start() {
     let fldr = Path::new("./data/phyml_protein_example/");
     let seq_file = fldr.join("nogap_seqs.fasta");
 
-    let pip = PIPModel::<WAG>::new(&[], &[50.0, 0.1]).unwrap();
-    let wag = SubstModel::<WAG>::new(&[], &[]).unwrap();
+    let pip = PIPModel::<WAG>::with_default_substitution(&[50.0, 0.1]).unwrap();
+    let wag = SubstModel::<WAG>::default();
     let rng = &mut FakeGenerator::default();
 
     let pip_res = optimise_tree_pip(
@@ -490,7 +490,7 @@ fn pip_optimise_model_tree() {
     let start_info = PIB::new(seq_file.clone()).build_w_rng(rng).unwrap();
 
     // Optimise tree starting from an NJ tree and initial model
-    let pip = PIPModel::<WAG>::new(&[], &[1.4, 0.5]).unwrap();
+    let pip = PIPModel::<WAG>::with_default_substitution(&[1.4, 0.5]).unwrap();
     let tree_opt_result = optimise_tree_pip(
         &seq_file,
         &fldr.join("jati_pip_nj_start.newick"),
@@ -561,7 +561,7 @@ fn wag_vs_phyml_empirical_freqs() {
 
     let rng = &mut FakeGenerator::default();
 
-    let wag = SubstModel::<WAG>::new(&[], &[]).unwrap();
+    let wag = SubstModel::<WAG>::default();
     let o = ModelOptimiser::new(
         SCB::new(wag.clone(), start_info.clone()).build().unwrap(),
         Empirical,
@@ -605,7 +605,7 @@ fn pip_wag_vs_phyml_empirical_freqs() {
     let start_info = PIB::new(seq_file.clone())
         .build_w_rng(&mut FakeGenerator::default())
         .unwrap();
-    let pip = PIPModel::<WAG>::new(&[], &[1.0, 2.0]).unwrap();
+    let pip = PIPModel::<WAG>::with_default_substitution(&[1.0, 2.0]).unwrap();
     // Use empirical frequencies and optimise lambda and mu for PIP
     let o = ModelOptimiser::new(
         PIPCB::new(pip.clone(), start_info.clone()).build().unwrap(),
@@ -646,7 +646,7 @@ fn wag_vs_phyml_fixed_freqs() {
     let fldr = Path::new("./data/phyml_protein_example/");
     let seq_file = fldr.join("seqs.fasta");
     let starting_tree = fldr.join("phyml_nj_tree.newick");
-    let wag = SubstModel::<WAG>::new(&[], &[]).unwrap();
+    let wag = SubstModel::<WAG>::default();
     let start_info = PIB::with_attrs(seq_file.clone(), starting_tree)
         .build()
         .unwrap();
@@ -717,7 +717,7 @@ fn dollo_tree_search() {
     )
     .unwrap();
     let info = PhyloInfo { msa, tree };
-    let k80 = SubstModel::<K80>::new(&[], &[4.0, 1.0]).unwrap();
+    let k80 = SubstModel::<K80>::new(&[0.25; 4], &[4.0]).unwrap();
     let scoring = ModelScoringBuilder::new(k80)
         .times(vec![1.0])
         .build()
@@ -759,7 +759,7 @@ fn dollo_tree_search_sim_data_model() {
         .build()
         .unwrap();
 
-    let k80 = SubstModel::<K80>::new(&[], &[4.0, 1.0]).unwrap();
+    let k80 = SubstModel::<K80>::new(&[0.25; 4], &[4.0]).unwrap();
     let scoring = ModelScoringBuilder::new(k80)
         .times(vec![1.0])
         .build()
@@ -782,7 +782,7 @@ fn fix_iter_low() {
     let seq_file = fldr.join("seqs.fasta");
     let mut rng = FakeGenerator::default();
 
-    let wag = SubstModel::<WAG>::new(&[], &[]).unwrap();
+    let wag = SubstModel::<WAG>::default();
     let info = PIB::new(seq_file).build_w_rng(&mut rng).unwrap();
     let c = SCB::new(wag, info).build().unwrap();
     let unopt_cost = c.cost();
@@ -816,7 +816,7 @@ fn precision() {
     let mut rng = FakeGenerator::default();
     let epsilon = 1e-1;
 
-    let wag = SubstModel::<WAG>::new(&[], &[]).unwrap();
+    let wag = SubstModel::<WAG>::default();
     let info = PIB::new(seq_file).build_w_rng(&mut rng).unwrap();
     let c = SCB::new(wag, info).build().unwrap();
     let unopt_cost = c.cost();
@@ -851,7 +851,7 @@ fn fix_iter() {
     let seq_file = fldr.join("nogap_seqs.fasta");
     let mut rng = FakeGenerator::default();
 
-    let wag = SubstModel::<WAG>::new(&[], &[]).unwrap();
+    let wag = SubstModel::<WAG>::default();
     let info = PIB::new(seq_file).build_w_rng(&mut rng).unwrap();
     let c = SCB::new(wag, info).build().unwrap();
     let unopt_cost = c.cost();
@@ -883,7 +883,7 @@ fn max_iter() {
     let seq_file = fldr.join("nogap_seqs.fasta");
     let epsilon = 1e-10;
 
-    let wag = SubstModel::<WAG>::new(&[], &[]).unwrap();
+    let wag = SubstModel::<WAG>::default();
     let info = PIB::new(seq_file)
         .build_w_rng(&mut FakeGenerator::default())
         .unwrap();
@@ -925,7 +925,7 @@ fn example_main_from_readme() {
     fn main() -> Result<()> {
         // Note: This example uses test data from the repository
         let info = PhyloInfoBuilder::new("./examples/data/K80.fasta").build()?;
-        let k80 = SubstModel::<K80>::new(&[], &[4.0, 1.0]).unwrap();
+        let k80 = SubstModel::<K80>::new(&[0.25; 4], &[4.0]).unwrap();
         let c = SubstitutionCostBuilder::new(k80, info).build()?;
         let unopt_cost = c.cost();
         let mut rng = FakeGenerator::default();
@@ -947,7 +947,7 @@ fn tkf92_topo_opti() {
     let msa = dir.join("masa.fasta");
     let tree = dir.join("tree.newick");
     let phylo = PIB::with_attrs(msa, tree).build_with_ancestors().unwrap();
-    let subst_model = SubstModel::<GTR>::new(&[], &[]).unwrap();
+    let subst_model = SubstModel::<GTR>::default();
     let lambda = 0.1;
     let mu = 0.2;
     let r = 0.3;
