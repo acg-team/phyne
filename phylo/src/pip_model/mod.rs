@@ -111,6 +111,33 @@ impl<Q: QMatrix + QMatrixMaker> PIPModel<Q> {
     }
 }
 
+impl<Q: QMatrix + Default> PIPModel<Q> {
+    pub fn with_default_substitution(params: &[f64]) -> Result<Self> {
+        let mut params = params.to_vec();
+        if params.len() < 2 {
+            warn!("Too few values provided for PIP, 2 values required, lambda and mu");
+            warn!("Falling back to default values");
+            params.extend(iter::repeat_n(1.5, 2 - params.len()));
+        }
+
+        let mu = params[1];
+
+        let subst_q = Q::default();
+        params.extend(subst_q.params());
+
+        let n = subst_q.n();
+        let freqs = subst_q.freqs().clone().insert_row(n, 0.0);
+        let mut q = SubstMatrix::zeros(n + 1, n + 1);
+        pip_q(&mut q, subst_q.q(), mu);
+        Ok(PIPModel {
+            subst_q,
+            q,
+            freqs,
+            params,
+        })
+    }
+}
+
 // TODO: where is this ever used?
 // See issue #119 https://github.com/acg-team/rust-phylo/issues/119
 impl<Q: QMatrix> EvoModel for PIPModel<Q> {
