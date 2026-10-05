@@ -274,7 +274,7 @@ fn dollo_parsimony_display() {
     assert!(display.contains("open: 2.4"));
     assert!(display.contains("ext: 2.4"));
 
-    let model = SubstModel::<WAG>::new(&[], &[]).unwrap();
+    let model = SubstModel::<WAG>::default();
     let scoring = ModelScoringBuilder::new(model)
         .gap_cost(GapCost::new(1.0, 1.0))
         .times(vec![1.0])
