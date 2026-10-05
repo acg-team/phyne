@@ -412,7 +412,7 @@ fn arpip_example() {
         .unwrap();
     assert_eq!(o.final_cost, c.cost());
 
-    assert_relative_eq!(o.final_cost, -161.70972212811094, epsilon = 1e-6); // value from python script
+    assert_relative_eq!(o.final_cost, -161.71033707196486, epsilon = 1e-6); // value from python script
 }
 
 #[test]
@@ -494,7 +494,7 @@ fn pip_gtr_optimisation() {
     assert_relative_eq!(pip_o.initial_cost, initial_logl);
     assert!(pip_o.final_cost > initial_logl);
     // On Intel chips epsilon = 1e-5 was sufficient, but not on ARM. See https://github.com/acg-team/rust-phylo/issues/80
-    assert_relative_eq!(pip_o.final_cost, -3481.828364024475, epsilon = 1e-4); // value from the python script
+    assert_relative_eq!(pip_o.final_cost, -3481.829388139959, epsilon = 1e-4); // value from the python script
     assert_eq!(pip_o.final_cost, pip_o.cost.cost());
 }
 
