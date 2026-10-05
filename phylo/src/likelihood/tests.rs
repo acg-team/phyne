@@ -16,9 +16,6 @@ use crate::substitution_models::{
 use crate::{tree, Error};
 
 #[cfg(test)]
-const EQUAL_DNA_FREQS: [f64; 4] = [0.25; 4];
-
-#[cfg(test)]
 fn search_costs_equal_template<C: ModelSearchCost + TreeSearchCost>(cost: C) {
     assert_eq!(ModelSearchCost::cost(&cost), TreeSearchCost::cost(&cost));
 }
@@ -92,10 +89,10 @@ fn setup_test_pip_cost<Q: QMatrix>(model: PIPModel<Q>) -> PIPCost<Q, MSA> {
 #[test]
 fn dna_pip_search_costs_equal() {
     search_costs_equal_template(setup_test_pip_cost(
-        PIPModel::<JC69>::new(&EQUAL_DNA_FREQS, &[1.2, 0.5]).unwrap(),
+        PIPModel::<JC69>::with_default_substitution(&[1.2, 0.5]).unwrap(),
     ));
     search_costs_equal_template(setup_test_pip_cost(
-        PIPModel::<K80>::new(&EQUAL_DNA_FREQS, &[1.2, 0.5, 2.0]).unwrap(),
+        PIPModel::<K80>::with_default_substitution(&[1.2, 0.5]).unwrap(),
     ));
     search_costs_equal_template(setup_test_pip_cost(
         PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[1.2, 0.5, 0.5]).unwrap(),
@@ -112,14 +109,15 @@ fn dna_pip_search_costs_equal() {
 #[test]
 fn protein_pip_search_costs_equal() {
     search_costs_equal_template(setup_test_pip_cost(
-        PIPModel::<WAG>::new(WAG_PI.as_slice(), &[1.2, 0.5]).unwrap(),
+        PIPModel::<WAG>::with_default_substitution(&[1.2, 0.5]).unwrap(),
     ));
     search_costs_equal_template(setup_test_pip_cost(
-        PIPModel::<HIVB>::new(HIVB_PI.as_slice(), &[1.2, 0.5]).unwrap(),
+        PIPModel::<HIVB>::with_default_substitution(&[1.2, 0.5]).unwrap(),
     ));
     search_costs_equal_template(setup_test_pip_cost(
-        PIPModel::<BLOSUM>::new(BLOSUM_PI.as_slice(), &[1.2, 0.5]).unwrap(),
+        PIPModel::<BLOSUM>::with_default_substitution(&[1.2, 0.5]).unwrap(),
     ));
+
     let freqs = &[1.0 / 20.0; 20];
     search_costs_equal_template(setup_test_pip_cost(
         PIPModel::<WAG>::new(freqs, &[1.2, 0.5]).unwrap(),
@@ -153,21 +151,16 @@ fn alphabet_mismatch_subst_model_template<Q: QMatrix>(
 }
 
 #[test]
-fn alphabet_mismatch_subst_model() {
+fn alphabet_mismatch_subst_model_dna() {
     alphabet_mismatch_subst_model_template(SubstModel::<JC69>::default(), Alphabet::protein());
     alphabet_mismatch_subst_model_template(SubstModel::<K80>::default(), Alphabet::protein());
-    alphabet_mismatch_subst_model_template(
-        SubstModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5]).unwrap(),
-        Alphabet::protein(),
-    );
-    alphabet_mismatch_subst_model_template(
-        SubstModel::<TN93>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5970915, 0.2940435]).unwrap(),
-        Alphabet::protein(),
-    );
-    alphabet_mismatch_subst_model_template(
-        SubstModel::<GTR>::new(&[0.1, 0.3, 0.4, 0.2], &[1.5; 5]).unwrap(),
-        Alphabet::protein(),
-    );
+    alphabet_mismatch_subst_model_template(SubstModel::<HKY>::default(), Alphabet::protein());
+    alphabet_mismatch_subst_model_template(SubstModel::<TN93>::default(), Alphabet::protein());
+    alphabet_mismatch_subst_model_template(SubstModel::<GTR>::default(), Alphabet::protein());
+}
+
+#[test]
+fn alphabet_mismatch_subst_model_protein() {
     alphabet_mismatch_subst_model_template(SubstModel::<WAG>::default(), Alphabet::dna());
     alphabet_mismatch_subst_model_template(SubstModel::<BLOSUM>::default(), Alphabet::dna());
     alphabet_mismatch_subst_model_template(SubstModel::<HIVB>::default(), Alphabet::dna());
@@ -198,19 +191,9 @@ fn alphabet_mismatch_subst_pip_template<Q: QMatrix>(model: PIPModel<Q>, alpha: &
 fn alphabet_mismatch_pip_model() {
     alphabet_mismatch_subst_pip_template(PIPModel::<JC69>::default(), Alphabet::protein());
     alphabet_mismatch_subst_pip_template(PIPModel::<K80>::default(), Alphabet::protein());
-    alphabet_mismatch_subst_pip_template(
-        PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[1.3, 0.5, 0.5]).unwrap(),
-        Alphabet::protein(),
-    );
-    alphabet_mismatch_subst_pip_template(
-        PIPModel::<TN93>::new(&[0.22, 0.26, 0.33, 0.19], &[1.3, 0.5, 0.5970915, 0.2940435])
-            .unwrap(),
-        Alphabet::protein(),
-    );
-    alphabet_mismatch_subst_pip_template(
-        PIPModel::<GTR>::new(&[0.1, 0.3, 0.4, 0.2], &[1.5; 7]).unwrap(),
-        Alphabet::protein(),
-    );
+    alphabet_mismatch_subst_pip_template(PIPModel::<HKY>::default(), Alphabet::protein());
+    alphabet_mismatch_subst_pip_template(PIPModel::<TN93>::default(), Alphabet::protein());
+    alphabet_mismatch_subst_pip_template(PIPModel::<GTR>::default(), Alphabet::protein());
     alphabet_mismatch_subst_pip_template(PIPModel::<WAG>::default(), Alphabet::dna());
     alphabet_mismatch_subst_pip_template(PIPModel::<BLOSUM>::default(), Alphabet::dna());
     alphabet_mismatch_subst_pip_template(PIPModel::<HIVB>::default(), Alphabet::dna());
