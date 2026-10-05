@@ -1090,3 +1090,30 @@ fn modify_freqs_of_model_wo_freqs_fails() {
     modify_model_wo_freqs_costs_match_template::<JC69>(PIPModel::<JC69>::default(), new_dna_freqs);
     modify_model_wo_freqs_costs_match_template::<K80>(PIPModel::<K80>::default(), new_dna_freqs);
 }
+
+#[cfg(test)]
+fn pip_default_subst_template<Q: QMatrix + Default>() {
+    let model = PIPModel::<Q>::with_default_substitution(&[1.5, 1.5]).unwrap();
+
+    assert_eq!(
+        &model.freqs().as_slice()[..model.n() - 1],
+        model.subst_q.freqs().as_slice()
+    );
+    assert_eq!(model.params().len(), 2 + model.subst_q.params().len());
+}
+
+#[test]
+fn pip_default_subst_dna() {
+    pip_default_subst_template::<JC69>();
+    pip_default_subst_template::<K80>();
+    pip_default_subst_template::<HKY>();
+    pip_default_subst_template::<TN93>();
+    pip_default_subst_template::<GTR>();
+}
+
+#[test]
+fn pip_default_subst_protein() {
+    pip_default_subst_template::<WAG>();
+    pip_default_subst_template::<HIVB>();
+    pip_default_subst_template::<BLOSUM>();
+}
