@@ -229,35 +229,25 @@ mod private_tests {
     }
 
     #[test]
-    fn model_builder_setters() {
+    fn model_builder_setters_protein() {
         for d in [Z::zero(), Z::non_zero()] {
             for r in [R::zero(), R::four(), R::none()] {
-                builder_template(SubstModel::<HIVB>::new(&[], &[]).unwrap(), d, r);
-                builder_template(SubstModel::<WAG>::new(&[], &[]).unwrap(), d, r);
-                builder_template(SubstModel::<BLOSUM>::new(&[], &[]).unwrap(), d, r);
+                builder_template(SubstModel::<HIVB>::default(), d, r);
+                builder_template(SubstModel::<WAG>::default(), d, r);
+                builder_template(SubstModel::<BLOSUM>::default(), d, r);
+            }
+        }
+    }
 
-                builder_template(SubstModel::<JC69>::new(&[], &[]).unwrap(), d, r);
-                builder_template(SubstModel::<K80>::new(&[], &[]).unwrap(), d, r);
-                builder_template(
-                    SubstModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5]).unwrap(),
-                    d,
-                    r,
-                );
-                builder_template(
-                    SubstModel::<TN93>::new(
-                        &[0.22, 0.26, 0.33, 0.19],
-                        &[0.5970915, 0.2940435, 0.00135],
-                    )
-                    .unwrap(),
-                    d,
-                    r,
-                );
-                builder_template(
-                    SubstModel::<GTR>::new(&[0.1, 0.3, 0.4, 0.2], &[5.0, 1.0, 1.0, 1.0, 1.0, 5.0])
-                        .unwrap(),
-                    d,
-                    r,
-                );
+    #[test]
+    fn model_builder_setters_dna() {
+        for d in [Z::zero(), Z::non_zero()] {
+            for r in [R::zero(), R::four(), R::none()] {
+                builder_template(SubstModel::<JC69>::default(), d, r);
+                builder_template(SubstModel::<K80>::default(), d, r);
+                builder_template(SubstModel::<HKY>::default(), d, r);
+                builder_template(SubstModel::<TN93>::default(), d, r);
+                builder_template(SubstModel::<GTR>::default(), d, r);
             }
         }
     }
@@ -276,28 +266,24 @@ mod private_tests {
     }
 
     #[test]
-    fn model_builder_defaults() {
-        builder_default_template(SubstModel::<HIVB>::new(&[], &[]).unwrap());
-        builder_default_template(SubstModel::<WAG>::new(&[], &[]).unwrap());
-        builder_default_template(SubstModel::<BLOSUM>::new(&[], &[]).unwrap());
+    fn model_builder_defaults_protein() {
+        builder_default_template(SubstModel::<HIVB>::default());
+        builder_default_template(SubstModel::<WAG>::default());
+        builder_default_template(SubstModel::<BLOSUM>::default());
+    }
 
-        builder_default_template(SubstModel::<JC69>::new(&[], &[]).unwrap());
-        builder_default_template(SubstModel::<K80>::new(&[], &[]).unwrap());
-        builder_default_template(
-            SubstModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5]).unwrap(),
-        );
-        builder_default_template(
-            SubstModel::<TN93>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5970915, 0.2940435, 0.00135])
-                .unwrap(),
-        );
-        builder_default_template(
-            SubstModel::<GTR>::new(&[0.1, 0.3, 0.4, 0.2], &[5.0, 1.0, 1.0, 1.0, 1.0, 5.0]).unwrap(),
-        );
+    #[test]
+    fn model_builder_defaults_dna() {
+        builder_default_template(SubstModel::<JC69>::default());
+        builder_default_template(SubstModel::<K80>::default());
+        builder_default_template(SubstModel::<HKY>::default());
+        builder_default_template(SubstModel::<TN93>::default());
+        builder_default_template(SubstModel::<GTR>::default());
     }
 
     #[test]
     fn protein_scorings() {
-        let s = ModelScoringBuilder::new(SubstModel::<WAG>::new(&[], &[]).unwrap())
+        let s = MCB::new(SubstModel::<WAG>::default())
             .gap_cost(GapCost::new(2.5, 1.0))
             .diagonal(Z::non_zero())
             .rounding(R::zero())
@@ -343,20 +329,22 @@ mod private_tests {
     }
 
     #[test]
-    fn matrix_entry_rounding() {
-        rounding_template(SubstModel::<HIVB>::new(&[], &[]).unwrap());
-        rounding_template(SubstModel::<WAG>::new(&[], &[]).unwrap());
-        rounding_template(SubstModel::<BLOSUM>::new(&[], &[]).unwrap());
+    fn matrix_entry_rounding_protein() {
+        rounding_template(SubstModel::<HIVB>::default());
+        rounding_template(SubstModel::<WAG>::default());
+        rounding_template(SubstModel::<BLOSUM>::default());
+    }
 
-        rounding_template(SubstModel::<JC69>::new(&[], &[]).unwrap());
-        rounding_template(SubstModel::<K80>::new(&[], &[]).unwrap());
+    #[test]
+    fn matrix_entry_rounding_dna() {
+        rounding_template(SubstModel::<JC69>::default());
+        rounding_template(SubstModel::<K80>::default());
         rounding_template(SubstModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5]).unwrap());
         rounding_template(
-            SubstModel::<TN93>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5970915, 0.2940435, 0.00135])
-                .unwrap(),
+            SubstModel::<TN93>::new(&[0.22, 0.26, 0.33, 0.19], &[442.29, 217.81]).unwrap(),
         );
         rounding_template(
-            SubstModel::<GTR>::new(&[0.1, 0.3, 0.4, 0.2], &[5.0, 1.0, 1.0, 1.0, 1.0, 5.0]).unwrap(),
+            SubstModel::<GTR>::new(&[0.1, 0.3, 0.4, 0.2], &[1.0, 0.2, 0.2, 0.2, 0.2]).unwrap(),
         );
     }
 
@@ -396,22 +384,18 @@ mod private_tests {
     }
 
     #[test]
-    fn matrix_zero_diagonals() {
-        matrix_zero_diagonals_template(SubstModel::<HIVB>::new(&[], &[]).unwrap());
-        matrix_zero_diagonals_template(SubstModel::<WAG>::new(&[], &[]).unwrap());
-        matrix_zero_diagonals_template(SubstModel::<BLOSUM>::new(&[], &[]).unwrap());
+    fn matrix_zero_diagonals_protein() {
+        matrix_zero_diagonals_template(SubstModel::<HIVB>::default());
+        matrix_zero_diagonals_template(SubstModel::<WAG>::default());
+        matrix_zero_diagonals_template(SubstModel::<BLOSUM>::default());
+    }
 
-        matrix_zero_diagonals_template(SubstModel::<JC69>::new(&[], &[]).unwrap());
-        matrix_zero_diagonals_template(SubstModel::<K80>::new(&[], &[]).unwrap());
-        matrix_zero_diagonals_template(
-            SubstModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5]).unwrap(),
-        );
-        matrix_zero_diagonals_template(
-            SubstModel::<TN93>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5970915, 0.2940435, 0.00135])
-                .unwrap(),
-        );
-        matrix_zero_diagonals_template(
-            SubstModel::<GTR>::new(&[0.1, 0.3, 0.4, 0.2], &[5.0, 1.0, 1.0, 1.0, 1.0, 5.0]).unwrap(),
-        );
+    #[test]
+    fn matrix_zero_diagonals_dna() {
+        matrix_zero_diagonals_template(SubstModel::<JC69>::default());
+        matrix_zero_diagonals_template(SubstModel::<K80>::default());
+        matrix_zero_diagonals_template(SubstModel::<HKY>::default());
+        matrix_zero_diagonals_template(SubstModel::<TN93>::default());
+        matrix_zero_diagonals_template(SubstModel::<GTR>::default());
     }
 }
