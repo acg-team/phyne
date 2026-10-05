@@ -449,7 +449,7 @@ fn pip_vs_python_no_gaps() {
     .build()
     .unwrap();
 
-    let pip_hky = PIPModel::<JC69>::with_default_substitution(&[1.2, 0.45]).unwrap();
+    let pip_hky = PIPModel::<HKY>::new(&[0.25; 4], &[1.2, 0.45, 1.0]).unwrap();
 
     let c = PIPCostBuilder::new(pip_hky, info).build().unwrap();
     assert_relative_eq!(c.cost(), -361.18634412281443, epsilon = 1e-7); // value from the python script
