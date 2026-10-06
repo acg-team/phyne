@@ -607,9 +607,8 @@ impl Display for GTR {
 #[cfg(test)]
 #[cfg_attr(coverage, coverage(off))]
 mod tests {
-    use rstest::rstest;
-
     use assert_matches::assert_matches;
+    use rstest::rstest;
 
     use crate::error::SubstitutionModelError;
     use crate::Error;
@@ -659,7 +658,6 @@ mod tests {
     #[case::sum_below_1(&[0.1, 0.2, 0.3, 0.1])]
     #[case::sum_above_1(&[0.4, 0.3, 0.2, 0.2])]
     #[case::sum_above_1_large(&[0.4, 1.3, 0.2, 0.2])]
-
     fn frequencies_dont_sum_to_1(#[case] freqs: &[f64]) {
         assert_matches!(
             validate_dna_frequencies(&frequencies!(freqs)),
