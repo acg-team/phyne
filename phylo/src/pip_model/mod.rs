@@ -153,9 +153,7 @@ impl<Q: QMatrix> EvoModel for PIPModel<Q> {
         &self.freqs
     }
 
-    // This assumes correct dimensions to minimise runtime checks
     fn set_freqs(&mut self, pi: FreqVector) -> Result<()> {
-        debug_assert!(self.freqs.nrows() - 1 == pi.nrows() || self.freqs.nrows() == pi.nrows());
         self.subst_q.set_freqs(pi)?;
         self.freqs
             .view_mut((0, 0), self.subst_q.freqs().shape())
