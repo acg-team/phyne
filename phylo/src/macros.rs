@@ -133,7 +133,11 @@ macro_rules! site {
     }};
 }
 
+/// Macro for early returning errors within the crate.
+///
+/// This macro simplifies error handling by providing a concise way to return errors from various parts of the crate.
 #[macro_export]
+#[doc(hidden)] // Hide from public documentation
 macro_rules! bail {
     // Usage: bail!(TreeParsing, "message", pest_error)
     (TreeParsing, $fmt:literal, $pest_err:expr $(, $arg:expr)*) => {
