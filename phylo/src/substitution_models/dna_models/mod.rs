@@ -22,7 +22,7 @@ fn validate_dna_frequencies(freqs: &FreqVector) -> Result<()> {
         bail!(SubstitutionModel, FrequencyCount, "DNA", DNA_N, freqs.len());
     } else if freqs.iter().any(|x| *x < 0.0) {
         bail!(SubstitutionModel, NegativeFrequency, "DNA");
-    } else if !relative_eq!(freqs.iter().sum::<f64>().abs(), 1.0) {
+    } else if !relative_eq!(freqs.iter().sum::<f64>().abs(), 1.0, epsilon = 1e-10) {
         bail!(SubstitutionModel, FrequencySum, "DNA");
     }
     Ok(())
