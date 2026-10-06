@@ -1,10 +1,12 @@
 use std::path::Path;
 
 use approx::assert_relative_eq;
+use assert_matches::assert_matches;
 use nalgebra::{DMatrix, DVector};
 
 use crate::alignment::{Alignment, Sequences, MSA};
 use crate::alphabets::{Alphabet, AMINOACIDS as aas, GAP, NUCLEOTIDES as nucls};
+use crate::error::Error;
 use crate::evolutionary_models::EvoModel;
 use crate::io::read_sequences;
 use crate::likelihood::ModelSearchCost;
@@ -1170,4 +1172,20 @@ fn pip_default_subst_too_many_params_protein() {
     pip_default_subst_too_many_params_template::<WAG>();
     pip_default_subst_too_many_params_template::<HIVB>();
     pip_default_subst_too_many_params_template::<BLOSUM>();
+}
+
+#[cfg(test)]
+fn pip_too_few_params_template<Q: QMatrix + QMatrixMaker>(freqs: &[f64], params: &[f64]) {
+    assert_matches!(
+        PIPModel::<Q>::new(freqs, params),
+        Err(Error::EvolutionaryModel { .. })
+    );
+}
+
+#[test]
+fn pip_too_few_params_dna() {
+    pip_too_few_params_template::<K80>(&[0.25; 4], &[0.5; 0]);
+    pip_too_few_params_template::<HKY>(&[0.25; 4], &[0.5; 0]);
+    pip_too_few_params_template::<TN93>(&[0.25; 4], &[0.5; 0]);
+    pip_too_few_params_template::<GTR>(&[0.25; 4], &[0.5; 0]);
 }
