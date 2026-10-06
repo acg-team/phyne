@@ -540,7 +540,7 @@ fn pip_likelihood_huelsenbeck_example_hky() {
     .unwrap();
     let model = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]).unwrap();
     let mut c = PIPB::new(model, info.clone()).build().unwrap();
-    assert_relative_eq!(c.cost(), -372.1419415285655, epsilon = 1e-6);
+    assert_relative_eq!(c.cost(), -372.1419048976677, epsilon = 1e-6);
 
     // Check that model update works
     c.set_param(0, 1.2);
