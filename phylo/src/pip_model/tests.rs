@@ -1117,3 +1117,30 @@ fn pip_default_subst_protein() {
     pip_default_subst_template::<HIVB>();
     pip_default_subst_template::<BLOSUM>();
 }
+
+#[cfg(test)]
+fn pip_default_subst_too_many_params_template<Q: QMatrix + Default>() {
+    let model = PIPModel::<Q>::with_default_substitution(&[0.5; 5]).unwrap();
+
+    assert_eq!(
+        &model.freqs().as_slice()[..model.n() - 1],
+        model.subst_q.freqs().as_slice()
+    );
+    assert_eq!(model.params().len(), 2 + model.subst_q.params().len());
+}
+
+#[test]
+fn pip_default_subst_too_many_params_dna() {
+    pip_default_subst_too_many_params_template::<JC69>();
+    pip_default_subst_too_many_params_template::<K80>();
+    pip_default_subst_too_many_params_template::<HKY>();
+    pip_default_subst_too_many_params_template::<TN93>();
+    pip_default_subst_too_many_params_template::<GTR>();
+}
+
+#[test]
+fn pip_default_subst_too_many_params_protein() {
+    pip_default_subst_too_many_params_template::<WAG>();
+    pip_default_subst_too_many_params_template::<HIVB>();
+    pip_default_subst_too_many_params_template::<BLOSUM>();
+}
