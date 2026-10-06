@@ -68,8 +68,6 @@ pub fn black_box_pip_cost<Model: QMatrix + Default>(
 
 #[derive(Clone)]
 pub struct PIPConfig {
-    pub freqs: Vec<f64>,
-    pub params: Vec<f64>,
     pub freq_opt: FrequencyOptimisation,
     pub max_iters: usize,
     pub epsilon: f64,
@@ -80,8 +78,6 @@ pub fn black_box_raw_pip_cost_with_config<Model: QMatrix + QMatrixMaker + Defaul
     let info = black_box_deterministic_phylo_info(seq_path);
 
     let cfg = black_box(PIPConfig {
-        params: vec![],
-        freqs: vec![],
         freq_opt: FrequencyOptimisation::Empirical,
         epsilon: 1e-2,
         max_iters: 5,
