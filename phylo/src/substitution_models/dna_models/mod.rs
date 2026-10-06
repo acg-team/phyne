@@ -351,6 +351,11 @@ impl Display for HKY {
     }
 }
 
+/// Tamura-Nei 1993 (TN93) DNA substitution model.
+///
+/// This model allows for different rates of two different types of transitions (A <-> G and C <-> T).
+/// Transversion rates are assumed to be equal and fixed to 1.0.
+/// The average substitution rate is normalised to 1.0.
 #[derive(Clone, Debug, PartialEq)]
 #[allow(clippy::upper_case_acronyms)]
 pub struct TN93 {
