@@ -31,7 +31,7 @@ fn run_fixed_iter_topo<C: TreeSearchCost + Clone + Display + Send + Compatible<S
     Ok(topo_opt.run()?.final_cost)
 }
 
-fn run_simulated_topo_for_sizes<Q: QMatrix + QMatrixMaker + Send>(
+fn run_simulated_topo_for_sizes<Q: QMatrix + QMatrixMaker + Default + Send>(
     paths: &SequencePaths,
     group_name: &'static str,
     criterion: &mut Criterion,

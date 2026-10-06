@@ -41,7 +41,7 @@ fn find_best_regraft_for_single_spr_move<C: TreeSearchCost + Clone + Display + S
     Ok(best_regraft.cost)
 }
 
-fn run_single_spr_cycle_for_sizes<Q: QMatrix + QMatrixMaker + Send>(
+fn run_single_spr_cycle_for_sizes<Q: QMatrix + QMatrixMaker + Default + Send>(
     paths: &SequencePaths,
     group_name: &'static str,
     criterion: &mut Criterion,
@@ -73,7 +73,7 @@ fn run_single_spr_cycle_for_sizes<Q: QMatrix + QMatrixMaker + Send>(
     bench_group.finish();
 }
 
-fn run_find_best_regraft_for_single_spr_move<Q: QMatrix + QMatrixMaker + Send>(
+fn run_find_best_regraft_for_single_spr_move<Q: QMatrix + QMatrixMaker + Default + Send>(
     paths: &SequencePaths,
     group_name: &'static str,
     criterion: &mut Criterion,

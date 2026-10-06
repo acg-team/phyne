@@ -4,7 +4,7 @@ use phylo::alignment::MSA;
 use phylo::evolutionary_models::FrequencyOptimisation;
 use phylo::likelihood::ModelSearchCost;
 use phylo::pip_model::PIPCost;
-use phylo::substitution_models::{QMatrix, QMatrixMaker, JC69, WAG};
+use phylo::substitution_models::{QMatrix, JC69, WAG};
 
 mod helpers;
 use helpers::{
@@ -13,7 +13,7 @@ use helpers::{
     DNA_EASY_46X16250, DNA_EASY_5X1000, DNA_EASY_8X1252, DNA_MEDIUM_128X688,
 };
 
-fn run_for_sizes<Q: QMatrix + QMatrixMaker>(
+fn run_for_sizes<Q: QMatrix + Default>(
     paths: &SequencePaths,
     group_name: &'static str,
     criterion: &mut Criterion,

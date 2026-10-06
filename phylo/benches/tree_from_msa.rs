@@ -53,7 +53,7 @@ fn run_optimisation(
     Ok((final_cost, cost.tree().clone()))
 }
 
-fn run_for_sizes<Q: QMatrix + QMatrixMaker + Send>(
+fn run_for_sizes<Q: QMatrix + QMatrixMaker + Default + Send>(
     paths: &SequencePaths,
     group_name: &'static str,
     criterion: &mut Criterion,

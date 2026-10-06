@@ -47,12 +47,12 @@ pub fn black_box_deterministic_phylo_info(seq_file: impl Into<PathBuf>) -> Phylo
     )
 }
 
-pub fn black_box_pip_cost<Model: QMatrix + QMatrixMaker>(
+pub fn black_box_pip_cost<Model: QMatrix + Default>(
     path: impl Into<PathBuf>,
     freq_opt: FrequencyOptimisation,
 ) -> PIPCost<Model, MSA> {
     let info = black_box_deterministic_phylo_info(path);
-    let pip_cost = PIPCostBuilder::new(PIPModel::<Model>::new(&[], &[]).unwrap(), info)
+    let pip_cost = PIPCostBuilder::new(PIPModel::<Model>::default(), info)
         .build()
         .expect("failed to build pip cost optimiser");
 
@@ -74,7 +74,7 @@ pub struct PIPConfig {
     pub max_iters: usize,
     pub epsilon: f64,
 }
-pub fn black_box_raw_pip_cost_with_config<Model: QMatrix + QMatrixMaker>(
+pub fn black_box_raw_pip_cost_with_config<Model: QMatrix + QMatrixMaker + Default>(
     seq_path: impl Into<PathBuf>,
 ) -> (PIPConfig, PIPCost<Model, MSA>) {
     let info = black_box_deterministic_phylo_info(seq_path);
