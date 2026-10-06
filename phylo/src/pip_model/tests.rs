@@ -1073,6 +1073,33 @@ fn modify_model_freqs_costs_match() {
 }
 
 #[cfg(test)]
+fn incorrect_model_freqs_costs_match_template<Q: QMatrix + QMatrixMaker + Default>(
+    model: PIPModel<Q>,
+    freqs: &[f64],
+) {
+    let mut c = setup_test_pip_cost(model.clone());
+    let logl = c.cost();
+
+    assert!(c.set_freqs(frequencies!(freqs)).is_err());
+    assert_eq!(logl, c.cost());
+}
+
+#[test]
+fn incorrect_model_frequencies() {
+    let new_dna_freqs = &[0.1, 0.1, 0.1, 0.6, 0.1];
+    incorrect_model_freqs_costs_match_template(PIPModel::<JC69>::default(), new_dna_freqs);
+    incorrect_model_freqs_costs_match_template(PIPModel::<K80>::default(), new_dna_freqs);
+    incorrect_model_freqs_costs_match_template(PIPModel::<HKY>::default(), new_dna_freqs);
+    incorrect_model_freqs_costs_match_template(PIPModel::<TN93>::default(), new_dna_freqs);
+    incorrect_model_freqs_costs_match_template(PIPModel::<GTR>::default(), new_dna_freqs);
+
+    let new_aa_freqs = &[1.0 / 30.0; 30];
+    incorrect_model_freqs_costs_match_template(PIPModel::<WAG>::default(), new_aa_freqs);
+    incorrect_model_freqs_costs_match_template(PIPModel::<HIVB>::default(), new_aa_freqs);
+    incorrect_model_freqs_costs_match_template(PIPModel::<BLOSUM>::default(), new_aa_freqs);
+}
+
+#[cfg(test)]
 fn modify_model_wo_freqs_costs_match_template<Q: QMatrix + Default>(
     model: PIPModel<Q>,
     freqs: &[f64],
