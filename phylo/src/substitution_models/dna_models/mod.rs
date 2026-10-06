@@ -132,7 +132,7 @@ impl Default for K80 {
 
 impl QMatrixMaker for K80 {
     fn create(freqs: &[f64], params: &[f64]) -> Result<K80> {
-        let freqs = FreqVector::from_column_slice(freqs);
+        let freqs = frequencies!(freqs);
         validate_dna_frequencies(&freqs)?;
 
         if freqs != frequencies!(&EQUAL_FREQS) {
@@ -250,7 +250,7 @@ impl Default for HKY {
 
 impl QMatrixMaker for HKY {
     fn create(freqs: &[f64], params: &[f64]) -> Result<HKY> {
-        let freqs = FreqVector::from_column_slice(freqs);
+        let freqs = frequencies!(freqs);
         validate_dna_frequencies(&freqs)?;
 
         let kappa = if params.len() != HKY_PARAM_N {
@@ -371,7 +371,7 @@ impl Default for TN93 {
 
 impl QMatrixMaker for TN93 {
     fn create(freqs: &[f64], params: &[f64]) -> Result<TN93> {
-        let freqs = FreqVector::from_column_slice(freqs);
+        let freqs = frequencies!(freqs);
         validate_dna_frequencies(&freqs)?;
 
         if params.len() != TN93_PARAM_N {
@@ -496,7 +496,7 @@ impl Default for GTR {
 
 impl QMatrixMaker for GTR {
     fn create(freqs: &[f64], params: &[f64]) -> Result<GTR> {
-        let freqs = FreqVector::from_column_slice(freqs);
+        let freqs = frequencies!(freqs);
         validate_dna_frequencies(&freqs)?;
 
         if params.len() != GTR_PARAM_N {

@@ -5,7 +5,7 @@ use approx::relative_eq;
 use crate::alphabets::{Alphabet, AMINOACID_INDEX};
 use crate::likelihood::{ParamRange, PARAM_RANGE_DUMMY};
 use crate::substitution_models::{FreqVector, QMatrix, QMatrixMaker, SubstMatrix};
-use crate::{bail, Result};
+use crate::{bail, frequencies, Result};
 
 pub(crate) mod protein_generics;
 pub(crate) use protein_generics::*;
@@ -64,7 +64,7 @@ macro_rules! define_protein_model {
 
         impl Default for $name {
             fn default() -> Self {
-                let freqs = FreqVector::from_column_slice($pi.as_slice());
+                let freqs = frequencies!($pi.as_slice());
                 let exchangeability = SubstMatrix::from_row_slice(PROTEIN_N, PROTEIN_N, &$exch);
                 let q = make_protein_q(&exchangeability, &freqs);
                 $name {
@@ -77,7 +77,7 @@ macro_rules! define_protein_model {
 
         impl QMatrixMaker for $name {
             fn create(freqs: &[f64], params: &[f64]) -> Result<$name> {
-                let freqs = FreqVector::from_column_slice(freqs);
+                let freqs = frequencies!(freqs);
                 validate_protein_frequencies(&freqs)?;
 
                 if !params.is_empty() {
