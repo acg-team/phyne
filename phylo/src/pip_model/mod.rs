@@ -55,12 +55,12 @@ fn pip_q(q: &mut SubstMatrix, subst_q: &SubstMatrix, mu: f64) {
 }
 
 impl<Q: QMatrix> PIPModel<Q> {
-    fn from_substitution_with_params(subst_q: Q, pip_parameters: Vec<f64>) -> Self {
+    fn from_substitution_with_params(subst_q: Q, pip_parameters: &[f64]) -> Self {
         let n = subst_q.n();
         let freqs = subst_q.freqs().clone().insert_row(n, 0.0);
         let mut q = SubstMatrix::zeros(n + 1, n + 1);
         pip_q(&mut q, subst_q.q(), pip_parameters[1]);
-        let mut params = pip_parameters.clone();
+        let mut params = pip_parameters.to_vec();
         params.extend(subst_q.params());
         PIPModel {
             subst_q,
@@ -86,8 +86,8 @@ impl<Q: QMatrix> PIPModel<Q> {
 impl<Q: QMatrix + Default> Default for PIPModel<Q> {
     fn default() -> Self {
         let subst_q = Q::default();
-        let params = vec![DEFAULT_PIP_PARAM; PIP_PARAM_N];
-        Self::from_substitution_with_params(subst_q, params)
+        let params = [DEFAULT_PIP_PARAM; PIP_PARAM_N];
+        Self::from_substitution_with_params(subst_q, &params)
     }
 }
 
@@ -107,7 +107,7 @@ impl<Q: QMatrix + Default> PIPModel<Q> {
         let subst_q = Q::default();
         Ok(Self::from_substitution_with_params(
             subst_q,
-            params[..PIP_PARAM_N].to_vec(),
+            &params[..PIP_PARAM_N],
         ))
     }
 }
@@ -131,7 +131,7 @@ impl<Q: QMatrix + QMatrixMaker> PIPModel<Q> {
         let subst_q = Q::create(frequencies, &params[PIP_PARAM_N..])?;
         Ok(Self::from_substitution_with_params(
             subst_q,
-            params[..PIP_PARAM_N].to_vec(),
+            &params[..PIP_PARAM_N],
         ))
     }
 }
