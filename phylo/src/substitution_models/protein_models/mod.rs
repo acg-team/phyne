@@ -163,9 +163,8 @@ define_protein_model!(BLOSUM, BLOSUM_PI, BLOSUM_EXCH);
 #[cfg(test)]
 #[cfg_attr(coverage, coverage(off))]
 mod tests {
-    use rstest::rstest;
-
     use assert_matches::assert_matches;
+    use rstest::rstest;
 
     use crate::{frequencies, Error, SubstitutionModelError};
 
