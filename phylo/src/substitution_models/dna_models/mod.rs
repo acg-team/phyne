@@ -559,6 +559,8 @@ impl QMatrix for GTR {
 }
 
 fn gtr_q(q: &mut SubstMatrix, pi: &FreqVector, params: &[f64]) {
+    // A <-> G transition rate is fixed to 1.0 to simplify parameter estimation
+    // Left in the code for clarity, even though it is fixed to 1.0.
     let ft = pi[0];
     let fc = pi[1];
     let fa = pi[2];
