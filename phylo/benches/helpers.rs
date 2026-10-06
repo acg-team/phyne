@@ -87,12 +87,9 @@ pub fn black_box_raw_pip_cost_with_config<Model: QMatrix + QMatrixMaker + Defaul
         max_iters: 5,
     });
 
-    let pip_cost = black_box(PIPCostBuilder::new(
-        PIPModel::<Model>::new(&cfg.freqs, &cfg.params).unwrap(),
-        info,
-    ))
-    .build()
-    .expect("failed to build pip cost optimiser");
+    let pip_cost = black_box(PIPCostBuilder::new(PIPModel::<Model>::default(), info))
+        .build()
+        .expect("failed to build pip cost optimiser");
 
     (cfg, pip_cost)
 }
