@@ -1,12 +1,11 @@
 use std::path::Path;
 
 use approx::assert_relative_eq;
-use assert_matches::assert_matches;
 use nalgebra::{DMatrix, DVector};
 
 use crate::alignment::{Alignment, Sequences, MSA};
 use crate::alphabets::{Alphabet, AMINOACIDS as aas, GAP, NUCLEOTIDES as nucls};
-use crate::error::Error;
+use crate::error::{Error, EvolutionaryModelError};
 use crate::evolutionary_models::EvoModel;
 use crate::io::read_sequences;
 use crate::likelihood::ModelSearchCost;
@@ -115,30 +114,6 @@ fn pip_dna_hky_as_k80() {
         .iter()
         .take(pip_hky.q.nrows() - 2)
         .all(|&x| x == -1.0 - mu));
-}
-
-#[cfg(test)]
-fn pip_default_subst_too_few_params_template<Q: QMatrix + Default>(params: &[f64]) {
-    let model = PIPModel::<Q>::with_default_substitution(params).unwrap();
-    assert_eq!(model.params().len(), 2 + model.subst_q.params().len());
-}
-
-#[test]
-fn pip_dna_default_subst_few_params() {
-    // Using a default substitution model for DNA sequences
-    pip_default_subst_too_few_params_template::<JC69>(&[0.2]);
-    pip_default_subst_too_few_params_template::<K80>(&[]);
-    pip_default_subst_too_few_params_template::<HKY>(&[0.6]);
-    pip_default_subst_too_few_params_template::<TN93>(&[0.6]);
-    pip_default_subst_too_few_params_template::<GTR>(&[0.6]);
-}
-
-#[test]
-fn pip_protein_default_subst_too_few_params() {
-    // Using a default substitution model for protein sequences
-    pip_default_subst_too_few_params_template::<WAG>(&[0.2]);
-    pip_default_subst_too_few_params_template::<HIVB>(&[1.5]);
-    pip_default_subst_too_few_params_template::<BLOSUM>(&[]);
 }
 
 #[test]
@@ -1154,44 +1129,109 @@ fn pip_default_subst_protein() {
 }
 
 #[cfg(test)]
-fn pip_default_subst_too_many_params_template<Q: QMatrix + Default>() {
-    let model = PIPModel::<Q>::with_default_substitution(&[0.5; 5]).unwrap();
-
-    assert_eq!(
-        &model.freqs().as_slice()[..model.n() - 1],
-        model.subst_q.freqs().as_slice()
-    );
-    assert_eq!(model.params().len(), 2 + model.subst_q.params().len());
+fn pip_default_subst_too_many_params_template<Q: QMatrix + Default>(params: &[f64]) {
+    match PIPModel::<Q>::with_default_substitution(params) {
+        Err(Error::EvolutionaryModel(EvolutionaryModelError::ParameterCount {
+            name,
+            actual,
+            expected,
+        })) => {
+            assert_eq!(name, "PIP");
+            assert_eq!(actual, params.len());
+            assert_eq!(expected, 2);
+        }
+        _ => panic!(
+            "Expected ParameterCount error for PIP with actual = {} and expected = {}",
+            params.len(),
+            2
+        ),
+    }
 }
 
 #[test]
 fn pip_default_subst_too_many_params_dna() {
-    pip_default_subst_too_many_params_template::<JC69>();
-    pip_default_subst_too_many_params_template::<K80>();
-    pip_default_subst_too_many_params_template::<HKY>();
-    pip_default_subst_too_many_params_template::<TN93>();
-    pip_default_subst_too_many_params_template::<GTR>();
+    pip_default_subst_too_many_params_template::<JC69>(&[0.5; 5]);
+    pip_default_subst_too_many_params_template::<K80>(&[0.5; 5]);
+    pip_default_subst_too_many_params_template::<HKY>(&[0.5; 5]);
+    pip_default_subst_too_many_params_template::<TN93>(&[0.5; 5]);
+    pip_default_subst_too_many_params_template::<GTR>(&[0.5; 5]);
 }
 
 #[test]
 fn pip_default_subst_too_many_params_protein() {
-    pip_default_subst_too_many_params_template::<WAG>();
-    pip_default_subst_too_many_params_template::<HIVB>();
-    pip_default_subst_too_many_params_template::<BLOSUM>();
+    pip_default_subst_too_many_params_template::<WAG>(&[0.5; 5]);
+    pip_default_subst_too_many_params_template::<HIVB>(&[0.5; 5]);
+    pip_default_subst_too_many_params_template::<BLOSUM>(&[0.5; 5]);
 }
 
 #[cfg(test)]
 fn pip_too_few_params_template<Q: QMatrix + QMatrixMaker>(freqs: &[f64], params: &[f64]) {
-    assert_matches!(
-        PIPModel::<Q>::new(freqs, params),
-        Err(Error::EvolutionaryModel { .. })
-    );
+    match PIPModel::<Q>::new(freqs, params) {
+        Err(Error::EvolutionaryModel(EvolutionaryModelError::ParameterCount {
+            name,
+            actual,
+            expected,
+        })) => {
+            assert_eq!(name, "PIP");
+            assert_eq!(actual, params.len());
+            assert_eq!(expected, 2);
+        }
+        _ => panic!(
+            "Expected ParameterCount error for PIP with actual = {} and expected = {}",
+            params.len(),
+            2
+        ),
+    }
 }
 
 #[test]
 fn pip_too_few_params_dna() {
+    pip_too_few_params_template::<JC69>(&[0.25; 4], &[0.5; 0]);
     pip_too_few_params_template::<K80>(&[0.25; 4], &[0.5; 0]);
     pip_too_few_params_template::<HKY>(&[0.25; 4], &[0.5; 0]);
     pip_too_few_params_template::<TN93>(&[0.25; 4], &[0.5; 0]);
     pip_too_few_params_template::<GTR>(&[0.25; 4], &[0.5; 0]);
+}
+
+#[test]
+fn pip_too_few_params_protein() {
+    pip_too_few_params_template::<WAG>(&[], &[0.5; 0]);
+    pip_too_few_params_template::<HIVB>(&[], &[0.5; 0]);
+    pip_too_few_params_template::<BLOSUM>(&[], &[0.5; 0]);
+}
+
+#[cfg(test)]
+fn pip_default_subst_too_few_params_template<Q: QMatrix + Default>(params: &[f64]) {
+    match PIPModel::<Q>::with_default_substitution(params) {
+        Err(Error::EvolutionaryModel(EvolutionaryModelError::ParameterCount {
+            name,
+            actual,
+            expected,
+        })) => {
+            assert_eq!(name, "PIP");
+            assert_eq!(actual, params.len());
+            assert_eq!(expected, 2);
+        }
+        _ => panic!(
+            "Expected ParameterCount error for PIP with actual = {} and expected = {}",
+            params.len(),
+            2
+        ),
+    }
+}
+
+#[test]
+fn pip_default_subst_too_few_params_dna() {
+    pip_default_subst_too_few_params_template::<JC69>(&[0.5; 1]);
+    pip_default_subst_too_few_params_template::<K80>(&[0.5; 1]);
+    pip_default_subst_too_few_params_template::<HKY>(&[0.5; 1]);
+    pip_default_subst_too_few_params_template::<TN93>(&[0.5; 1]);
+    pip_default_subst_too_few_params_template::<GTR>(&[0.5; 1]);
+}
+
+#[test]
+fn pip_default_subst_too_few_params_protein() {
+    pip_default_subst_too_few_params_template::<WAG>(&[0.5; 1]);
+    pip_default_subst_too_few_params_template::<HIVB>(&[0.5; 1]);
+    pip_default_subst_too_few_params_template::<BLOSUM>(&[0.5; 1]);
 }
