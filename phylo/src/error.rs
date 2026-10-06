@@ -16,7 +16,7 @@ pub enum Error {
     SubstitutionModel(#[from] SubstitutionModelError),
 
     #[error("Evolutionary model error: {0}")]
-    EvolutionaryModel(String),
+    EvolutionaryModel(#[from] EvolutionaryModelError),
 
     #[error("Alignment error: {0}")]
     Alignment(String),
@@ -70,6 +70,19 @@ pub enum SubstitutionModelError {
 
     #[error("{name}: expects equal frequencies")]
     UnequalFrequencies { name: String },
+
+    #[error("{name}: expected {expected} parameter values, got {actual}")]
+    ParameterCount {
+        name: String,
+        expected: usize,
+        actual: usize,
+    },
+}
+
+#[derive(Error, Debug)]
+pub enum EvolutionaryModelError {
+    #[error("Other evolutionary model error: {0}")]
+    Other(String),
 
     #[error("{name}: expected {expected} parameter values, got {actual}")]
     ParameterCount {

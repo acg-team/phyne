@@ -196,12 +196,33 @@ macro_rules! bail {
             },
         ))
     };
+
     // Usage: bail!(SubstitutionModel, message)
     (SubstitutionModel, $err:expr) => {
         return Err($crate::Error::SubstitutionModel(
             $crate::error::SubstitutionModelError::Other($err.to_string()),
         ))
     };
+
+    // Usage: bail!(EvolutionaryModel, ParameterCount, "PIP", expected, actual)
+    (EvolutionaryModel, ParameterCount, $name:expr, $expected:expr, $actual:expr) => {
+        return Err($crate::Error::EvolutionaryModel(
+            $crate::error::EvolutionaryModelError::ParameterCount {
+                name: $name.to_string(),
+                expected: $expected,
+                actual: $actual,
+            },
+        ))
+    };
+
+    // Usage: bail!(EvolutionaryModel, message)
+    (EvolutionaryModel, $err:expr) => {
+        return Err($crate::Error::EvolutionaryModel(
+            $crate::error::EvolutionaryModelError::Other($err.to_string()),
+        ))
+    };
+
+
     // Usage: bail!(Alignment, "Sequences must be aligned")
     ($variant:ident, $fmt:literal $(, $arg:expr)*) => {
         return Err($crate::Error::$variant(format!($fmt $(, $arg)*)))
