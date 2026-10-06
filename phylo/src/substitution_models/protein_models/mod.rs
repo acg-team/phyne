@@ -44,9 +44,9 @@ fn validate_protein_frequencies(freqs: &FreqVector) -> Result<()> {
             PROTEIN_N,
             freqs.len()
         );
-    } else if freqs.into_iter().any(|x| *x < 0.0) {
+    } else if freqs.iter().any(|x| *x < 0.0) {
         bail!(SubstitutionModel, NegativeFrequency, "protein");
-    } else if !relative_eq!(freqs.into_iter().sum::<f64>().abs(), 1.0) {
+    } else if !relative_eq!(freqs.iter().sum::<f64>().abs(), 1.0) {
         bail!(SubstitutionModel, FrequencySum, "protein");
     }
     Ok(())

@@ -20,9 +20,9 @@ const GTR_PARAM_N: usize = 5;
 fn validate_dna_frequencies(freqs: &FreqVector) -> Result<()> {
     if freqs.len() != DNA_N {
         bail!(SubstitutionModel, FrequencyCount, "DNA", DNA_N, freqs.len());
-    } else if freqs.into_iter().any(|x| *x < 0.0) {
+    } else if freqs.iter().any(|x| *x < 0.0) {
         bail!(SubstitutionModel, NegativeFrequency, "DNA");
-    } else if !relative_eq!(freqs.into_iter().sum::<f64>().abs(), 1.0) {
+    } else if !relative_eq!(freqs.iter().sum::<f64>().abs(), 1.0) {
         bail!(SubstitutionModel, FrequencySum, "DNA");
     }
     Ok(())
