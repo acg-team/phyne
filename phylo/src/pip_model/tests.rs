@@ -556,7 +556,7 @@ fn pip_hky_likelihood_example_2() {
 }
 
 #[test]
-fn pip_likelihood_huelsenbeck_example() {
+fn pip_likelihood_huelsenbeck_example_hky() {
     let info = PIB::with_attrs(
         "./data/Huelsenbeck_example_long_DNA.fasta",
         "./data/Huelsenbeck_example.newick",
@@ -576,6 +576,14 @@ fn pip_likelihood_huelsenbeck_example() {
     assert_relative_eq!(c.cost(), -361.18634412281443, epsilon = 1e-6); // value from the python script
 }
 
+#[test]
+fn pip_likelihood_huelsenbeck_example_gtr() {
+    let info = PIB::with_attrs(
+        "./data/Huelsenbeck_example_long_DNA.fasta",
+        "./data/Huelsenbeck_example.newick",
+    )
+    .build()
+    .unwrap();
     let model = PIPModel::<GTR>::new(
         &[0.22, 0.26, 0.33, 0.19],
         &[
