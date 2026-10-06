@@ -481,6 +481,11 @@ impl Display for TN93 {
     }
 }
 
+/// GTR (General Time Reversible) DNA substitution model.
+///
+/// This model allows for different rates of all possible nucleotide substitutions.
+/// The rate of A <-> G transition is fixed to 1.0 to simplify parameter estimation as
+/// the substitution matrix is normalised so that the average substitution rate is 1.0.
 #[derive(Clone, Debug, PartialEq)]
 #[allow(clippy::upper_case_acronyms)]
 pub struct GTR {
