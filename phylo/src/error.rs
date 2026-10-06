@@ -52,7 +52,7 @@ impl From<std::io::Error> for Error {
 
 #[derive(Error, Debug)]
 pub enum SubstitutionModelError {
-    #[error("Other substitution model error")]
+    #[error("Other substitution model error: {0}")]
     Other(String),
 
     #[error("{name}: expected {expected} frequencies, got {actual}")]
