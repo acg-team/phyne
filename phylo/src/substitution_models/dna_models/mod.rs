@@ -429,39 +429,39 @@ impl QMatrix for TN93 {
 }
 
 fn tn93_q(q: &mut SubstMatrix, pi: &FreqVector, params: &[f64]) {
+    // beta (transversion rate) is fixed to 1.0
     let ft = pi[0];
     let fc = pi[1];
     let fa = pi[2];
     let fg = pi[3];
     let a1 = params[0];
     let a2 = params[1];
-    let b = 1.0;
 
     let scaler = 1.0
-        / ((a1 * fc + b * fa + b * fg) * ft
-            + (a1 * ft + b * fa + b * fg) * fc
-            + (b * ft + b * fc + a2 * fg) * fa
-            + (b * ft + b * fc + a2 * fa) * fg);
+        / ((a1 * fc + fa + fg) * ft
+            + (a1 * ft + fa + fg) * fc
+            + (ft + fc + a2 * fg) * fa
+            + (ft + fc + a2 * fa) * fg);
 
-    q[(0, 0)] = -(a1 * fc + b * fa + b * fg);
+    q[(0, 0)] = -(a1 * fc + fa + fg);
     q[(0, 1)] = a1 * fc;
-    q[(0, 2)] = b * fa;
-    q[(0, 3)] = b * fg;
+    q[(0, 2)] = fa;
+    q[(0, 3)] = fg;
 
     q[(1, 0)] = a1 * ft;
-    q[(1, 1)] = -(a1 * ft + b * fa + b * fg);
-    q[(1, 2)] = b * fa;
-    q[(1, 3)] = b * fg;
+    q[(1, 1)] = -(a1 * ft + fa + fg);
+    q[(1, 2)] = fa;
+    q[(1, 3)] = fg;
 
-    q[(2, 0)] = b * ft;
-    q[(2, 1)] = b * fc;
-    q[(2, 2)] = -(b * ft + b * fc + a2 * fg);
+    q[(2, 0)] = ft;
+    q[(2, 1)] = fc;
+    q[(2, 2)] = -(ft + fc + a2 * fg);
     q[(2, 3)] = a2 * fg;
 
-    q[(3, 0)] = b * ft;
-    q[(3, 1)] = b * fc;
+    q[(3, 0)] = ft;
+    q[(3, 1)] = fc;
     q[(3, 2)] = a2 * fa;
-    q[(3, 3)] = -(b * ft + b * fc + a2 * fa);
+    q[(3, 3)] = -(ft + fc + a2 * fa);
 
     q.scale_mut(scaler);
 }
