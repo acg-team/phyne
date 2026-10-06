@@ -119,7 +119,14 @@ impl<Q: QMatrix + QMatrixMaker> PIPModel<Q> {
     where
         Self: Sized,
     {
-        let subst_q = Q::create(frequencies, &params[2..])?;
+        let subst_params = match params.get(2..) {
+            Some(p) => p,
+            None => bail!(
+                EvolutionaryModel,
+                "too few PIP parameters, at least 2 parameters (lambda and mu) are required"
+            ),
+        };
+        let subst_q = Q::create(frequencies, subst_params)?;
         Ok(Self::from_substitution_with_params(
             subst_q,
             pip_parameters_or_default(params),
