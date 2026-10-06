@@ -576,17 +576,16 @@ fn pip_likelihood_huelsenbeck_example() {
 
     assert_relative_eq!(c.cost(), -361.1613531649497, epsilon = 1e-1); // value from the python script
 
-    let scaler = 1.0 / 1.47031;
     let model = PIPModel::<GTR>::new(
         &[0.22, 0.26, 0.33, 0.19],
         &[
             0.5,
             0.25,
-            1.25453 * scaler,
-            1.07461 * scaler,
-            1.0 * scaler,
-            1.14689 * scaler,
-            1.53244 * scaler,
+            0.8532418333548707,
+            0.7308730811869607,
+            0.6801286803463216,
+            0.7800327822023927,
+            1.042256394909917,
         ],
     )
     .unwrap();
@@ -620,17 +619,16 @@ fn pip_likelihood_huelsenbeck_example_reroot() {
     )
     .build()
     .unwrap();
-    let scaler = 1.0 / 1.47031;
     let model_gtr = PIPModel::<GTR>::new(
         &[0.22, 0.26, 0.33, 0.19],
         &[
             0.5,
             0.25,
-            1.25453 * scaler,
-            1.07461 * scaler,
-            1.0 * scaler,
-            1.14689 * scaler,
-            1.53244 * scaler,
+            0.8532418333548707,
+            0.7308730811869607,
+            0.6801286803463216,
+            0.7800327822023927,
+            1.042256394909917,
         ],
     )
     .unwrap();
