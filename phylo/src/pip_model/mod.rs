@@ -1,13 +1,11 @@
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
-use std::iter;
 use std::marker::{PhantomData, Sized};
 use std::ops::Mul;
 use std::vec;
 
 use hashbrown::HashMap;
 use lazy_static::lazy_static;
-use log::warn;
 use nalgebra::{DMatrix, DVector};
 
 use crate::alignment::{Alignment, Mapping};
@@ -45,6 +43,7 @@ pub struct PIPModel<Q: QMatrix> {
 }
 
 const DEFAULT_PIP_PARAM: f64 = 1.5;
+const PIP_PARAM_N: usize = 2;
 
 fn pip_q(q: &mut SubstMatrix, subst_q: &SubstMatrix, mu: f64) {
     let n = subst_q.ncols();
@@ -53,18 +52,6 @@ fn pip_q(q: &mut SubstMatrix, subst_q: &SubstMatrix, mu: f64) {
     for i in 0..(n + 1) {
         q[(i, i)] -= mu;
     }
-}
-
-/// Copies the given PIP parameters (lambda, mu), filling in defaults if too few are given,
-/// returning a vector containing exactly two elements: lambda and mu.
-fn pip_parameters_or_default(params: &[f64]) -> Vec<f64> {
-    let mut params = params.to_vec();
-    if params.len() < 2 {
-        warn!("Too few values provided for PIP, 2 values required, lambda and mu");
-        warn!("Falling back to default values");
-        params.extend(iter::repeat_n(DEFAULT_PIP_PARAM, 2 - params.len()));
-    }
-    params[..2].to_vec()
 }
 
 impl<Q: QMatrix> PIPModel<Q> {
@@ -99,17 +86,28 @@ impl<Q: QMatrix> PIPModel<Q> {
 impl<Q: QMatrix + Default> Default for PIPModel<Q> {
     fn default() -> Self {
         let subst_q = Q::default();
-        let params = vec![DEFAULT_PIP_PARAM; 2];
+        let params = vec![DEFAULT_PIP_PARAM; PIP_PARAM_N];
         Self::from_substitution_with_params(subst_q, params)
     }
 }
 
 impl<Q: QMatrix + Default> PIPModel<Q> {
     pub fn with_default_substitution(params: &[f64]) -> Result<Self> {
+        // Only 2 parameters are expected as the substitution model uses defaults
+        if params.len() != PIP_PARAM_N {
+            bail!(
+                EvolutionaryModel,
+                ParameterCount,
+                "PIP",
+                PIP_PARAM_N,
+                params.len()
+            );
+        }
+
         let subst_q = Q::default();
         Ok(Self::from_substitution_with_params(
             subst_q,
-            pip_parameters_or_default(params),
+            params[..PIP_PARAM_N].to_vec(),
         ))
     }
 }
@@ -119,17 +117,21 @@ impl<Q: QMatrix + QMatrixMaker> PIPModel<Q> {
     where
         Self: Sized,
     {
-        let subst_params = match params.get(2..) {
-            Some(p) => p,
-            None => bail!(
+        // At least 2 parameters are expected as substitution models can vary in the number of additional parameters
+        if params.len() < PIP_PARAM_N {
+            bail!(
                 EvolutionaryModel,
-                "too few PIP parameters, at least 2 parameters (lambda and mu) are required"
-            ),
-        };
-        let subst_q = Q::create(frequencies, subst_params)?;
+                ParameterCount,
+                "PIP",
+                PIP_PARAM_N,
+                params.len()
+            );
+        }
+
+        let subst_q = Q::create(frequencies, &params[PIP_PARAM_N..])?;
         Ok(Self::from_substitution_with_params(
             subst_q,
-            pip_parameters_or_default(params),
+            params[..PIP_PARAM_N].to_vec(),
         ))
     }
 }
@@ -204,7 +206,9 @@ impl<Q: QMatrix + Display> Display for PIPModel<Q> {
         write!(
             f,
             "PIP with [lambda = {:.5}, mu = {:.5}]\n and {}",
-            self.params[0], self.params[1], self.subst_q
+            self.lambda(),
+            self.mu(),
+            self.subst_q
         )
     }
 }
