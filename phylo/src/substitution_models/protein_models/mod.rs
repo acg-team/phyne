@@ -186,11 +186,11 @@ mod tests {
     }
 
     #[rstest]
-    #[case::too_few_sum_1(&[1.0/19.0; 19])]
+    #[case::too_few_but_sum_1(&[1.0/19.0; 19])]
     #[case::valid_dna(&[1.0/4.0; 4])]
     #[case::too_few(&[0.1, 0.4, 0.0])]
     #[case::empty(&[])]
-    #[case::one_too_many_sum_1(&[1.0/21.0; 21])]
+    #[case::one_too_many_but_sum_1(&[1.0/21.0; 21])]
     #[case::too_many(&[0.1; 30])]
     fn wrong_number_of_frequencies(#[case] freqs: &[f64]) {
         match validate_protein_frequencies(&frequencies!(freqs)) {

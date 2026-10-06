@@ -629,10 +629,10 @@ mod tests {
     }
 
     #[rstest]
-    #[case::too_few_sum_1(&[0.5, 0.4, 0.1])]
+    #[case::too_few_but_sum_1(&[0.5, 0.4, 0.1])]
     #[case::too_few(&[0.5, 0.4, 0.0])]
     #[case::empty(&[])]
-    #[case::one_too_many_sum_1(&[0.4, 0.3, 0.1, 0.1, 0.1])]
+    #[case::one_too_many_but_sum_1(&[0.4, 0.3, 0.1, 0.1, 0.1])]
     #[case::too_many(&[0.1, 0.1, 0.1, 0.1, 0.1, 0.1])]
     #[case::valid_protein(&[1.0 / 20.0; 20])]
     fn wrong_number_of_frequencies(#[case] freqs: &[f64]) {
