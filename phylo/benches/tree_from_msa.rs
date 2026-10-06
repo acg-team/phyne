@@ -12,7 +12,7 @@ use phylo::likelihood::{ModelSearchCost, TreeSearchCost};
 use phylo::optimisers::{Compatible, ModelOptimiser, SprOptimiser, TopologyOptimiser};
 use phylo::pip_model::PIPCost;
 use phylo::random::FakeGenerator;
-use phylo::substitution_models::{QMatrix, QMatrixMaker, JC69, WAG};
+use phylo::substitution_models::{QMatrix, HKY, WAG};
 use phylo::tree::Tree;
 
 mod helpers;
@@ -53,7 +53,7 @@ fn run_optimisation(
     Ok((final_cost, cost.tree().clone()))
 }
 
-fn run_for_sizes<Q: QMatrix + QMatrixMaker + Default + Send>(
+fn run_for_sizes<Q: QMatrix + Default + Send>(
     paths: &SequencePaths,
     group_name: &'static str,
     criterion: &mut Criterion,
@@ -78,7 +78,7 @@ fn run_for_sizes<Q: QMatrix + QMatrixMaker + Default + Send>(
 
 fn pip_inference_dna(criterion: &mut Criterion) {
     let paths = SequencePaths::from([("5X1000", DNA_EASY_5X1000), ("8X1252", DNA_EASY_8X1252)]);
-    run_for_sizes::<JC69>(&paths, "Tree-from-MSA DNA", criterion);
+    run_for_sizes::<HKY>(&paths, "Tree-from-MSA DNA", criterion);
 }
 
 fn pip_inference_aa(criterion: &mut Criterion) {

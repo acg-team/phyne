@@ -4,7 +4,7 @@ use phylo::alignment::MSA;
 use phylo::evolutionary_models::FrequencyOptimisation;
 use phylo::likelihood::ModelSearchCost;
 use phylo::pip_model::PIPCost;
-use phylo::substitution_models::{QMatrix, JC69, WAG};
+use phylo::substitution_models::{QMatrix, HKY, WAG};
 
 mod helpers;
 use helpers::{
@@ -45,7 +45,7 @@ fn pip_cost_dna_easy(criterion: &mut Criterion) {
         ("46X16250", DNA_EASY_46X16250),
         ("128X688", DNA_MEDIUM_128X688),
     ]);
-    run_for_sizes::<JC69>(&paths, "PIP Cost DNA", criterion);
+    run_for_sizes::<HKY>(&paths, "PIP Cost DNA", criterion);
 }
 
 fn pip_cost_aa_easy(criterion: &mut Criterion) {

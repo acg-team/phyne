@@ -11,7 +11,7 @@ use phylo::optimisers::ModelOptimiser;
 use phylo::phylo_info::{PhyloInfo, PhyloInfoBuilder};
 use phylo::pip_model::{PIPCost, PIPCostBuilder, PIPModel};
 use phylo::random::FakeGenerator;
-use phylo::substitution_models::{QMatrix, QMatrixMaker};
+use phylo::substitution_models::QMatrix;
 
 pub type BenchPath = &'static str;
 pub type SequencePaths = HashMap<&'static str, BenchPath>;
@@ -72,7 +72,8 @@ pub struct PIPConfig {
     pub max_iters: usize,
     pub epsilon: f64,
 }
-pub fn black_box_raw_pip_cost_with_config<Model: QMatrix + QMatrixMaker + Default>(
+
+pub fn black_box_raw_pip_cost_with_config<Model: QMatrix + Default>(
     seq_path: impl Into<PathBuf>,
 ) -> (PIPConfig, PIPCost<Model, MSA>) {
     let info = black_box_deterministic_phylo_info(seq_path);
