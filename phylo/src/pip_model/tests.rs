@@ -565,7 +565,7 @@ fn pip_likelihood_huelsenbeck_example() {
     .unwrap();
     let model = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]).unwrap();
     let mut c = PIPB::new(model, info.clone()).build().unwrap();
-    assert_relative_eq!(c.cost(), -372.1419415285655, epsilon = 1e-4);
+    assert_relative_eq!(c.cost(), -372.1419415285655, epsilon = 1e-6);
 
     // Check that model update works
     c.set_param(0, 1.2);
@@ -573,8 +573,8 @@ fn pip_likelihood_huelsenbeck_example() {
     c.set_freqs(frequencies!(&[0.25, 0.25, 0.25, 0.25]))
         .unwrap();
     c.set_param(2, 1.0);
-
-    assert_relative_eq!(c.cost(), -361.1613531649497, epsilon = 1e-1); // value from the python script
+    assert_relative_eq!(c.cost(), -361.18634412281443, epsilon = 1e-6); // value from the python script
+}
 
     let model = PIPModel::<GTR>::new(
         &[0.22, 0.26, 0.33, 0.19],
@@ -591,7 +591,7 @@ fn pip_likelihood_huelsenbeck_example() {
     .unwrap();
     let c = PIPB::new(model, info).build().unwrap();
 
-    assert_relative_eq!(c.cost(), -359.2343309917135, epsilon = 1e-4);
+    assert_relative_eq!(c.cost(), -359.2342943608156, epsilon = 1e-4);
 }
 
 #[test]
@@ -641,8 +641,8 @@ fn pip_likelihood_huelsenbeck_example_reroot() {
     let c = PIPB::new(model_gtr.clone(), phylo).build().unwrap();
     let c_rerooted = PIPB::new(model_gtr, phylo_rerooted).build().unwrap();
 
-    assert_relative_eq!(c.cost(), c_rerooted.cost(), epsilon = 1e-4);
-    assert_relative_eq!(c.cost(), -359.2343309917135, epsilon = 1e-4);
+    assert_relative_eq!(c.cost(), c_rerooted.cost(), epsilon = 1e-6);
+    assert_relative_eq!(c.cost(), -359.2342943608156, epsilon = 1e-6);
 }
 
 #[test]
