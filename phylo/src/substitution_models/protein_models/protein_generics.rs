@@ -485,7 +485,7 @@ pub(crate) const BLOSUM_EXCH: ProteinExch = [
 ];
 
 lazy_static! {
-// WAG stationary frequencies from MrBayes
+// BLOSUM stationary frequencies from MrBayes
 pub(crate) static ref BLOSUM_PI: ProteinFrequencies = normalised_protein_pi([
     0.074, 0.052, 0.045, 0.054, 0.025, 0.034, 0.054, 0.074, 0.026, 0.068, 0.099, 0.058, 0.025,
     0.047, 0.039, 0.057, 0.051, 0.013, 0.032, 0.073,
