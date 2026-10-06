@@ -13,7 +13,7 @@ fn hiv_subset_valid_pip_likelihood() {
 
     let info = PhyloInfoBuilder::new(alignment).build().unwrap();
 
-    let pip = PIPModel::<GTR>::new(&[0.25; 4], &[0.1, 0.1, 1.0, 1.0, 1.0, 1.0, 1.0]).unwrap();
+    let pip = PIPModel::<GTR>::default();
     let c = PIPCostBuilder::new(pip, info).build().unwrap();
     let logl = c.cost();
     assert_ne!(logl, f64::NEG_INFINITY);
