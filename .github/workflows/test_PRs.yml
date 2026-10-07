@@ -2,12 +2,12 @@ name: tests on stable
 
 on:
   push:
-    branches-ignore:    
+    branches-ignore:
       - "develop"
   pull_request:
     branches: [ "develop" ]
   workflow_dispatch:
-    
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -39,7 +39,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --manifest-path ./phylo/Cargo.toml
+          args: --manifest-path ./phyne/Cargo.toml
 
   test:
     name: cargo test
@@ -52,9 +52,9 @@ jobs:
     - name: install cargo2junit
       run: |
         cargo install cargo2junit
-    - name: Running cargo tests 
+    - name: Running cargo tests
       run: |
-        cargo test --manifest-path ./phylo/Cargo.toml -- -Z unstable-options --format json --report-time > cargo_test.out
+        cargo test --manifest-path ./phyne/Cargo.toml -- -Z unstable-options --format json --report-time > cargo_test.out
     - name: Display cargo test output
       if: always()
       run: |

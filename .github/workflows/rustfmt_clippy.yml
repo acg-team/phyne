@@ -2,12 +2,12 @@ name: rustfmt and clippy with annotations
 
 on:
   push:
-    branches-ignore:    
+    branches-ignore:
       - "develop"
   pull_request:
     branches: [ "develop" ]
   workflow_dispatch:
-  
+
 
 env:
   CARGO_TERM_COLOR: always
@@ -43,11 +43,11 @@ jobs:
       - uses: mbrobbel/rustfmt-check@0.16.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          args: --manifest-path ./phylo/Cargo.toml
+          args: --manifest-path ./phyne/Cargo.toml
 
   clippy_check:
     needs: skip_check
-    if: needs.skip_check.outputs.should_skip != 'true' 
+    if: needs.skip_check.outputs.should_skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Skip Duplicate Actions
@@ -59,4 +59,4 @@ jobs:
       - uses: actions-rs/clippy-check@v1.0.7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          args: --manifest-path ./phylo/Cargo.toml --all-features -- -D warnings
+          args: --manifest-path ./phyne/Cargo.toml --all-features -- -D warnings

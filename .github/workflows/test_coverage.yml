@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [ "develop" ]
   workflow_dispatch:
-    
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - run: cargo install cargo-llvm-cov
-      - run: cargo llvm-cov --features ci_coverage --manifest-path phylo/Cargo.toml --all-features --workspace --lcov --output-path lcov.info
+      - run: cargo llvm-cov --features ci_coverage --manifest-path phyne/Cargo.toml --all-features --workspace --lcov --output-path lcov.info
       - uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
