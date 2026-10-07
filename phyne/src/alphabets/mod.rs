@@ -82,7 +82,7 @@ impl Alphabet {
     ///
     /// Example:
     /// ```
-    /// # use phylo::alphabets::Alphabet;
+    /// # use phyne::alphabets::Alphabet;
     /// assert!(Alphabet::dna().is_word(b"ACGT"));
     /// assert!(Alphabet::dna().is_word(b"aCgTx"));
     /// assert!(Alphabet::protein().is_word(b"ACGTFTH"));
@@ -98,7 +98,7 @@ impl Alphabet {
     ///
     /// Example:
     /// ```
-    /// # use phylo::alphabets::Alphabet;
+    /// # use phyne::alphabets::Alphabet;
     /// assert_eq!(Alphabet::dna().symbols(), b"TCAG");
     /// assert_eq!(Alphabet::protein().symbols(), b"ARNDCQEGHILKMFPSTWYV");
     /// ```
@@ -110,7 +110,7 @@ impl Alphabet {
     ///
     /// Example:
     /// ```
-    /// # use phylo::alphabets::Alphabet;
+    /// # use phyne::alphabets::Alphabet;
     /// assert_eq!(Alphabet::dna().ambiguous(), b"RYSWKMBDHVNZX");
     /// assert_eq!(Alphabet::protein().ambiguous(), b"BJZX");
     /// ```
@@ -122,7 +122,7 @@ impl Alphabet {
     ///
     /// Example:
     /// ```
-    /// # use phylo::alphabets::Alphabet;
+    /// # use phyne::alphabets::Alphabet;
     /// assert_eq!(Alphabet::dna().len(), 4);
     /// assert_eq!(Alphabet::protein().len(), 20);
     /// ```
@@ -137,7 +137,7 @@ impl Alphabet {
     ///
     /// Example:
     /// ```
-    /// # use phylo::alphabets::Alphabet;
+    /// # use phyne::alphabets::Alphabet;
     /// assert_eq!(Alphabet::dna().index(&b'T'), 0);
     /// assert_eq!(Alphabet::dna().index(&b'c'), 1);
     /// assert_eq!(Alphabet::dna().index(&b'A'), 2);
@@ -154,7 +154,7 @@ impl Alphabet {
     ///
     /// Example:
     /// ```
-    /// # use phylo::alphabets::Alphabet;
+    /// # use phyne::alphabets::Alphabet;
     /// # use nalgebra::dvector;
     /// let t_probs = Alphabet::dna().char_encoding(b'T');
     /// assert_eq!(t_probs, &dvector![1.0, 0.0, 0.0, 0.0]);
@@ -169,7 +169,7 @@ impl Alphabet {
     ///
     /// Example:
     /// ```
-    /// # use phylo::alphabets::Alphabet;
+    /// # use phyne::alphabets::Alphabet;
     /// # use nalgebra::dvector;
     /// let gap_probs = Alphabet::dna().missing_char_encoding();
     /// assert_eq!(gap_probs, &dvector![1.0, 1.0, 1.0, 1.0]);
@@ -186,8 +186,8 @@ impl Alphabet {
     ///
     /// Example:
     /// ```
-    /// # use phylo::alphabets::Alphabet;
-    /// # use phylo::alphabets::ParsimonySet;
+    /// # use phyne::alphabets::Alphabet;
+    /// # use phyne::alphabets::ParsimonySet;
     /// let r_set = Alphabet::dna().parsimony_set(&b'R');
     /// assert_eq!(format!("{r_set}"), "[AG]");
     /// let z_set = Alphabet::protein().parsimony_set(&b'Z');
@@ -201,8 +201,8 @@ impl Alphabet {
     ///
     /// Example:
     /// ```
-    /// # use phylo::alphabets::Alphabet;
-    /// # use phylo::alphabets::ParsimonySet;
+    /// # use phyne::alphabets::Alphabet;
+    /// # use phyne::alphabets::ParsimonySet;
     /// let gap_set = Alphabet::dna().gap_set();
     /// assert_eq!(format!("{gap_set}"), "[-]");
     /// ```
