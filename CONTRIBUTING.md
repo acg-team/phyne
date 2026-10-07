@@ -1,6 +1,6 @@
-# Contributing to Phylo
+# Contributing to Phyne
 
-Hey there! First off, thank you for considering contributing to the `phylo` crate! This is a young crate in active development, so any contributions are welcome.
+Hey there! First off, thank you for considering contributing to the `phyne` crate! This is a young crate in active development, so any contributions are welcome.
 
 To keep the code clean and good quality, please check out the [Rust API guidelines]( https://rust-lang.github.io/api-guidelines/about.html ) and try to follow them when contributing to the codebase.
 
@@ -19,7 +19,7 @@ We welcome all types of contributions:
 
 ## Bug Reports and Feature Requests
 
-For questions, bug reports, or feature requests, please go to [rust-phylo discussion page]( https://github.com/acg-team/rust-phylo/discussions ) and/or open an issue on [GitHub]( https://github.com/acg-team/rust-phylo/issues ).
+For questions, bug reports, or feature requests, please go to the [phyne discussion page]( https://github.com/acg-team/phyne/discussions ) and/or open an issue on [GitHub]( https://github.com/acg-team/phyne/issues ).
 
 In case you would like to add a feature to the crate, please open an issue first and then tackle it with a pull request.
 
@@ -36,12 +36,12 @@ In case you would like to add a feature to the crate, please open an issue first
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/rust-phylo.git
-   cd rust-phylo/phylo
+   git clone https://github.com/YOUR_USERNAME/phyne.git
+   cd phyne/phyne
    ```
 3. **Add the upstream remote**:
    ```bash
-   git remote add upstream https://github.com/acg-team/rust-phylo.git
+   git remote add upstream https://github.com/acg-team/phyne.git
    ```
 4. **Install development dependencies**:
    ```bash
@@ -74,7 +74,7 @@ In case you would like to add a feature to the crate, please open an issue first
 
 ## Ensuring Code Quality
 
-If you decide to tackle an issue from our [issue list]( https://github.com/acg-team/rust-phylo/issues ), please follow these guidelines to make the review process go smoothly. We recommend reading [Rust crate guidelines]( https://rust-lang.github.io/api-guidelines/about.html ) to make sure your contribution is up to scratch!
+If you decide to tackle an issue from our [issue list]( https://github.com/acg-team/phyne/issues ), please follow these guidelines to make the review process go smoothly. We recommend reading [Rust crate guidelines]( https://rust-lang.github.io/api-guidelines/about.html ) to make sure your contribution is up to scratch!
 
 When you submit a pull request, it will be automatically tested and code coverage will run with GitHub Actions. We are aiming to maintain our current code coverage percentage, so if the report claims that some new features are missing tests, please add some! Bear in mind that the code coverage report will take around 1.5 hours to generate, so please be patient. In addition to running the tests, GitHub Actions runs Clippy and `rustfmt` on each PR.
 
@@ -171,11 +171,11 @@ We look for:
 
 ## Community & Support
 
-- **Questions about contributing**: Open a [discussion](https://github.com/acg-team/rust-phylo/discussions);
-- **Technical questions**: Check existing [issues](https://github.com/acg-team/rust-phylo/issues) or open a new one;
+- **Questions about contributing**: Open a [discussion](https://github.com/acg-team/phyne/discussions);
+- **Technical questions**: Check existing [issues](https://github.com/acg-team/phyne/issues) or open a new one;
 - **Be patient**: Reviews take time;
 - **Be collaborative**: We're all here to make the crate better together!
 
 ---
 
-Thank you for contributing to `phylo`! 🦀
+Thank you for contributing to `phyne`! 🦀
