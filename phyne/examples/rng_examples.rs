@@ -2,7 +2,7 @@ use rand::distr::weighted::WeightedIndex;
 use rand::rngs::StdRng;
 use std::iter::repeat_n;
 
-use phylo::random::{DefaultGenerator, RandomGenerator};
+use phyne::random::{DefaultGenerator, RandomGenerator};
 
 fn main() {
     // 1. Generating from default RNG (Pcg32, seeded with the current timestamp):
