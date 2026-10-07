@@ -89,12 +89,12 @@ where
     ///
     /// # Example
     /// ```rust
-    /// use phylo::likelihood::TreeSearchCost;
-    /// use phylo::optimisers::{SprOptimiser, TopologyOptimiser};
-    /// use phylo::phylo_info::PhyloInfoBuilder;
-    /// use phylo::random::DefaultGenerator;
-    /// use phylo::substitution_models::{K80, SubstModel, SubstitutionCostBuilder};
-    /// # use phylo::Result;
+    /// use phyne::likelihood::TreeSearchCost;
+    /// use phyne::optimisers::{SprOptimiser, TopologyOptimiser};
+    /// use phyne::phylo_info::PhyloInfoBuilder;
+    /// use phyne::random::DefaultGenerator;
+    /// use phyne::substitution_models::{K80, SubstModel, SubstitutionCostBuilder};
+    /// # use phyne::Result;
     ///
     /// # fn main() -> Result<()> {
     /// let info = PhyloInfoBuilder::new("./examples/data/K80.fasta").build()?;
