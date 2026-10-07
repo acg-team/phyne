@@ -80,10 +80,10 @@ impl Sequences {
     ///
     /// # Example:
     /// ```
-    /// use phylo::alignment::Sequences;
-    /// use phylo::record;
+    /// use phyne::alignment::Sequences;
+    /// use phyne::record;
     ///
-    /// # use phylo::Result;
+    /// # use phyne::Result;
     /// # fn main() -> Result<()> {
     /// let records = vec![
     ///     record!("seq1", None, b"ACGT"),
@@ -104,11 +104,11 @@ impl Sequences {
     ///
     /// # Example:
     /// ```
-    /// use phylo::alignment::Sequences;
-    /// use phylo::alphabets::Alphabet;
-    /// use phylo::record;
+    /// use phyne::alignment::Sequences;
+    /// use phyne::alphabets::Alphabet;
+    /// use phyne::record;
     ///
-    /// # use phylo::Result;
+    /// # use phyne::Result;
     /// # fn main() -> Result<()> {
     /// let records = vec![record!("seq1", None, b"ACGT")];
     /// let seqs = Sequences::with_alphabet(records, Alphabet::dna())?;
@@ -170,9 +170,9 @@ impl Sequences {
     ///
     /// # Example:
     /// ```
-    /// use phylo::alignment::Sequences;
+    /// use phyne::alignment::Sequences;
     ///
-    /// # use phylo::Result;
+    /// # use phyne::Result;
     /// # fn main() -> Result<()> {
     /// let seqs = Sequences::new(vec![])?;
     /// assert_eq!(seqs.len(), 0);
@@ -186,9 +186,9 @@ impl Sequences {
     ///
     /// # Example:
     /// ```
-    /// use phylo::alignment::Sequences;
+    /// use phyne::alignment::Sequences;
     ///
-    /// # use phylo::Result;
+    /// # use phyne::Result;
     /// # fn main() -> Result<()> {
     /// let seqs = Sequences::new(vec![])?;
     /// assert!(seqs.is_empty());
@@ -207,10 +207,10 @@ impl Sequences {
     ///
     /// # Example:
     /// ```
-    /// use phylo::alignment::Sequences;
-    /// use phylo::record;
+    /// use phyne::alignment::Sequences;
+    /// use phyne::record;
     ///
-    /// # use phylo::Result;
+    /// # use phyne::Result;
     /// # fn main() -> Result<()> {
     /// let records = vec![record!("seq1", None, b"A")];
     /// let seqs = Sequences::new(records)?;
@@ -232,10 +232,10 @@ impl Sequences {
     ///
     /// # Example:
     /// ```
-    /// use phylo::alignment::Sequences;
-    /// use phylo::record;
+    /// use phyne::alignment::Sequences;
+    /// use phyne::record;
     ///
-    /// # use phylo::Result;
+    /// # use phyne::Result;
     /// # fn main() -> Result<()> {
     /// let records = vec![record!("seq1", None, b"A")];
     /// let mut seqs = Sequences::new(records)?;
@@ -259,10 +259,10 @@ impl Sequences {
     ///
     /// # Example:
     /// ```
-    /// use phylo::alignment::Sequences;
-    /// use phylo::record;
+    /// use phyne::alignment::Sequences;
+    /// use phyne::record;
     ///
-    /// # use phylo::Result;
+    /// # use phyne::Result;
     /// # fn main() -> Result<()> {
     /// let records = vec![record!("seq1", None, b"A")];
     /// let seqs = Sequences::new(records)?;
@@ -282,11 +282,11 @@ impl Sequences {
     ///
     /// # Example:
     /// ```
-    /// use phylo::alignment::Sequences;
-    /// use phylo::alphabets::Alphabet;
-    /// use phylo::record;
+    /// use phyne::alignment::Sequences;
+    /// use phyne::alphabets::Alphabet;
+    /// use phyne::record;
     ///
-    /// # use phylo::Result;
+    /// # use phyne::Result;
     /// # fn main() -> Result<()> {
     /// let records = vec![record!("seq1", None, b"A")];
     /// let seqs = Sequences::new(records)?;
@@ -301,10 +301,10 @@ impl Sequences {
     ///
     /// # Example:
     /// ```
-    /// use phylo::alignment::Sequences;
-    /// use phylo::record;
+    /// use phyne::alignment::Sequences;
+    /// use phyne::record;
     ///
-    /// # use phylo::Result;
+    /// # use phyne::Result;
     /// # fn main() -> Result<()> {
     /// let records = vec![record!("seq1", None, b"A-C")];
     /// let seqs = Sequences::new(records)?;
@@ -341,10 +341,10 @@ impl Sequences {
     ///
     /// # Example:
     /// ```
-    /// use phylo::alignment::Sequences;
-    /// use phylo::record;
+    /// use phyne::alignment::Sequences;
+    /// use phyne::record;
     ///
-    /// # use phylo::Result;
+    /// # use phyne::Result;
     /// # fn main() -> Result<()> {
     /// let records = vec![
     ///     record!("seq1", None, b"A-C"),
