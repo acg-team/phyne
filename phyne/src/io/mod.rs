@@ -19,8 +19,8 @@ use crate::{bail, record, Result};
 ///
 /// # Example
 /// ```
-/// use phylo::io::read_sequences;
-/// # use phylo::Result;
+/// use phyne::io::read_sequences;
+/// # use phyne::Result;
 ///
 /// # fn main() -> Result<()> {
 /// let records = read_sequences("./examples/data/sequences_DNA_small.fasta")?;
@@ -90,9 +90,9 @@ pub fn read_sequences(path: impl AsRef<Path> + Debug) -> Result<Vec<Record>> {
 ///
 /// use std::fs::{File, remove_file};
 ///
-/// use phylo::io::write_sequences_to_file;
-/// use phylo::record;
-/// # use phylo::Result;
+/// use phyne::io::write_sequences_to_file;
+/// use phyne::record;
+/// # use phyne::Result;
 ///
 /// # fn main() -> Result<()> {
 /// let sequences = vec![
@@ -134,8 +134,8 @@ pub fn write_sequences_to_file(sequences: &[Record], path: impl AsRef<Path>) -> 
 ///
 /// # Example
 /// ```
-/// use phylo::io::read_newick_from_file;
-/// # use phylo::Result;
+/// use phyne::io::read_newick_from_file;
+/// # use phyne::Result;
 ///
 /// # fn main() -> Result<()> {
 /// let trees = read_newick_from_file("./examples/data/tree.newick")?;
@@ -161,9 +161,9 @@ pub fn read_newick_from_file(path: impl AsRef<Path>) -> Result<Vec<Tree>> {
 /// # use std::fs::{File, remove_file};
 /// # use std::io::Read;
 ///
-/// use phylo::tree::{tree_parser::from_newick, Tree};
-/// use phylo::io::write_newick_to_file;
-/// # use phylo::Result;
+/// use phyne::tree::{tree_parser::from_newick, Tree};
+/// use phyne::io::write_newick_to_file;
+/// # use phyne::Result;
 ///
 /// # fn main() -> Result<()> {
 /// let output_path = "./examples/data/doctest_tmp_output.newick";
