@@ -1,6 +1,6 @@
 # Phyne
 
-A high-performance Rust library for phylogenetic analysis and multiple sequence alignment under maximum likelihood and parsimony optimality criteria.
+A high-performance Rust crate for indel-aware phylogenetic analysis and multiple sequence alignment under maximum likelihood and parsimony optimality criteria.
 
 <!-- [![Crates.io](https://img.shields.io/crates/v/phyne.svg)](https://crates.io/crates/phyne)
 [![Documentation](https://docs.rs/phyne/badge.svg)](https://docs.rs/phyne) -->
