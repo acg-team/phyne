@@ -213,7 +213,7 @@ where
                     // best_move_at_location, instead of calling update_tree() again?
                     // For tkf we would have to call the dp re-estimate again here again, even
                     // though it is already computed once during the best_move_at_location call.
-                    // See issue #141 https://github.com/acg-team/rust-phylo/issues/141
+                    // See issue #141 https://github.com/acg-team/phyne/issues/141
                     cost_fn.update_tree(best_tree);
                     info!("    {move_opti} move applied, new cost {best_cost}");
                     Ok(best_cost)

@@ -48,7 +48,7 @@ pub(super) enum Event {
 pub trait TKFModel: Clone + Display {
     // TODO: it might be better for model optimisation to have parameter lambda and scale s = mu/lambda,
     // because of the constraint that mu > lambda.
-    // See issue #152 https://github.com/acg-team/rust-phylo/issues/152
+    // See issue #152 https://github.com/acg-team/phyne/issues/152
     fn lambda(&self) -> f64;
     fn mu(&self) -> f64;
     /// [TKF91](crate::tkf_model::tkf91) has 2 parameters: `lambda` and `mu`, [TKF92](crate::tkf_model::tkf92)
@@ -76,7 +76,7 @@ pub trait TKFModel: Clone + Display {
 /// This struct holds intermediate values for the computation of the ln likelihood
 /// of an ancestral alignment and tree under a TKF indel model, i.e., without substitutions.
 /// The intermediate values are needed for re-alignment, which is not implemented yet.
-/// See issue #150 https://github.com/acg-team/rust-phylo/issues/150
+/// See issue #150 https://github.com/acg-team/phyne/issues/150
 #[derive(Clone, Debug)]
 pub(super) struct TKFIndelModelInfo {
     /// ln_node_event_factor[(node, block)] = the ln probability factor for the event
@@ -469,7 +469,7 @@ impl<T: TKFModel, AA: AncestralAlignment> TreeSearchCost for TKFIndelCost<T, AA>
             let v2 = self.tree().nodes[dirty_nodes[0]].idx;
             // TODO: For now we use the FakeGenerator to have deterministic behavior, but in the future
             // we should use a proper RNG here. But pass the RNG from outside and not
-            // create a new one each time, see issue #142 https://github.com/acg-team/rust-phylo/issues/142
+            // create a new one each time, see issue #142 https://github.com/acg-team/phyne/issues/142
             let rng = &mut FakeGenerator::default();
             let mut reestimator = EdgeSeqsReestimator::new(self, rng);
             let dp_logl = reestimator.reestimate_unchecked(&v2);

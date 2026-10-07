@@ -440,7 +440,7 @@ where
             // TODO: perhaps instead return any valid assignment that is compatible with Dollo's
             // constraint, and return -infinity in the reassignment method. If we have -infinity here,
             // then any valid assignment is -infinity.
-            // See issue #153 https://github.com/acg-team/rust-phylo/issues/153
+            // See issue #153 https://github.com/acg-team/phyne/issues/153
             assert!(
                 found_at_least_one,
                 "No valid assignments found for block_id = {block_id}, due to -inf logl"
@@ -458,7 +458,7 @@ where
     /// # Arguments
     /// Takes a mutable reference to self to be able to use the random generator to break ties.
     // TODO: More sophisticated filtering could be done, but might add more complexity and is perhaps not worth it.
-    // See issue #151 https://github.com/acg-team/rust-phylo/issues/151
+    // See issue #151 https://github.com/acg-team/phyne/issues/151
     fn max_over_previous(
         &mut self,
         current_del_or_not: &QuartetDelOrNot,
@@ -469,14 +469,14 @@ where
         let mut argmaxes = Vec::new();
 
         // TODO: instead of recalculating the possible assignments it could be reused from the previous block
-        // See issue #151 https://github.com/acg-team/rust-phylo/issues/151
+        // See issue #151 https://github.com/acg-team/phyne/issues/151
         let previous_block = block_id - 1;
         let model_info = self.cost.model_info.borrow();
         let site = model_info.blocks[previous_block] - 1;
         for prev_assignment in self.possible_assignments(site) {
             // TODO: here it is not checked whether the `prev_del_or_not` matches the `prev_assignment`
             // which will lead to -inf which is then skipped.
-            // See issue #151 https://github.com/acg-team/rust-phylo/issues/151
+            // See issue #151 https://github.com/acg-team/phyne/issues/151
             for prev_del_or_not in prev_compatible_del_or_not(current_events, current_del_or_not) {
                 let prev_dp_index = bools_to_index(prev_assignment, prev_del_or_not);
                 let prev_gamma = self.dp_table[block_id - 1][prev_dp_index];

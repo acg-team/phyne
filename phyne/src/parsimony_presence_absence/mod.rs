@@ -52,8 +52,8 @@ fn get_ancestral_records<A: Alignment>(tree: &Tree, alignment: &A) -> Vec<Record
     let mut ancestral_seqs = HashMap::new();
     // TODO: i could also have a matrix has_char[node, site] and then
     //       loop over nodes and then sites, which might be faster due to caches
-    //       see https://github.com/acg-team/rust-phylo/pull/48/files#r2046683347
-    //       See issue #63 https://github.com/acg-team/rust-phylo/issues/63
+    //       see https://github.com/acg-team/phyne/pull/48/files#r2046683347
+    //       See issue #63 https://github.com/acg-team/phyne/issues/63
     for site in 0..alignment.len() {
         // upward pass
         let has_char = non_empty_clades(alignment, tree, site);
@@ -109,7 +109,7 @@ fn non_empty_clades<A: Alignment>(leaf_alignment: &A, tree: &Tree, site: usize) 
         match node_idx {
             Leaf(idx) => {
                 // TODO: record_by_id is slow
-                //       See issue #63 https://github.com/acg-team/rust-phylo/issues/63
+                //       See issue #63 https://github.com/acg-team/phyne/issues/63
                 has_char[*idx] = leaf_alignment.leaf_map(node_idx)[site].is_some();
             }
             Internal(idx) => {

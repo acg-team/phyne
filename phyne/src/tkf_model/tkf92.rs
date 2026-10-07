@@ -93,7 +93,7 @@ impl TKFModel for TKF92IndelModel {
     }
 
     fn ln_insertion_factor_at_non_root(&self, ln_beta: f64) -> f64 {
-        // TODO: this lambda.ln() could be cached, see issue #152 https://github.com/acg-team/rust-phylo/issues/152
+        // TODO: this lambda.ln() could be cached, see issue #152 https://github.com/acg-team/phyne/issues/152
         self.lambda().ln() + ln_beta + self.ln_one_minus_r_over_r
     }
 
@@ -105,7 +105,7 @@ impl TKFModel for TKF92IndelModel {
         //     m * ln(1 + x) approx ln((1 + x)^m) approx ln(1 + m*x) approx m*x
         //   recovers log(m)  bits of precision, at the cost of two linearization
         //   errors. Whether the net gain is positive requires further investigation.
-        //   See issue https://github.com/acg-team/rust-phylo/issues/174.
+        //   See issue https://github.com/acg-team/phyne/issues/174.
         ln_tree_event_factor
             + (block_len as f64 - 1.0) * (ln_tree_event_factor.exp()).ln_1p()
             + (block_len as f64) * self.ln_r

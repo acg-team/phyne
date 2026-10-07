@@ -197,7 +197,7 @@ impl Tree {
     /// Returns the number of nodes in the tree.
     // TODO: use an alternative name to avoid confusion with length = sum of branch lengths
     // possibly: size, n_nodes, num_nodes,
-    // See issue #82 https://github.com/acg-team/rust-phylo/issues/82
+    // See issue #82 https://github.com/acg-team/phyne/issues/82
     pub fn len(&self) -> usize {
         self.nodes.len()
     }

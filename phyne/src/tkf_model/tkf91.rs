@@ -63,7 +63,7 @@ impl TKFModel for TKF91IndelModel {
     }
 
     fn ln_insertion_factor_at_root(&self) -> f64 {
-        // TODO: this lambda.ln() and mu.ln() could be cached, see issue #152 https://github.com/acg-team/rust-phylo/issues/152
+        // TODO: this lambda.ln() and mu.ln() could be cached, see issue #152 https://github.com/acg-team/phyne/issues/152
         self.lambda().ln() - self.mu().ln()
     }
 

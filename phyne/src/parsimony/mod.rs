@@ -108,7 +108,7 @@ impl<'a, PS: ParsimonyScoring + Clone> ParsimonyAligner<PS> {
         // TODO: to avoid having a fn new(tree, seqs, internal_alignments, leaf_maps) for the Alignment trait,
         // we instead get the aligned Sequences and then create the alignment from it. This discards the internal
         // alignments and rebuilds them when calling `from_aligned`, which might not be ideal.
-        // See issue #79 https://github.com/acg-team/rust-phylo/issues/79
+        // See issue #79 https://github.com/acg-team/phyne/issues/79
         let leaf_maps = PhyloInfo::<A>::compile_leaf_map(&tree.root, &alignments, seqs, tree);
         let aligned_seqs = Sequences::with_alphabet_unchecked(
             leaf_maps

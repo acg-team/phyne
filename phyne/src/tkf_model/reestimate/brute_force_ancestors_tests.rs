@@ -201,7 +201,7 @@ fn get_edge_assignment_possibilities(
         let t3_is_char = t3_mapping[site].is_some();
         let t4_is_char = t4_mapping[site].is_some();
         // TODO: perhaps the return type could be changed such that to_vec is not needed here
-        // See issue #151 https://github.com/acg-team/rust-phylo/issues/151
+        // See issue #151 https://github.com/acg-team/phyne/issues/151
         *possible_edge_assignment =
             possible_assignments_of_edge(t1_is_char, t2_is_char, t3_is_char, t4_is_char).to_vec();
     }

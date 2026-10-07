@@ -64,7 +64,7 @@ lazy_static! {
 
 // TODO: these are not ensured to be compatible with the previous assignments. Would it be
 // worth to filter them here?
-// See issue #151 https://github.com/acg-team/rust-phylo/issues/151
+// See issue #151 https://github.com/acg-team/phyne/issues/151
 pub(super) fn prev_compatible_del_or_not(
     current_events: &QuartetEvents,
     q_del_or_not: &QuartetDelOrNot,

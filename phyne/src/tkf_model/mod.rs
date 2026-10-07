@@ -22,7 +22,7 @@ pub struct TKFCost<Q: QMatrix + Display, T: TKFModel, AA: AncestralAlignment> {
     // phylo (which is tree and alignment) twice, which might be too big of a downside, since the
     // cost is copied often. Alternatively we could implement the substitution cost inside the
     // tkf92 cost, which would duplicate some code.
-    // See issue #152 https://github.com/acg-team/rust-phylo/issues/152
+    // See issue #152 https://github.com/acg-team/phyne/issues/152
     indel_cost: TKFIndelCost<T, AA>,
     subst_cost: SubstitutionCost<Q, AA>,
 }
