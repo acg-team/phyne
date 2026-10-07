@@ -5,7 +5,7 @@
 ///
 /// # Examples
 /// ```
-/// # use phylo::record_wo_desc;
+/// # use phyne::record_wo_desc;
 /// let record = record_wo_desc!("seq1", b"ATCG");
 /// assert_eq!(record.id(), "seq1");
 /// assert_eq!(record.desc(), None);
@@ -25,7 +25,7 @@ macro_rules! record_wo_desc {
 ///
 /// # Examples
 /// ```
-/// # use phylo::record;
+/// # use phyne::record;
 /// let record = record!("seq1", Some("A sequence"), b"ATCG");
 /// assert_eq!(record.id(), "seq1");
 /// assert_eq!(record.desc(), Some("A sequence"));
@@ -46,7 +46,7 @@ macro_rules! record {
 ///
 /// # Examples
 /// ```
-/// # use phylo::tree;
+/// # use phyne::tree;
 /// let tree = tree!("(A,B);");
 /// assert_eq!(tree.leaves().len(), 2);
 /// let tree = tree!("((A,B),(C,D));");
@@ -64,7 +64,7 @@ macro_rules! tree {
 ///
 /// # Examples
 /// ```
-/// # use phylo::align;
+/// # use phyne::align;
 /// let aligned = align!(b"01-2");
 /// assert_eq!(aligned, vec![Some(0), Some(1), None, Some(2)]);
 /// let aligned = align!(b"0--1");
@@ -94,8 +94,8 @@ macro_rules! align {
 ///
 /// # Examples
 /// ```
-/// # use phylo::aligned_seq;
-/// use phylo::alphabets::GAP;
+/// # use phyne::aligned_seq;
+/// use phyne::alphabets::GAP;
 /// let indices = vec![None, Some(0), None, Some(1)];
 /// let seq = b"AT";
 /// let aligned = aligned_seq!(indices, seq);
