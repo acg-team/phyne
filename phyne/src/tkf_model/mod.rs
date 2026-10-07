@@ -107,13 +107,13 @@ impl<Q: QMatrix, T: TKFModel, AA: AncestralAlignment> TKFCost<Q, T, AA> {
     ///
     /// # Example
     /// ```rust
-    /// use phylo::phylo_info::PhyloInfo;
-    /// use phylo::substitution_models::{SubstModel, dna_models::GTR};
-    /// use phylo::alignment::{Alignment, AncestralAlignment, Sequences, MASA};
-    /// use phylo::tkf_model::TKF92CostBuilder;
-    /// use phylo::{tree, record_wo_desc as record};
+    /// use phyne::phylo_info::PhyloInfo;
+    /// use phyne::substitution_models::{SubstModel, dna_models::GTR};
+    /// use phyne::alignment::{Alignment, AncestralAlignment, Sequences, MASA};
+    /// use phyne::tkf_model::TKF92CostBuilder;
+    /// use phyne::{tree, record_wo_desc as record};
     ///
-    /// # use phylo::Result;
+    /// # use phyne::Result;
     /// # fn main() -> Result<()> {
     /// let tree = tree!("(((A1:2.0,B2:2.0)I3:0.3,C4:2.0)R5:1.0);");
     /// let msa = MASA::from_aligned_with_ancestral(
@@ -142,13 +142,13 @@ impl<Q: QMatrix, T: TKFModel, AA: AncestralAlignment> TKFCost<Q, T, AA> {
     ///
     /// # Example
     /// ```rust
-    /// use phylo::phylo_info::PhyloInfo;
-    /// use phylo::substitution_models::{SubstModel, dna_models::GTR};
-    /// use phylo::alignment::{Alignment, AncestralAlignment, Sequences, MASA};
-    /// use phylo::tkf_model::TKF92CostBuilder;
-    /// use phylo::{tree, record_wo_desc as record};
+    /// use phyne::phylo_info::PhyloInfo;
+    /// use phyne::substitution_models::{SubstModel, dna_models::GTR};
+    /// use phyne::alignment::{Alignment, AncestralAlignment, Sequences, MASA};
+    /// use phyne::tkf_model::TKF92CostBuilder;
+    /// use phyne::{tree, record_wo_desc as record};
     ///
-    /// # use phylo::Result;
+    /// # use phyne::Result;
     /// # fn main() -> Result<()> {
     /// let tree = tree!("(((A1:2.0,B2:2.0)I3:0.3,C4:2.0)R5:1.0);");
     /// let msa = MASA::from_aligned_with_ancestral(

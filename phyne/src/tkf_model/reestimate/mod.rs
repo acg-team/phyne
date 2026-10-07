@@ -150,12 +150,12 @@ struct BackTrackingResult {
 ///
 /// # Example
 /// ```rust
-/// # use phylo::Result;
+/// # use phyne::Result;
 /// # fn main() -> Result<()> {
-/// use phylo::phylo_info::PhyloInfoBuilder;
-/// use phylo::random::DefaultGenerator;
-/// use phylo::tkf_model::{EdgeSeqsReestimator, TKF92IndelCostBuilder};
-/// use phylo::tree::NodeIdx::{Internal, Leaf};
+/// use phyne::phylo_info::PhyloInfoBuilder;
+/// use phyne::random::DefaultGenerator;
+/// use phyne::tkf_model::{EdgeSeqsReestimator, TKF92IndelCostBuilder};
+/// use phyne::tree::NodeIdx::{Internal, Leaf};
 /// // Re-estimation for ASR refinement.
 /// // The alignment below includes ancestral sequences for which the indel points
 /// // will be refined.
