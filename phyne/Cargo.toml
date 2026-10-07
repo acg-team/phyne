@@ -26,8 +26,11 @@ precomputed-test-results = []
 par-regraft = ["dep:rayon"]
 par-regraft-chunk = ["dep:rayon"]
 par-regraft-manual = ["dep:rayon"]
-recompute-brute-force-asr = [] # used to force re-computation of brute-force ASR in tests instead of loading precomputed results
-multithread-brute-force-asr = ["dep:rayon"] # parallelise brute-force ASR computations in tests
+recompute-brute-force-asr = [
+] # used to force re-computation of brute-force ASR in tests instead of loading precomputed results
+multithread-brute-force-asr = [
+    "dep:rayon",
+] # parallelise brute-force ASR computations in tests
 
 [lib]
 bench = false
