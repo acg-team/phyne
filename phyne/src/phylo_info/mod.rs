@@ -111,10 +111,10 @@ impl<A: Alignment> PhyloInfo<A> {
     ///
     /// # Example
     /// ```
-    /// use phylo::frequencies;
-    /// use phylo::phylo_info::PhyloInfoBuilder;
-    /// use phylo::evolutionary_models::FreqVector;
-    /// # use phylo::Result;
+    /// use phyne::frequencies;
+    /// use phyne::phylo_info::PhyloInfoBuilder;
+    /// use phyne::evolutionary_models::FreqVector;
+    /// # use phyne::Result;
     ///
     /// # fn main() -> Result<()> {
     /// let info = PhyloInfoBuilder::with_attrs(
