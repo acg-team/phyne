@@ -1,10 +1,10 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use phylo::alignment::MSA;
-use phylo::evolutionary_models::FrequencyOptimisation;
-use phylo::likelihood::ModelSearchCost;
-use phylo::pip_model::PIPCost;
-use phylo::substitution_models::{QMatrix, HKY, WAG};
+use phyne::alignment::MSA;
+use phyne::evolutionary_models::FrequencyOptimisation;
+use phyne::likelihood::ModelSearchCost;
+use phyne::pip_model::PIPCost;
+use phyne::substitution_models::{QMatrix, HKY, WAG};
 
 mod helpers;
 use helpers::{

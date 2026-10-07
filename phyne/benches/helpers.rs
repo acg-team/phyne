@@ -5,13 +5,13 @@ use std::{collections::HashMap, hint::black_box, path::PathBuf, time::Duration};
 
 use criterion::Criterion;
 
-use phylo::alignment::MSA;
-use phylo::evolutionary_models::FrequencyOptimisation;
-use phylo::optimisers::ModelOptimiser;
-use phylo::phylo_info::{PhyloInfo, PhyloInfoBuilder};
-use phylo::pip_model::{PIPCost, PIPCostBuilder, PIPModel};
-use phylo::random::FakeGenerator;
-use phylo::substitution_models::QMatrix;
+use phyne::alignment::MSA;
+use phyne::evolutionary_models::FrequencyOptimisation;
+use phyne::optimisers::ModelOptimiser;
+use phyne::phylo_info::{PhyloInfo, PhyloInfoBuilder};
+use phyne::pip_model::{PIPCost, PIPCostBuilder, PIPModel};
+use phyne::random::FakeGenerator;
+use phyne::substitution_models::QMatrix;
 
 pub type BenchPath = &'static str;
 pub type SequencePaths = HashMap<&'static str, BenchPath>;

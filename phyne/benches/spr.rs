@@ -1,16 +1,16 @@
 use std::fmt::Display;
 
 use criterion::{criterion_group, criterion_main, Criterion};
-
 use itertools::Itertools;
-use phylo::alignment::MSA;
-use phylo::evolutionary_models::FrequencyOptimisation;
-use phylo::likelihood::TreeSearchCost;
-use phylo::optimisers::{Compatible, MoveOptimiser, SprOptimiser, TopologyOptimiser};
-use phylo::pip_model::PIPCost;
-use phylo::random::FakeRng;
-use phylo::substitution_models::{QMatrix, HKY, WAG};
-use phylo::tree::NodeIdx;
+
+use phyne::alignment::MSA;
+use phyne::evolutionary_models::FrequencyOptimisation;
+use phyne::likelihood::TreeSearchCost;
+use phyne::optimisers::{Compatible, MoveOptimiser, SprOptimiser, TopologyOptimiser};
+use phyne::pip_model::PIPCost;
+use phyne::random::FakeRng;
+use phyne::substitution_models::{QMatrix, HKY, WAG};
+use phyne::tree::NodeIdx;
 
 mod helpers;
 use helpers::{
@@ -22,7 +22,7 @@ fn single_spr_cycle<C: TreeSearchCost + Clone + Display + Send + Compatible<SprO
     mut cost_fn: C,
     prune_locations: &[&NodeIdx],
     spr_optimiser: SprOptimiser,
-) -> phylo::Result<f64> {
+) -> Result<f64> {
     TopologyOptimiser::<SprOptimiser, C, FakeRng>::fold_improving_moves(
         &mut cost_fn,
         &spr_optimiser,

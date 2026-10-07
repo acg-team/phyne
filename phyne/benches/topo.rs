@@ -3,13 +3,13 @@ use std::num::NonZero;
 
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use phylo::alignment::MSA;
-use phylo::evolutionary_models::FrequencyOptimisation;
-use phylo::likelihood::TreeSearchCost;
-use phylo::optimisers::{Compatible, SprOptimiser, StopCondition, TopologyOptimiser};
-use phylo::pip_model::PIPCost;
-use phylo::random::FakeGenerator;
-use phylo::substitution_models::{QMatrix, HKY, WAG};
+use phyne::alignment::MSA;
+use phyne::evolutionary_models::FrequencyOptimisation;
+use phyne::likelihood::TreeSearchCost;
+use phyne::optimisers::{Compatible, SprOptimiser, StopCondition, TopologyOptimiser};
+use phyne::pip_model::PIPCost;
+use phyne::random::FakeGenerator;
+use phyne::substitution_models::{QMatrix, HKY, WAG};
 
 mod helpers;
 use helpers::{

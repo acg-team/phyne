@@ -6,14 +6,14 @@ use anyhow::Result;
 use criterion::{criterion_group, criterion_main, Criterion};
 use log::info;
 
-use phylo::alignment::MSA;
-use phylo::evolutionary_models::FrequencyOptimisation;
-use phylo::likelihood::{ModelSearchCost, TreeSearchCost};
-use phylo::optimisers::{Compatible, ModelOptimiser, SprOptimiser, TopologyOptimiser};
-use phylo::pip_model::PIPCost;
-use phylo::random::FakeGenerator;
-use phylo::substitution_models::{QMatrix, HKY, WAG};
-use phylo::tree::Tree;
+use phyne::alignment::MSA;
+use phyne::evolutionary_models::FrequencyOptimisation;
+use phyne::likelihood::{ModelSearchCost, TreeSearchCost};
+use phyne::optimisers::{Compatible, ModelOptimiser, SprOptimiser, TopologyOptimiser};
+use phyne::pip_model::PIPCost;
+use phyne::random::FakeGenerator;
+use phyne::substitution_models::{QMatrix, HKY, WAG};
+use phyne::tree::Tree;
 
 mod helpers;
 use helpers::{
@@ -24,7 +24,7 @@ use helpers::{
 /// NOTE: This is essentially a snapshot of the JATI binary at the time of creation
 /// ANY changes must be manually tracked to accurately measure real-world usage.
 ///
-/// TODO: expose this as part of the rust-phylo library
+/// TODO: expose this as part of the phyne library
 fn run_optimisation(
     cost: impl TreeSearchCost + ModelSearchCost + Display + Clone + Send + Compatible<SprOptimiser>,
     freq_opt: FrequencyOptimisation,
