@@ -21,7 +21,7 @@ pub use fake_random::*;
 /// ```rust
 /// use rand::rngs::StdRng;
 ///
-/// use phylo::random::RandomGenerator;
+/// use phyne::random::RandomGenerator;
 ///
 /// // Create a custom RNG instance
 /// let mut custom_rng: RandomGenerator<StdRng> = RandomGenerator::new(123);
