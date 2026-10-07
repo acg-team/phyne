@@ -30,13 +30,13 @@ impl<D: EvolutionaryDistance> TreeBuilder for NJTreeBuilder<D> {
     ///
     /// # Example
     /// ```rust
-    /// use phylo::alignment::Sequences;
-    /// use phylo::evolutionary_distances::LevenshteinDNACorrected;
-    /// use phylo::io::read_sequences;
-    /// use phylo::random::DefaultGenerator;
-    /// use phylo::tree::{NJTreeBuilder, TreeBuilder};
+    /// use phyne::alignment::Sequences;
+    /// use phyne::evolutionary_distances::LevenshteinDNACorrected;
+    /// use phyne::io::read_sequences;
+    /// use phyne::random::DefaultGenerator;
+    /// use phyne::tree::{NJTreeBuilder, TreeBuilder};
     ///
-    /// # use phylo::Result;
+    /// # use phyne::Result;
     /// # fn main() -> Result<()> {
     /// let sequences = Sequences::new(read_sequences("./data/sequences_DNA1.fasta")?)?;
     /// let mut rng = DefaultGenerator::default();
@@ -63,13 +63,13 @@ impl<D: EvolutionaryDistance> NJTreeBuilder<D> {
     ///
     /// # Example
     /// ```rust
-    /// use phylo::alignment::Sequences;
-    /// use phylo::evolutionary_distances::LevenshteinDNACorrected;
-    /// use phylo::io::read_sequences;
-    /// use phylo::random::DefaultGenerator;
-    /// use phylo::tree::{  NJTreeBuilder, TreeBuilder};
+    /// use phyne::alignment::Sequences;
+    /// use phyne::evolutionary_distances::LevenshteinDNACorrected;
+    /// use phyne::io::read_sequences;
+    /// use phyne::random::DefaultGenerator;
+    /// use phyne::tree::{  NJTreeBuilder, TreeBuilder};
     ///
-    /// # use phylo::Result;
+    /// # use phyne::Result;
     /// # fn main() -> Result<()> {
     /// let sequences = Sequences::new(read_sequences("./data/sequences_DNA1.fasta")?)?;
     /// let mut rng = DefaultGenerator::default();
@@ -95,13 +95,13 @@ impl<D: EvolutionaryDistance> NJTreeBuilder<D> {
     ///
     /// # Example
     /// ```rust
-    /// use phylo::alignment::Sequences;
-    /// use phylo::evolutionary_distances::LevenshteinDNACorrected;
-    /// use phylo::io::read_sequences;
-    /// use phylo::random::DefaultGenerator;
-    /// use phylo::tree::{NJTreeBuilder, TreeBuilder};
+    /// use phyne::alignment::Sequences;
+    /// use phyne::evolutionary_distances::LevenshteinDNACorrected;
+    /// use phyne::io::read_sequences;
+    /// use phyne::random::DefaultGenerator;
+    /// use phyne::tree::{NJTreeBuilder, TreeBuilder};
     ///
-    /// # use phylo::Result;
+    /// # use phyne::Result;
     /// # fn main() -> Result<()> {
     /// let sequences = Sequences::new(read_sequences("./data/sequences_DNA1.fasta")?)?;
     /// let mut rng = DefaultGenerator::default();

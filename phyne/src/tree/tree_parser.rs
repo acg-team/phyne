@@ -38,7 +38,7 @@ impl NewickTreeParser {
     /// Parse a Newick formatted string into a vector of `Tree` structures.
     ///
     /// ```
-    /// use phylo::tree::tree_parser::from_newick;
+    /// use phyne::tree::tree_parser::from_newick;
     ///
     /// let newick = "(A:0.1,B:0.2);";
     /// let trees = from_newick(newick).unwrap();
