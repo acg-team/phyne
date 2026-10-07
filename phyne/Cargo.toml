@@ -1,8 +1,8 @@
 [package]
-name = "phylo"
+name = "phyne"
 version = "0.1.0"
 edition = "2021"
-repository = "https://github.com/acg-team/rust-phylo"
+repository = "https://github.com/acg-team/phyne"
 license = "MIT OR Apache-2.0"
 keywords = [
     "phylogenetics",
