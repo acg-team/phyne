@@ -35,7 +35,7 @@ impl PhyloInfoBuilder<MSA, MASA> {
     ///
     /// # Example
     /// ```
-    /// use phylo::phylo_info::PhyloInfoBuilder;
+    /// use phyne::phylo_info::PhyloInfoBuilder;
     /// let builder = PhyloInfoBuilder::new("./examples/data/sequences_DNA_small.fasta");
     /// ```
     pub fn new(sequence_file: impl AsRef<Path>) -> PhyloInfoBuilder<MSA, MASA> {
@@ -56,7 +56,7 @@ impl PhyloInfoBuilder<MSA, MASA> {
     ///
     /// # Example
     /// ```
-    /// use phylo::phylo_info::PhyloInfoBuilder;
+    /// use phyne::phylo_info::PhyloInfoBuilder;
     /// let builder = PhyloInfoBuilder::with_attrs(
     ///     "./examples/data/sequences_DNA_small.fasta",
     ///     "./examples/data/tree_diff_branch_lengths_2.newick");
@@ -84,8 +84,8 @@ impl<A: Alignment, AA: AncestralAlignment> PhyloInfoBuilder<A, AA> {
     ///
     /// # Example
     /// ```
-    /// use phylo::phylo_info::PhyloInfoBuilder;
-    /// use phylo::alignment::{MSA, MASA};
+    /// use phyne::phylo_info::PhyloInfoBuilder;
+    /// use phyne::alignment::{MSA, MASA};
     /// let builder = PhyloInfoBuilder::<MSA, MASA>::new("./examples/data/sequences_DNA_small.fasta")
     ///   .tree_file(Some("./examples/data/tree_diff_branch_lengths_2.newick"));
     /// ```
@@ -99,10 +99,10 @@ impl<A: Alignment, AA: AncestralAlignment> PhyloInfoBuilder<A, AA> {
     ///
     /// # Example
     /// ```
-    /// use phylo::alignment::Alignment;
-    /// use phylo::alphabets::Alphabet;
-    /// use phylo::phylo_info::PhyloInfoBuilder;
-    /// # use phylo::Result;
+    /// use phyne::alignment::Alignment;
+    /// use phyne::alphabets::Alphabet;
+    /// use phyne::phylo_info::PhyloInfoBuilder;
+    /// # use phyne::Result;
     ///
     /// # fn main() -> Result<()> {
     /// let info = PhyloInfoBuilder::new("./examples/data/sequences_DNA_small.fasta").alphabet(Some(Alphabet::protein())).build()?;
@@ -128,9 +128,9 @@ impl<A: Alignment, AA: AncestralAlignment> PhyloInfoBuilder<A, AA> {
     ///
     /// # Example
     /// ```
-    /// use phylo::alignment::Alignment;
-    /// use phylo::phylo_info::PhyloInfoBuilder;
-    /// # use phylo::Result;
+    /// use phyne::alignment::Alignment;
+    /// use phyne::phylo_info::PhyloInfoBuilder;
+    /// # use phyne::Result;
     ///
     /// # fn main() -> Result<()> {
     /// let info = PhyloInfoBuilder::with_attrs(
