@@ -189,10 +189,10 @@ impl Alignment for MSA {
     ///
     /// # Example
     /// ```
-    /// use phylo::alignment::{Alignment, MSA, Sequences};
-    /// use phylo::alphabets::Alphabet;
-    /// use phylo::{record, tree};
-    /// # use phylo::Result;
+    /// use phyne::alignment::{Alignment, MSA, Sequences};
+    /// use phyne::alphabets::Alphabet;
+    /// use phyne::{record, tree};
+    /// # use phyne::Result;
     ///
     /// # fn main() -> Result<()> {
     /// let tree = tree!("(((A0:1.0,B1:1.0):1.0,C2:1.0):1.0);");
@@ -217,9 +217,9 @@ impl Alignment for MSA {
     ///
     /// # Example
     /// ```
-    /// use phylo::alignment::{Alignment, MSA, Sequences};
-    /// use phylo::{record, tree};
-    /// # use phylo::Result;
+    /// use phyne::alignment::{Alignment, MSA, Sequences};
+    /// use phyne::{record, tree};
+    /// # use phyne::Result;
     ///
     /// # fn main() -> Result<()> {
     /// let tree = tree!("(((A0:1.0,B1:1.0):1.0,C2:1.0):1.0);");
@@ -245,9 +245,9 @@ impl Alignment for MSA {
     ///
     /// # Example
     /// ```
-    /// use phylo::alignment::{Alignment, MSA, Sequences};
-    /// use phylo::{record, tree};
-    /// # use phylo::Result;
+    /// use phyne::alignment::{Alignment, MSA, Sequences};
+    /// use phyne::{record, tree};
+    /// # use phyne::Result;
     ///
     /// # fn main() -> Result<()> {
     /// let tree = tree!("(((A0:1.0,B1:1.0):1.0,C2:1.0):1.0);");
@@ -280,11 +280,11 @@ impl Alignment for MSA {
     ///
     /// # Example
     /// ```
-    /// use phylo::alignment::{Alignment, MSA, Sequences};
-    /// use phylo::phylo_info::PhyloInfo;
-    /// use phylo::{record, tree};
+    /// use phyne::alignment::{Alignment, MSA, Sequences};
+    /// use phyne::phylo_info::PhyloInfo;
+    /// use phyne::{record, tree};
     ///
-    /// # use phylo::Result;
+    /// # use phyne::Result;
     /// # fn main() -> Result<()> {
     /// let tree = tree!("(((A0:1.0,B1:1.0):1.0,C2:1.0):1.0);");
     /// let seqs = Sequences::new(vec![
@@ -406,10 +406,10 @@ impl Alignment for MASA {
 
     /// # Example
     /// ```
-    /// use phylo::alignment::{Alignment, AncestralAlignment, MASA, Sequences};
-    /// use phylo::phylo_info::PhyloInfo;
-    /// use phylo::{record, tree};
-    /// # use phylo::Result;
+    /// use phyne::alignment::{Alignment, AncestralAlignment, MASA, Sequences};
+    /// use phyne::phylo_info::PhyloInfo;
+    /// use phyne::{record, tree};
+    /// # use phyne::Result;
     ///
     /// # fn main() -> Result<()> {
     /// let tree = tree!("(((A0:1.0,B1:1.0)I1:1.0,C2:1.0)I2:1.0);");
@@ -512,10 +512,10 @@ impl AncestralAlignment for MASA {
 
     /// # Example
     /// ```
-    /// use phylo::alignment::{Alignment, AncestralAlignment, MASA, Sequences};
-    /// use phylo::phylo_info::PhyloInfo;
-    /// use phylo::{record, tree};
-    /// # use phylo::Result;
+    /// use phyne::alignment::{Alignment, AncestralAlignment, MASA, Sequences};
+    /// use phyne::phylo_info::PhyloInfo;
+    /// use phyne::{record, tree};
+    /// # use phyne::Result;
     ///
     /// # fn main() -> Result<()> {
     /// let tree = tree!("(((A0:1.0,B1:1.0)I1:1.0,C2:1.0)I2:1.0);");
