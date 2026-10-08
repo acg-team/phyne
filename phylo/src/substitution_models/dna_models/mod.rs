@@ -51,7 +51,7 @@ impl Default for JC69 {
 
 impl QMatrixMaker for JC69 {
     fn create(freqs: &[f64], params: &[f64]) -> Result<JC69> {
-        let freqs = FreqVector::from_column_slice(freqs);
+        let freqs = frequencies!(freqs);
         validate_dna_frequencies(&freqs)?;
 
         if freqs != frequencies!(&EQUAL_FREQS) {
