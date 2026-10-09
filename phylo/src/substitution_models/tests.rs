@@ -1449,3 +1449,31 @@ fn dna_degenerate_freqs() {
     degenerate_freqs_template::<TN93>(&[2.0; 2]);
     degenerate_freqs_template::<GTR>(&[2.0; 5]);
 }
+
+#[cfg(test)]
+fn almost_degenerate_freqs_template<Q: QMatrix + QMatrixMaker>(params: &[f64]) {
+    let n = Q::alphabet().len();
+    for i in 0..n {
+        let mut almost_degenerate_freqs = vec![f64::EPSILON; n];
+        almost_degenerate_freqs[i] = 1.0 - (n as f64 - 1.0) * f64::EPSILON;
+        let model = SubstModel::<Q>::new(&almost_degenerate_freqs, params).unwrap();
+        assert!(model
+            .q()
+            .iter()
+            .all(|&x| !x.is_nan() && x.abs() != f64::INFINITY));
+    }
+}
+
+#[test]
+fn almost_degenerate_dna_frequencies() {
+    almost_degenerate_freqs_template::<HKY>(&[2.0; 1]);
+    almost_degenerate_freqs_template::<TN93>(&[2.0; 2]);
+    almost_degenerate_freqs_template::<GTR>(&[2.0; 5]);
+}
+
+#[test]
+fn almost_degenerate_protein_frequencies() {
+    almost_degenerate_freqs_template::<WAG>(&[]);
+    almost_degenerate_freqs_template::<HIVB>(&[]);
+    almost_degenerate_freqs_template::<BLOSUM>(&[]);
+}
