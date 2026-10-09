@@ -12,13 +12,22 @@ use crate::likelihood::ModelSearchCost;
 use crate::parsimony::{DiagonalZeros as Z, ParsimonyModel, Rounding as R};
 use crate::phylo_info::{PhyloInfo, PhyloInfoBuilder as PIB};
 use crate::substitution_models::{
-    dna_models::*, protein_models::*, FreqVector, QMatrix, QMatrixMaker, SubstMatrix, SubstModel,
-    SubstitutionCostBuilder as SCB,
+    dna_models::{GTR, HKY, JC69, K80, TN93},
+    protein_models::{BLOSUM, HIVB, WAG},
+    FreqVector, QMatrix, QMatrixMaker, SubstMatrix, SubstModel, SubstitutionCostBuilder as SCB,
 };
 use crate::{record_wo_desc as record, tree, Error, SubstitutionModelError};
 
+use super::{
+    DEFAULT_GTR_RATES, DEFAULT_TN93_RATES, DEFAULT_TS_TV_RATIO, GTR_PARAM_N, HKY_PARAM_N,
+    K80_PARAM_N, TN93_PARAM_N,
+};
+
 #[cfg(test)]
 const EQUAL_DNA_FREQS: [f64; 4] = [0.25; 4];
+
+#[cfg(test)]
+const EQUAL_PROTEIN_FREQS: [f64; 20] = [1.0 / 20.0; 20];
 
 #[cfg(test)]
 fn freqs_cannot_change_template<Q: QMatrix>(mut model: SubstModel<Q>) {
@@ -167,12 +176,13 @@ fn dna_jc69_invalid_inputs() {
 #[test]
 fn dna_k80_default() {
     let k80 = SubstModel::<K80>::default();
-    let k801 = SubstModel::<K80>::new(&EQUAL_DNA_FREQS, &[2.0]).unwrap();
+    let k801 = SubstModel::<K80>::new(&EQUAL_DNA_FREQS, &[DEFAULT_TS_TV_RATIO]).unwrap();
     assert_eq!(k80, k801);
     assert_relative_eq!(k80.rate(b'A', b'A'), -1.0);
     assert_relative_eq!(k80.rate(b'T', b'A'), 1.0 * 0.25);
     assert_relative_eq!(k80.rate(b'A', b'G'), 2.0 * 0.25);
     assert_relative_eq!(k80.freqs(), &frequencies!(&EQUAL_DNA_FREQS));
+    assert_eq!(k80.params(), &[DEFAULT_TS_TV_RATIO]);
 }
 
 #[test]
@@ -232,28 +242,28 @@ fn dna_infinity_p() {
 
 #[test]
 fn wag_infinity_p_convergence() {
-    infinity_p_template(SubstModel::<WAG>::new(&[1.0 / 20.0; 20], &[]).unwrap());
+    infinity_p_template(SubstModel::<WAG>::new(&EQUAL_PROTEIN_FREQS, &[]).unwrap());
     infinity_p_template(SubstModel::<WAG>::default());
 }
 
 #[test]
 fn hivb_infinity_p_convergence() {
-    infinity_p_template(SubstModel::<HIVB>::new(&[1.0 / 20.0; 20], &[]).unwrap());
+    infinity_p_template(SubstModel::<HIVB>::new(&EQUAL_PROTEIN_FREQS, &[]).unwrap());
     infinity_p_template(SubstModel::<HIVB>::default());
 }
 
 #[test]
 fn blosum_infinity_p_convergence() {
-    infinity_p_template(SubstModel::<BLOSUM>::new(&[1.0 / 20.0; 20], &[]).unwrap());
+    infinity_p_template(SubstModel::<BLOSUM>::new(&EQUAL_PROTEIN_FREQS, &[]).unwrap());
     infinity_p_template(SubstModel::<BLOSUM>::default());
 }
 
 #[test]
 fn dna_hky_default() {
     let hky = SubstModel::<HKY>::default();
-    let hky2 = SubstModel::<HKY>::new(&EQUAL_DNA_FREQS, &[2.0]).unwrap();
+    let hky2 = SubstModel::<HKY>::new(&EQUAL_DNA_FREQS, &[DEFAULT_TS_TV_RATIO]).unwrap();
     assert_eq!(hky.freqs(), &frequencies!(&EQUAL_DNA_FREQS));
-    assert_eq!(hky.params(), &[2.0]);
+    assert_eq!(hky.params(), &[DEFAULT_TS_TV_RATIO]);
     assert_eq!(hky, hky2);
 }
 
@@ -286,9 +296,9 @@ fn dna_hky_invalid_inputs() {
 #[test]
 fn dna_gtr_default() {
     let gtr = SubstModel::<GTR>::default();
-    let gtr2 = SubstModel::<GTR>::new(&EQUAL_DNA_FREQS, &[1.0; 5]).unwrap();
+    let gtr2 = SubstModel::<GTR>::new(&EQUAL_DNA_FREQS, &DEFAULT_GTR_RATES).unwrap();
     assert_eq!(gtr.freqs(), &frequencies!(&EQUAL_DNA_FREQS));
-    assert_eq!(gtr.params(), &[1.0; 5]);
+    assert_eq!(gtr.params(), &DEFAULT_GTR_RATES);
     assert_eq!(gtr.q()[(0, 0)], -1.0);
     assert!(gtr.rate(b'T', b'T') < 0.0);
     assert!(gtr.rate(b'A', b'A') < 0.0);
@@ -533,13 +543,13 @@ fn change_logl_on_freq_change_template<Q: QMatrix>(model: SubstModel<Q>) {
 #[test]
 fn change_logl_on_freq_change() {
     change_logl_on_freq_change_template(
-        SubstModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5]).unwrap(),
+        SubstModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5; HKY_PARAM_N]).unwrap(),
     );
     change_logl_on_freq_change_template(
-        SubstModel::<TN93>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5; 2]).unwrap(),
+        SubstModel::<TN93>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5; TN93_PARAM_N]).unwrap(),
     );
     change_logl_on_freq_change_template(
-        SubstModel::<GTR>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5; 5]).unwrap(),
+        SubstModel::<GTR>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5; GTR_PARAM_N]).unwrap(),
     );
 }
 
@@ -1445,9 +1455,9 @@ fn protein_degenerate_freqs() {
 
 #[test]
 fn dna_degenerate_freqs() {
-    degenerate_freqs_template::<HKY>(&[2.0; 1]);
-    degenerate_freqs_template::<TN93>(&[2.0; 2]);
-    degenerate_freqs_template::<GTR>(&[2.0; 5]);
+    degenerate_freqs_template::<HKY>(&[2.0; HKY_PARAM_N]);
+    degenerate_freqs_template::<TN93>(&[2.0; TN93_PARAM_N]);
+    degenerate_freqs_template::<GTR>(&[2.0; GTR_PARAM_N]);
 }
 
 #[cfg(test)]
@@ -1466,9 +1476,9 @@ fn almost_degenerate_freqs_template<Q: QMatrix + QMatrixMaker>(params: &[f64]) {
 
 #[test]
 fn almost_degenerate_dna_frequencies() {
-    almost_degenerate_freqs_template::<HKY>(&[2.0; 1]);
-    almost_degenerate_freqs_template::<TN93>(&[2.0; 2]);
-    almost_degenerate_freqs_template::<GTR>(&[2.0; 5]);
+    almost_degenerate_freqs_template::<HKY>(&[2.0; HKY_PARAM_N]);
+    almost_degenerate_freqs_template::<TN93>(&[2.0; TN93_PARAM_N]);
+    almost_degenerate_freqs_template::<GTR>(&[2.0; GTR_PARAM_N]);
 }
 
 #[test]
@@ -1488,10 +1498,10 @@ fn equal_freqs_template<Q: QMatrix + QMatrixMaker>(params: &[f64]) {
 #[test]
 fn equal_freqs_dna() {
     equal_freqs_template::<JC69>(&[]);
-    equal_freqs_template::<K80>(&[2.0; 1]);
-    equal_freqs_template::<HKY>(&[2.0; 1]);
-    equal_freqs_template::<TN93>(&[2.0; 2]);
-    equal_freqs_template::<GTR>(&[2.0; 5]);
+    equal_freqs_template::<K80>(&[2.0; K80_PARAM_N]);
+    equal_freqs_template::<HKY>(&[2.0; HKY_PARAM_N]);
+    equal_freqs_template::<TN93>(&[2.0; TN93_PARAM_N]);
+    equal_freqs_template::<GTR>(&[2.0; GTR_PARAM_N]);
 }
 
 #[test]
