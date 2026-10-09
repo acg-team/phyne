@@ -8,7 +8,7 @@ use nalgebra::DMatrix;
 
 use crate::alignment::Alignment;
 use crate::alphabets::Alphabet;
-use crate::evolutionary_models::{EvoModel, FreqVector, SubstMatrix, TransitionMatrix};
+use crate::evolutionary_models::{EvoModel, FreqVector, RateMatrix, TransitionMatrix};
 use crate::likelihood::{ModelSearchCost, ParamRange, TreeSearchCost};
 use crate::parsimony::{CostMatrix, DiagonalZeros, ParsimonyModel, Rounding};
 use crate::phylo_info::PhyloInfo;
@@ -37,7 +37,7 @@ pub trait QMatrixMaker {
 }
 
 pub trait QMatrix: Debug + Clone + Display {
-    fn q(&self) -> &SubstMatrix;
+    fn q(&self) -> &RateMatrix;
     fn rate(&self, i: u8, j: u8) -> f64;
     fn params(&self) -> &[f64];
     fn param_count() -> usize;
@@ -94,7 +94,7 @@ impl<Q: QMatrix> EvoModel for SubstModel<Q> {
         }
     }
 
-    fn q(&self) -> &SubstMatrix {
+    fn q(&self) -> &RateMatrix {
         self.qmatrix.q()
     }
 
@@ -311,7 +311,7 @@ pub struct SubstModelInfo<Q: QMatrix> {
     phantom: PhantomData<Q>,
     node_info: Vec<DMatrix<f64>>,
     node_info_valid: Vec<bool>,
-    node_models: Vec<SubstMatrix>,
+    node_models: Vec<RateMatrix>,
     node_models_valid: Vec<bool>,
     leaf_seq_info: HashMap<NodeIdx, DMatrix<f64>>,
 }
@@ -340,7 +340,7 @@ impl<Q: QMatrix> SubstModelInfo<Q> {
             phantom: PhantomData,
             node_info: vec![DMatrix::<f64>::zeros(n, msa_length); node_count],
             node_info_valid: vec![false; node_count],
-            node_models: vec![SubstMatrix::zeros(n, n); node_count],
+            node_models: vec![RateMatrix::zeros(n, n); node_count],
             node_models_valid: vec![false; node_count],
             leaf_seq_info,
         })

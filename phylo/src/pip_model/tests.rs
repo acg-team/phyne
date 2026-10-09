@@ -6,7 +6,7 @@ use nalgebra::{DMatrix, DVector};
 use crate::alignment::{Alignment, Sequences, MSA};
 use crate::alphabets::{Alphabet, AMINOACIDS as aas, GAP, NUCLEOTIDES as nucls};
 use crate::error::{Error, EvolutionaryModelError};
-use crate::evolutionary_models::{EvoModel, FreqVector, SubstMatrix};
+use crate::evolutionary_models::{EvoModel, FreqVector, RateMatrix};
 use crate::io::read_sequences;
 use crate::likelihood::ModelSearchCost;
 use crate::phylo_info::{PhyloInfo, PhyloInfoBuilder as PIB};
@@ -230,7 +230,7 @@ fn pip_dna_tn93_correct() {
         PIPModel::<TN93>::new(&[0.22, 0.26, 0.33, 0.19], &[0.2, 0.5, 0.5970915, 0.2940435])
             .unwrap();
     let tn93 = SubstModel::<TN93>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5970915, 0.2940435]).unwrap();
-    let mut diff = SubstMatrix::zeros(4, 4);
+    let mut diff = RateMatrix::zeros(4, 4);
     diff.fill_diagonal(-0.5);
     diff = diff.insert_column(4, 0.5).insert_row(4, 0.0);
     let expected_q = tn93.q().clone().insert_column(4, 0.0).insert_row(4, 0.0) + diff;
@@ -246,8 +246,8 @@ fn pip_p_example_matrix() {
     // PIP matrix example from the PIP likelihood tutorial, rounded to 3 decimal values
     let epsilon = 1e-3;
     let mut pip_hky = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]).unwrap();
-    pip_hky.q = SubstMatrix::from_column_slice(5, 5, &UNNORMALIZED_PIP_HKY_Q);
-    let expected_p = SubstMatrix::from_row_slice(
+    pip_hky.q = RateMatrix::from_column_slice(5, 5, &UNNORMALIZED_PIP_HKY_Q);
+    let expected_p = RateMatrix::from_row_slice(
         5,
         5,
         &[
@@ -256,7 +256,7 @@ fn pip_p_example_matrix() {
         ],
     );
     assert_relative_eq!(pip_hky.p(2.0), expected_p, epsilon = epsilon);
-    let expected_p = SubstMatrix::from_row_slice(
+    let expected_p = RateMatrix::from_row_slice(
         5,
         5,
         &[
@@ -317,7 +317,7 @@ fn pip_hky_likelihood_example_leaf_values() {
     let info = setup_example_phylo_info();
     let tree = info.tree.clone();
     let mut model = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]).unwrap();
-    model.q = SubstMatrix::from_column_slice(5, 5, &UNNORMALIZED_PIP_HKY_Q);
+    model.q = RateMatrix::from_column_slice(5, 5, &UNNORMALIZED_PIP_HKY_Q);
 
     let nu = 7.5;
     let ib = 0.1333 * 0.78694; // iota times beta
@@ -364,7 +364,7 @@ fn pip_hky_likelihood_example_leaf_values() {
 fn pip_hky_likelihood_example_internals() {
     let info = setup_example_phylo_info();
     let mut model = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]).unwrap();
-    model.q = SubstMatrix::from_column_slice(5, 5, &UNNORMALIZED_PIP_HKY_Q);
+    model.q = RateMatrix::from_column_slice(5, 5, &UNNORMALIZED_PIP_HKY_Q);
 
     let c = PIPB::new(model, info.clone()).build().unwrap();
     c.cost();
@@ -424,7 +424,7 @@ fn assert_c0_values<Q: QMatrix>(tmp: &PIPModelInfo<Q>, idx: usize, exp_f1: f64, 
 fn pip_hky_likelihood_example_c0() {
     let info = setup_example_phylo_info();
     let mut model = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]).unwrap();
-    model.q = SubstMatrix::from_column_slice(5, 5, &UNNORMALIZED_PIP_HKY_Q);
+    model.q = RateMatrix::from_column_slice(5, 5, &UNNORMALIZED_PIP_HKY_Q);
 
     let c = PIPB::new(model, info.clone()).build().unwrap();
     c.cost();
@@ -479,7 +479,7 @@ fn pip_hky_likelihood_example_c0() {
 fn pip_hky_likelihood_example_final() {
     let info = setup_example_phylo_info();
     let mut model = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]).unwrap();
-    model.q = SubstMatrix::from_column_slice(5, 5, &UNNORMALIZED_PIP_HKY_Q);
+    model.q = RateMatrix::from_column_slice(5, 5, &UNNORMALIZED_PIP_HKY_Q);
 
     let c = PIPB::new(model, info.clone()).build().unwrap();
     c.cost();
@@ -524,7 +524,7 @@ fn setup_example_phylo_info_2() -> PhyloInfo<MSA> {
 #[test]
 fn pip_hky_likelihood_example_2() {
     let mut model = PIPModel::<HKY>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5, 0.25, 0.5]).unwrap();
-    model.q = SubstMatrix::from_column_slice(5, 5, &UNNORMALIZED_PIP_HKY_Q);
+    model.q = RateMatrix::from_column_slice(5, 5, &UNNORMALIZED_PIP_HKY_Q);
     let info = setup_example_phylo_info_2();
     let c = PIPB::new(model, info).build().unwrap();
     assert_relative_eq!(c.cost(), -24.9549393298, epsilon = 1e-2);

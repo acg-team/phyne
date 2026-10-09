@@ -5,7 +5,7 @@ use approx::relative_eq;
 use crate::alphabets::{Alphabet, NUCLEOTIDE_INDEX};
 use crate::frequencies;
 use crate::likelihood::{ParamRange, PARAM_RANGE_DUMMY, PARAM_RANGE_POSITIVE};
-use crate::substitution_models::{FreqVector, QMatrix, QMatrixMaker, SubstMatrix};
+use crate::substitution_models::{FreqVector, QMatrix, QMatrixMaker, RateMatrix};
 use crate::{bail, Result};
 
 const DNA_N: usize = 4;
@@ -43,13 +43,13 @@ fn validate_dna_frequencies(freqs: &FreqVector) -> Result<()> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct JC69 {
     freqs: FreqVector,
-    q: SubstMatrix,
+    q: RateMatrix,
 }
 
 impl Default for JC69 {
     fn default() -> Self {
         let r = 1.0 / 3.0;
-        let q = SubstMatrix::from_row_slice(
+        let q = RateMatrix::from_row_slice(
             DNA_N,
             DNA_N,
             &[-1.0, r, r, r, r, -1.0, r, r, r, r, -1.0, r, r, r, r, -1.0],
@@ -85,7 +85,7 @@ impl QMatrixMaker for JC69 {
 }
 
 impl QMatrix for JC69 {
-    fn q(&self) -> &SubstMatrix {
+    fn q(&self) -> &RateMatrix {
         &self.q
     }
     fn rate(&self, i: u8, j: u8) -> f64 {
@@ -128,14 +128,14 @@ impl Display for JC69 {
 #[derive(Clone, Debug, PartialEq)]
 pub struct K80 {
     freqs: FreqVector,
-    q: SubstMatrix,
+    q: RateMatrix,
     kappa: Vec<f64>,
 }
 
 impl Default for K80 {
     fn default() -> Self {
         let kappa = DEFAULT_TS_TV_RATIO;
-        let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
+        let mut q = RateMatrix::zeros(DNA_N, DNA_N);
         k80_q(&mut q, kappa);
         K80 {
             freqs: frequencies!(&EQUAL_FREQS),
@@ -166,7 +166,7 @@ impl QMatrixMaker for K80 {
             params[0]
         };
 
-        let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
+        let mut q = RateMatrix::zeros(DNA_N, DNA_N);
         k80_q(&mut q, kappa);
         Ok(K80 {
             freqs: frequencies!(&EQUAL_FREQS),
@@ -177,7 +177,7 @@ impl QMatrixMaker for K80 {
 }
 
 impl QMatrix for K80 {
-    fn q(&self) -> &SubstMatrix {
+    fn q(&self) -> &RateMatrix {
         &self.q
     }
     fn rate(&self, i: u8, j: u8) -> f64 {
@@ -220,7 +220,7 @@ impl Display for K80 {
     }
 }
 
-fn k80_q(q: &mut SubstMatrix, k: f64) {
+fn k80_q(q: &mut RateMatrix, k: f64) {
     let scaler = 1.0 / (k * 0.25 + 0.5);
     q[(0, 0)] = -(k * 0.25 + 0.5);
     q[(0, 1)] = k * 0.25;
@@ -248,7 +248,7 @@ fn k80_q(q: &mut SubstMatrix, k: f64) {
 #[allow(clippy::upper_case_acronyms)]
 pub struct HKY {
     freqs: FreqVector,
-    q: SubstMatrix,
+    q: RateMatrix,
     kappa: Vec<f64>,
 }
 
@@ -256,7 +256,7 @@ impl Default for HKY {
     fn default() -> Self {
         let kappa = DEFAULT_TS_TV_RATIO;
         let freqs = frequencies!(&EQUAL_FREQS);
-        let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
+        let mut q = RateMatrix::zeros(DNA_N, DNA_N);
         hky_q(&mut q, &freqs, kappa);
         HKY {
             freqs,
@@ -283,7 +283,7 @@ impl QMatrixMaker for HKY {
             params[0]
         };
 
-        let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
+        let mut q = RateMatrix::zeros(DNA_N, DNA_N);
         hky_q(&mut q, &freqs, kappa);
         Ok(HKY {
             freqs,
@@ -294,7 +294,7 @@ impl QMatrixMaker for HKY {
 }
 
 impl QMatrix for HKY {
-    fn q(&self) -> &SubstMatrix {
+    fn q(&self) -> &RateMatrix {
         &self.q
     }
     fn rate(&self, i: u8, j: u8) -> f64 {
@@ -330,7 +330,7 @@ impl QMatrix for HKY {
     }
 }
 
-fn hky_q(q: &mut SubstMatrix, pi: &FreqVector, k: f64) {
+fn hky_q(q: &mut RateMatrix, pi: &FreqVector, k: f64) {
     let ft = pi[0];
     let fc = pi[1];
     let fa = pi[2];
@@ -381,7 +381,7 @@ impl Display for HKY {
 #[allow(clippy::upper_case_acronyms)]
 pub struct TN93 {
     freqs: FreqVector,
-    pub(crate) q: SubstMatrix,
+    pub(crate) q: RateMatrix,
     params: Vec<f64>,
 }
 
@@ -389,7 +389,7 @@ impl Default for TN93 {
     fn default() -> Self {
         let params = DEFAULT_TN93_RATES.to_vec();
         let freqs = frequencies!(&EQUAL_FREQS);
-        let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
+        let mut q = RateMatrix::zeros(DNA_N, DNA_N);
         tn93_q(&mut q, &freqs, &params);
         TN93 { freqs, q, params }
     }
@@ -410,7 +410,7 @@ impl QMatrixMaker for TN93 {
             );
         }
 
-        let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
+        let mut q = RateMatrix::zeros(DNA_N, DNA_N);
         tn93_q(&mut q, &freqs, params);
         Ok(TN93 {
             freqs,
@@ -421,7 +421,7 @@ impl QMatrixMaker for TN93 {
 }
 
 impl QMatrix for TN93 {
-    fn q(&self) -> &SubstMatrix {
+    fn q(&self) -> &RateMatrix {
         &self.q
     }
     fn rate(&self, i: u8, j: u8) -> f64 {
@@ -457,7 +457,7 @@ impl QMatrix for TN93 {
     }
 }
 
-fn tn93_q(q: &mut SubstMatrix, pi: &FreqVector, params: &[f64]) {
+fn tn93_q(q: &mut RateMatrix, pi: &FreqVector, params: &[f64]) {
     // beta (transversion rate) is fixed to 1.0
     let ft = pi[0];
     let fc = pi[1];
@@ -514,7 +514,7 @@ impl Display for TN93 {
 #[allow(clippy::upper_case_acronyms)]
 pub struct GTR {
     freqs: FreqVector,
-    q: SubstMatrix,
+    q: RateMatrix,
     params: Vec<f64>,
 }
 
@@ -522,7 +522,7 @@ impl Default for GTR {
     fn default() -> Self {
         let params = DEFAULT_GTR_RATES.to_vec();
         let freqs = frequencies!(&EQUAL_FREQS);
-        let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
+        let mut q = RateMatrix::zeros(DNA_N, DNA_N);
         gtr_q(&mut q, &freqs, &params);
         GTR { freqs, q, params }
     }
@@ -543,7 +543,7 @@ impl QMatrixMaker for GTR {
             );
         }
 
-        let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
+        let mut q = RateMatrix::zeros(DNA_N, DNA_N);
         gtr_q(&mut q, &freqs, params);
         Ok(GTR {
             freqs,
@@ -554,7 +554,7 @@ impl QMatrixMaker for GTR {
 }
 
 impl QMatrix for GTR {
-    fn q(&self) -> &SubstMatrix {
+    fn q(&self) -> &RateMatrix {
         &self.q
     }
     fn rate(&self, i: u8, j: u8) -> f64 {
@@ -590,7 +590,7 @@ impl QMatrix for GTR {
     }
 }
 
-fn gtr_q(q: &mut SubstMatrix, pi: &FreqVector, params: &[f64]) {
+fn gtr_q(q: &mut RateMatrix, pi: &FreqVector, params: &[f64]) {
     // A <-> G transition rate is fixed to 1.0 to simplify parameter estimation
     // Left in the code for clarity, even though it is fixed to 1.0.
     let ft = pi[0];

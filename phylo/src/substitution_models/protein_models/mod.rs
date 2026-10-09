@@ -1,10 +1,11 @@
 use std::fmt::Display;
 
 use approx::relative_eq;
+use nalgebra::DMatrix;
 
 use crate::alphabets::{Alphabet, AMINOACID_INDEX};
 use crate::likelihood::{ParamRange, PARAM_RANGE_DUMMY};
-use crate::substitution_models::{FreqVector, QMatrix, QMatrixMaker, SubstMatrix};
+use crate::substitution_models::{FreqVector, QMatrix, QMatrixMaker, RateMatrix};
 use crate::{bail, frequencies, Result};
 
 pub(crate) mod protein_generics;
@@ -25,8 +26,8 @@ pub fn make_exchangeability(lower_triangle: &ProteinExchLowerTriangle) -> Protei
     exch
 }
 
-fn make_protein_q(exchangeability: &SubstMatrix, freqs: &FreqVector) -> SubstMatrix {
-    let mut q = exchangeability * SubstMatrix::from_diagonal(freqs);
+fn make_protein_q(exchangeability: &RateMatrix, freqs: &FreqVector) -> RateMatrix {
+    let mut q = exchangeability * RateMatrix::from_diagonal(freqs);
     for i in 0..PROTEIN_N {
         q[(i, i)] = -q.row(i).sum();
     }
@@ -65,14 +66,14 @@ macro_rules! define_protein_model {
         #[allow(clippy::upper_case_acronyms)]
         pub struct $name {
             freqs: FreqVector,
-            q: SubstMatrix,
-            exchangeability: SubstMatrix,
+            q: RateMatrix,
+            exchangeability: DMatrix<f64>,
         }
 
         impl Default for $name {
             fn default() -> Self {
                 let freqs = frequencies!($pi.as_slice());
-                let exchangeability = SubstMatrix::from_row_slice(PROTEIN_N, PROTEIN_N, &$exch);
+                let exchangeability = RateMatrix::from_row_slice(PROTEIN_N, PROTEIN_N, &$exch);
                 let q = make_protein_q(&exchangeability, &freqs);
                 $name {
                     freqs,
@@ -97,7 +98,7 @@ macro_rules! define_protein_model {
                     );
                 }
 
-                let exchangeability = SubstMatrix::from_row_slice(PROTEIN_N, PROTEIN_N, &$exch);
+                let exchangeability = RateMatrix::from_row_slice(PROTEIN_N, PROTEIN_N, &$exch);
                 let q = make_protein_q(&exchangeability, &freqs);
                 Ok($name {
                     freqs,
@@ -108,7 +109,7 @@ macro_rules! define_protein_model {
         }
 
         impl QMatrix for $name {
-            fn q(&self) -> &SubstMatrix {
+            fn q(&self) -> &RateMatrix {
                 &self.q
             }
 

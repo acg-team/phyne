@@ -11,7 +11,7 @@ use nalgebra::{DMatrix, DVector};
 
 use crate::alignment::{Alignment, Mapping};
 use crate::alphabets::{Alphabet, GAP};
-use crate::evolutionary_models::{EvoModel, FreqVector, SubstMatrix, TransitionMatrix};
+use crate::evolutionary_models::{EvoModel, FreqVector, TransitionMatrix, RateMatrix};
 use crate::likelihood::{ModelSearchCost, ParamRange, TreeSearchCost, PARAM_RANGE_POSITIVE};
 use crate::phylo_info::PhyloInfo;
 use crate::substitution_models::{QMatrix, QMatrixMaker};
@@ -38,7 +38,7 @@ fn log_factorial_shifted(n: usize) -> f64 {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PIPModel<Q: QMatrix> {
     pub(crate) subst_q: Q,
-    q: SubstMatrix,
+    q: RateMatrix,
     freqs: FreqVector,
     params: Vec<f64>,
 }
@@ -46,7 +46,7 @@ pub struct PIPModel<Q: QMatrix> {
 const DEFAULT_PIP_PARAM: f64 = 1.5;
 const PIP_PARAM_N: usize = 2;
 
-fn pip_q(q: &mut SubstMatrix, subst_q: &SubstMatrix, mu: f64) {
+fn pip_q(q: &mut RateMatrix, subst_q: &RateMatrix, mu: f64) {
     let n = subst_q.ncols();
     q.view_mut((0, 0), (n, n)).copy_from(subst_q);
     q.fill_column(n, mu);
@@ -59,7 +59,7 @@ impl<Q: QMatrix> PIPModel<Q> {
     fn from_substitution_with_params(subst_q: Q, pip_parameters: &[f64]) -> Self {
         let n = subst_q.n();
         let freqs = subst_q.freqs().clone().insert_row(n, 0.0);
-        let mut q = SubstMatrix::zeros(n + 1, n + 1);
+        let mut q = RateMatrix::zeros(n + 1, n + 1);
         pip_q(&mut q, subst_q.q(), pip_parameters[1]);
         let mut params = pip_parameters.to_vec();
         params.extend(subst_q.params());
@@ -143,7 +143,7 @@ impl<Q: QMatrix> EvoModel for PIPModel<Q> {
         (self.q().clone() * time).exp()
     }
 
-    fn q(&self) -> &SubstMatrix {
+    fn q(&self) -> &RateMatrix {
         &self.q
     }
 
@@ -224,7 +224,7 @@ pub struct PIPModelInfo<Q: QMatrix> {
     c0_f1: Vec<f64>,
     c0_pnu: Vec<f64>,
     valid: Vec<bool>,
-    models: Vec<SubstMatrix>,
+    models: Vec<RateMatrix>,
     models_valid: Vec<bool>,
     leaf_seq_info: HashMap<NodeIdx, DMatrix<f64>>,
 }
@@ -265,7 +265,7 @@ impl<Q: QMatrix> PIPModelInfo<Q> {
             c0_pnu: vec![0.0; node_count],
             anc: vec![DMatrix::<f64>::zeros(msa_length, 3); node_count],
             valid: vec![false; node_count],
-            models: vec![SubstMatrix::zeros(n, n); node_count],
+            models: vec![RateMatrix::zeros(n, n); node_count],
             models_valid: vec![false; node_count],
             leaf_seq_info,
         })

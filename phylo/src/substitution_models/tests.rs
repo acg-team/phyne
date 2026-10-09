@@ -14,7 +14,7 @@ use crate::phylo_info::{PhyloInfo, PhyloInfoBuilder as PIB};
 use crate::substitution_models::{
     dna_models::{GTR, HKY, JC69, K80, TN93},
     protein_models::{BLOSUM, HIVB, WAG},
-    FreqVector, QMatrix, QMatrixMaker, SubstMatrix, SubstModel, SubstitutionCostBuilder as SCB,
+    FreqVector, QMatrix, QMatrixMaker, RateMatrix, SubstModel, SubstitutionCostBuilder as SCB,
     TransitionMatrix,
 };
 use crate::{record_wo_desc as record, tree, Error, SubstitutionModelError};
@@ -343,7 +343,7 @@ fn dna_gtr_invalid_inputs() {
 fn dna_tn93_correct() {
     let tn93 = SubstModel::<TN93>::new(&[0.22, 0.26, 0.33, 0.19], &[442.29, 217.81]).unwrap();
     let expected_pi = frequencies!(&[0.22, 0.26, 0.33, 0.19]);
-    let expected_q = SubstMatrix::from_column_slice(
+    let expected_q = RateMatrix::from_column_slice(
         4,
         4,
         &[
@@ -687,7 +687,7 @@ fn dna_cb_example_likelihood() {
     let mut model = SubstModel::<TN93>::default();
     // pre-computed unnormalised Q matrix for math check
     let _ = model.set_freqs(frequencies!(&[0.22, 0.26, 0.33, 0.19]));
-    model.qmatrix.q = SubstMatrix::from_row_slice(
+    model.qmatrix.q = RateMatrix::from_row_slice(
         4,
         4,
         &[
