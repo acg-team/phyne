@@ -19,6 +19,9 @@ pub enum FrequencyOptimisation {
     Fixed,
 }
 
+/// The epsilon value used for frequency comparisons to determine degenerate frequencies.
+pub(crate) const FREQUENCY_EPSILON: f64 = 1e-10;
+
 pub trait EvoModel: Display + DynClone {
     fn p(&self, time: f64) -> ProbabilityMatrix;
     fn q(&self) -> &RateMatrix;
