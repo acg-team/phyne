@@ -123,7 +123,7 @@ macro_rules! define_protein_model {
                 Ok(())
             }
 
-            fn param_count(&self) -> usize {
+            fn param_count() -> usize {
                 0
             }
 
