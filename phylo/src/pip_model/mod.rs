@@ -78,6 +78,10 @@ impl<Q: QMatrix> PIPModel<Q> {
         self.params[1]
     }
 
+    fn param_count() -> usize {
+        PIP_PARAM_N + Q::param_count()
+    }
+
     fn param_range(&self, _: usize) -> ParamRange {
         PARAM_RANGE_POSITIVE
     }
@@ -85,9 +89,7 @@ impl<Q: QMatrix> PIPModel<Q> {
 
 impl<Q: QMatrix + Default> Default for PIPModel<Q> {
     fn default() -> Self {
-        let subst_q = Q::default();
-        let params = [DEFAULT_PIP_PARAM; PIP_PARAM_N];
-        Self::from_substitution_with_params(subst_q, &params)
+        Self::with_default_substitution(&[DEFAULT_PIP_PARAM; PIP_PARAM_N]).unwrap()
     }
 }
 
@@ -105,10 +107,7 @@ impl<Q: QMatrix + Default> PIPModel<Q> {
         }
 
         let subst_q = Q::default();
-        Ok(Self::from_substitution_with_params(
-            subst_q,
-            &params[..PIP_PARAM_N],
-        ))
+        Ok(Self::from_substitution_with_params(subst_q, params))
     }
 }
 
@@ -117,13 +116,12 @@ impl<Q: QMatrix + QMatrixMaker> PIPModel<Q> {
     where
         Self: Sized,
     {
-        // At least 2 parameters are expected as substitution models can vary in the number of additional parameters
-        if params.len() < PIP_PARAM_N {
+        if params.len() != Self::param_count() {
             bail!(
                 EvolutionaryModel,
                 ParameterCount,
                 "PIP",
-                PIP_PARAM_N,
+                Self::param_count(),
                 params.len()
             );
         }
@@ -328,7 +326,7 @@ impl<Q: QMatrix, M: Alignment> ModelSearchCost for PIPCost<Q, M> {
     }
 
     fn param_count(&self) -> usize {
-        self.model.params.len()
+        <PIPModel<Q>>::param_count()
     }
 
     fn param(&self, param: usize) -> f64 {
