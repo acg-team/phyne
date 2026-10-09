@@ -15,6 +15,7 @@ use crate::substitution_models::{
     dna_models::{GTR, HKY, JC69, K80, TN93},
     protein_models::{BLOSUM, HIVB, WAG},
     FreqVector, QMatrix, QMatrixMaker, SubstMatrix, SubstModel, SubstitutionCostBuilder as SCB,
+    TransitionMatrix,
 };
 use crate::{record_wo_desc as record, tree, Error, SubstitutionModelError};
 
@@ -211,10 +212,10 @@ fn dna_k80_invalid_inputs() {
 }
 
 #[cfg(test)]
-fn check_freq_convergence(substmat: SubstMatrix, pi: &FreqVector, epsilon: f64) {
-    assert_eq!(substmat.nrows(), pi.len());
-    assert_eq!(substmat.ncols(), pi.len());
-    for row in substmat.row_iter() {
+fn check_freq_convergence(p: TransitionMatrix, pi: &FreqVector, epsilon: f64) {
+    assert_eq!(p.nrows(), pi.len());
+    assert_eq!(p.ncols(), pi.len());
+    for row in p.row_iter() {
         assert_relative_eq!(row.sum(), 1.0, epsilon = epsilon);
         assert_relative_eq!(row, pi.transpose().as_view(), epsilon = epsilon);
     }

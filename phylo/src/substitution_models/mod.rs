@@ -24,6 +24,7 @@ pub mod protein_models;
 pub use protein_models::*;
 
 pub type SubstMatrix = DMatrix<f64>;
+pub type TransitionMatrix = DMatrix<f64>;
 pub type FreqVector = DVector<f64>;
 
 #[macro_export]
@@ -87,7 +88,7 @@ impl<Q: QMatrix + QMatrixMaker> SubstModel<Q> {
 }
 
 impl<Q: QMatrix> EvoModel for SubstModel<Q> {
-    fn p(&self, time: f64) -> SubstMatrix {
+    fn p(&self, time: f64) -> TransitionMatrix {
         // If time > 1e10f64 the matrix exponentiation breaks and stops converging, but before it breaks
         // starting with 1e5f64 it converges to the same result.
         if time > MAX_BLEN {

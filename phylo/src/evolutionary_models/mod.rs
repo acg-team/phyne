@@ -3,7 +3,7 @@ use std::fmt::Display;
 use dyn_clone::DynClone;
 
 use crate::alphabets::Alphabet;
-use crate::substitution_models::{FreqVector, SubstMatrix};
+use crate::substitution_models::{FreqVector, SubstMatrix, TransitionMatrix};
 use crate::Result;
 
 #[derive(Clone, clap::ValueEnum, Debug, Copy)]
@@ -16,7 +16,7 @@ pub enum FrequencyOptimisation {
 }
 
 pub trait EvoModel: Display + DynClone {
-    fn p(&self, time: f64) -> SubstMatrix;
+    fn p(&self, time: f64) -> TransitionMatrix;
     fn q(&self) -> &SubstMatrix;
     fn rate(&self, i: u8, j: u8) -> f64;
     fn params(&self) -> &[f64];
