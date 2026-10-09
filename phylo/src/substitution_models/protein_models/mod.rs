@@ -254,6 +254,7 @@ mod tests {
         let model = WAG::default();
         assert_eq!(model.freqs().as_slice(), WAG_PI.as_slice());
         assert!(model.params().is_empty());
+        assert_eq!(model.params().len(), WAG::param_count());
     }
 
     #[test]
@@ -261,6 +262,7 @@ mod tests {
         let model = HIVB::default();
         assert_eq!(model.freqs().as_slice(), HIVB_PI.as_slice());
         assert!(model.params().is_empty());
+        assert_eq!(model.params().len(), HIVB::param_count());
     }
 
     #[test]
@@ -268,5 +270,6 @@ mod tests {
         let model = BLOSUM::default();
         assert_eq!(model.freqs().as_slice(), BLOSUM_PI.as_slice());
         assert!(model.params().is_empty());
+        assert_eq!(model.params().len(), BLOSUM::param_count());
     }
 }
