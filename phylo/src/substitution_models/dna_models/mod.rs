@@ -11,11 +11,16 @@ use crate::{bail, Result};
 const DNA_N: usize = 4;
 const EQUAL_FREQS: [f64; DNA_N] = [0.25, 0.25, 0.25, 0.25];
 
-const JC69_PARAM_N: usize = 0;
-const K80_PARAM_N: usize = 1;
-const HKY_PARAM_N: usize = 1;
-const TN93_PARAM_N: usize = 2;
-const GTR_PARAM_N: usize = 5;
+pub(super) const JC69_PARAM_N: usize = 0;
+pub(super) const K80_PARAM_N: usize = 1;
+pub(super) const HKY_PARAM_N: usize = 1;
+pub(super) const TN93_PARAM_N: usize = 2;
+pub(super) const GTR_PARAM_N: usize = 5;
+
+// Default transition/transversion ratio for K80 and HKY models
+pub(super) const DEFAULT_TS_TV_RATIO: f64 = 2.0;
+pub(super) const DEFAULT_GTR_RATES: [f64; GTR_PARAM_N] = [1.0, 1.0, 1.0, 1.0, 1.0];
+pub(super) const DEFAULT_TN93_RATES: [f64; TN93_PARAM_N] = [1.0, 1.0];
 
 fn validate_dna_frequencies(freqs: &FreqVector) -> Result<()> {
     if freqs.len() != DNA_N {
@@ -129,7 +134,7 @@ pub struct K80 {
 
 impl Default for K80 {
     fn default() -> Self {
-        let kappa = 2.0;
+        let kappa = DEFAULT_TS_TV_RATIO;
         let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
         k80_q(&mut q, kappa);
         K80 {
@@ -249,7 +254,7 @@ pub struct HKY {
 
 impl Default for HKY {
     fn default() -> Self {
-        let kappa = 2.0;
+        let kappa = DEFAULT_TS_TV_RATIO;
         let freqs = frequencies!(&EQUAL_FREQS);
         let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
         hky_q(&mut q, &freqs, kappa);
@@ -382,7 +387,7 @@ pub struct TN93 {
 
 impl Default for TN93 {
     fn default() -> Self {
-        let params = vec![1.0; Self::param_count()];
+        let params = DEFAULT_TN93_RATES.to_vec();
         let freqs = frequencies!(&EQUAL_FREQS);
         let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
         tn93_q(&mut q, &freqs, &params);
@@ -515,7 +520,7 @@ pub struct GTR {
 
 impl Default for GTR {
     fn default() -> Self {
-        let params = vec![1.0; Self::param_count()];
+        let params = DEFAULT_GTR_RATES.to_vec();
         let freqs = frequencies!(&EQUAL_FREQS);
         let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
         gtr_q(&mut q, &freqs, &params);
