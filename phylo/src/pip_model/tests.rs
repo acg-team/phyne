@@ -1240,3 +1240,36 @@ fn pip_default_subst_too_few_params_protein() {
     pip_default_subst_too_few_params_template::<HIVB>(&[0.5; 1]);
     pip_default_subst_too_few_params_template::<BLOSUM>(&[0.5; 1]);
 }
+
+#[cfg(test)]
+fn correct_parameter_number<Q: QMatrix + QMatrixMaker + Default>(model: PIPModel<Q>) {
+    assert_eq!(model.params().len(), PIPModel::<Q>::param_count());
+    assert_eq!(model.subst_q.params().len(), Q::param_count());
+    assert_eq!(model.params().len(), Q::param_count() + PIP_PARAM_N);
+}
+
+#[test]
+fn pip_correct_parameter_number_dna() {
+    correct_parameter_number(
+        PIPModel::<JC69>::new(&[0.25; 4], &vec![0.5; JC69::param_count() + PIP_PARAM_N]).unwrap(),
+    );
+    correct_parameter_number(
+        PIPModel::<K80>::new(&[0.25; 4], &vec![0.5; K80::param_count() + PIP_PARAM_N]).unwrap(),
+    );
+    correct_parameter_number(
+        PIPModel::<HKY>::new(&[0.25; 4], &vec![0.5; HKY::param_count() + PIP_PARAM_N]).unwrap(),
+    );
+    correct_parameter_number(
+        PIPModel::<TN93>::new(&[0.25; 4], &vec![0.5; TN93::param_count() + PIP_PARAM_N]).unwrap(),
+    );
+    correct_parameter_number(
+        PIPModel::<GTR>::new(&[0.25; 4], &vec![0.5; GTR::param_count() + PIP_PARAM_N]).unwrap(),
+    );
+}
+
+#[test]
+fn pip_correct_parameter_number_protein() {
+    correct_parameter_number(PIPModel::<WAG>::new(&[0.05; 20], &[0.5; PIP_PARAM_N]).unwrap());
+    correct_parameter_number(PIPModel::<HIVB>::new(&[0.05; 20], &[0.5; PIP_PARAM_N]).unwrap());
+    correct_parameter_number(PIPModel::<BLOSUM>::new(&[0.05; 20], &[0.5; PIP_PARAM_N]).unwrap());
+}
