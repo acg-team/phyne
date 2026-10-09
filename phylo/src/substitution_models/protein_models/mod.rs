@@ -47,15 +47,14 @@ fn validate_protein_frequencies(freqs: &FreqVector) -> Result<()> {
         );
     } else if freqs.iter().any(|x| *x < 0.0) {
         bail!(SubstitutionModel, NegativeFrequency, "protein");
-    } else if !relative_eq!(freqs.iter().sum::<f64>().abs(), 1.0, epsilon = 1e-10) {
+    } else if !relative_eq!(
+        freqs.iter().sum::<f64>().abs(),
+        1.0,
+        epsilon = FREQUENCY_EPSILON
+    ) {
         bail!(SubstitutionModel, FrequencySum, "protein");
-    } else if freqs.iter().any(|x| *x == 1.0) {
-        bail!(
-            SubstitutionModel,
-            DegenerateFrequencies,
-            "protein",
-            freqs.iter().position(|x| *x == 1.0).unwrap()
-        );
+    } else if freqs.iter().filter(|x| **x == 0.0).count() == PROTEIN_N - 1 {
+        bail!(SubstitutionModel, DegenerateFrequencies, "protein");
     }
     Ok(())
 }
@@ -240,12 +239,10 @@ mod tests {
             match validate_protein_frequencies(&frequencies!(&degenerate_freqs)) {
                 Err(Error::SubstitutionModel(SubstitutionModelError::DegenerateFrequencies {
                     name,
-                    index,
                 })) => {
                     assert_eq!(name, "protein");
-                    assert_eq!(i, index);
                 }
-                _ => panic!("Expected DegenerateFrequencies error for index {}", i),
+                _ => panic!("Expected DegenerateFrequencies error for proteins"),
             }
         }
     }
