@@ -386,6 +386,15 @@ fn dna_tn93_correct() {
 }
 
 #[test]
+fn dna_tn93_default() {
+    let tn93 = SubstModel::<TN93>::default();
+    let tn932 = SubstModel::<TN93>::new(&EQUAL_DNA_FREQS, &DEFAULT_TN93_RATES).unwrap();
+    assert_eq!(tn93.freqs(), &frequencies!(&EQUAL_DNA_FREQS));
+    assert_eq!(tn93.params(), &DEFAULT_TN93_RATES);
+    assert_eq!(tn93, tn932);
+}
+
+#[test]
 fn dna_tn93_incorrect() {
     assert!(SubstModel::<TN93>::new(&[0.22, 0.26, 0.33, 0.19], &[0.5970915]).is_err());
 
