@@ -1420,3 +1420,32 @@ fn modify_model_freqs_costs_match() {
     modify_model_freqs_costs_match_template(SubstModel::<BLOSUM>::default(), new_aa_freqs.clone());
     modify_model_freqs_costs_match_template(SubstModel::<HIVB>::default(), new_aa_freqs);
 }
+
+#[cfg(test)]
+fn degenerate_freqs_template<Q: QMatrix + QMatrixMaker>(params: &[f64]) {
+    let n = Q::alphabet().len();
+    for i in 0..n {
+        let mut degenerate_freqs = vec![0.0; n];
+        degenerate_freqs[i] = 1.0;
+        assert_matches!(
+            SubstModel::<Q>::new(&degenerate_freqs, params),
+            Err(Error::SubstitutionModel(
+                SubstitutionModelError::DegenerateFrequencies { .. }
+            ))
+        );
+    }
+}
+
+#[test]
+fn protein_degenerate_freqs() {
+    degenerate_freqs_template::<WAG>(&[]);
+    degenerate_freqs_template::<HIVB>(&[]);
+    degenerate_freqs_template::<BLOSUM>(&[]);
+}
+
+#[test]
+fn dna_degenerate_freqs() {
+    degenerate_freqs_template::<HKY>(&[2.0; 1]);
+    degenerate_freqs_template::<TN93>(&[2.0; 2]);
+    degenerate_freqs_template::<GTR>(&[2.0; 5]);
+}
