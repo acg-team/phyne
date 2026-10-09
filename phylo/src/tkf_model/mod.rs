@@ -1,8 +1,9 @@
 use std::fmt::Display;
 
 use crate::alignment::AncestralAlignment;
+use crate::evolutionary_models::FreqVector;
 use crate::likelihood::{ModelSearchCost, ParamRange, TreeSearchCost};
-use crate::substitution_models::{FreqVector, QMatrix, SubstitutionCost};
+use crate::substitution_models::{QMatrix, SubstitutionCost};
 use crate::tree::Tree;
 use crate::Result;
 

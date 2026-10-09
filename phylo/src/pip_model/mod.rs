@@ -11,10 +11,10 @@ use nalgebra::{DMatrix, DVector};
 
 use crate::alignment::{Alignment, Mapping};
 use crate::alphabets::{Alphabet, GAP};
-use crate::evolutionary_models::EvoModel;
+use crate::evolutionary_models::{EvoModel, FreqVector, SubstMatrix, TransitionMatrix};
 use crate::likelihood::{ModelSearchCost, ParamRange, TreeSearchCost, PARAM_RANGE_POSITIVE};
 use crate::phylo_info::PhyloInfo;
-use crate::substitution_models::{FreqVector, QMatrix, QMatrixMaker, SubstMatrix};
+use crate::substitution_models::{QMatrix, QMatrixMaker};
 use crate::tree::{
     NodeIdx::{self, Internal as Int, Leaf},
     Tree,
@@ -139,7 +139,7 @@ impl<Q: QMatrix + QMatrixMaker> PIPModel<Q> {
 // TODO: where is this ever used?
 // See issue #119 https://github.com/acg-team/rust-phylo/issues/119
 impl<Q: QMatrix> EvoModel for PIPModel<Q> {
-    fn p(&self, time: f64) -> SubstMatrix {
+    fn p(&self, time: f64) -> TransitionMatrix {
         (self.q().clone() * time).exp()
     }
 

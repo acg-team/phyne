@@ -8,10 +8,10 @@ use lazy_static::lazy_static;
 use nalgebra::{DMatrix, DVector};
 
 use crate::alignment::AncestralAlignment;
+use crate::evolutionary_models::FreqVector;
 use crate::likelihood::{ModelSearchCost, ParamRange, TreeSearchCost};
 use crate::phylo_info::PhyloInfo;
 use crate::random::FakeGenerator;
-use crate::substitution_models::FreqVector;
 use crate::tkf_model::reestimate::EdgeSeqsReestimator;
 use crate::tree::NodeIdx::{self, Internal, Leaf};
 use crate::tree::Tree;

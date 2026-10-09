@@ -4,8 +4,8 @@ use hashbrown::HashSet;
 use lazy_static::lazy_static;
 use nalgebra::DVector;
 
+use crate::evolutionary_models::FreqVector;
 use crate::frequencies;
-use crate::substitution_models::FreqVector;
 
 pub mod parsimony_set;
 pub use parsimony_set::*;

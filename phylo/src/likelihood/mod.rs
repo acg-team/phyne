@@ -1,4 +1,4 @@
-use crate::substitution_models::FreqVector;
+use crate::evolutionary_models::FreqVector;
 use crate::tree::Tree;
 use crate::Result;
 

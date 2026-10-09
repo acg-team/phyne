@@ -4,11 +4,11 @@ use std::marker::{PhantomData, Sized};
 use std::ops::Mul;
 
 use hashbrown::HashMap;
-use nalgebra::{DMatrix, DVector};
+use nalgebra::DMatrix;
 
 use crate::alignment::Alignment;
 use crate::alphabets::Alphabet;
-use crate::evolutionary_models::EvoModel;
+use crate::evolutionary_models::{EvoModel, FreqVector, SubstMatrix, TransitionMatrix};
 use crate::likelihood::{ModelSearchCost, ParamRange, TreeSearchCost};
 use crate::parsimony::{CostMatrix, DiagonalZeros, ParsimonyModel, Rounding};
 use crate::phylo_info::PhyloInfo;
@@ -22,10 +22,6 @@ pub mod dna_models;
 pub use dna_models::*;
 pub mod protein_models;
 pub use protein_models::*;
-
-pub type SubstMatrix = DMatrix<f64>;
-pub type TransitionMatrix = DMatrix<f64>;
-pub type FreqVector = DVector<f64>;
 
 #[macro_export]
 macro_rules! frequencies {

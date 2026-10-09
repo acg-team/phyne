@@ -3,14 +3,14 @@ use std::path::Path;
 
 use approx::assert_relative_eq;
 
-use crate::evolutionary_models::{EvoModel, FrequencyOptimisation};
+use crate::evolutionary_models::{EvoModel, FreqVector, FrequencyOptimisation};
 use crate::frequencies;
 use crate::likelihood::ModelSearchCost;
 use crate::optimisers::{ModelOptimiser, StopCondition};
 use crate::phylo_info::PhyloInfoBuilder as PIB;
 use crate::pip_model::{PIPCostBuilder, PIPModel};
 use crate::substitution_models::{
-    dna_models::*, protein_models::*, FreqVector, QMatrix, QMatrixMaker, SubstModel,
+    dna_models::*, protein_models::*, QMatrix, QMatrixMaker, SubstModel,
     SubstitutionCostBuilder as SCB,
 };
 use crate::tkf_model::{TKF91CostBuilder, TKF92CostBuilder};

@@ -6,13 +6,13 @@ use nalgebra::{DMatrix, DVector};
 use crate::alignment::{Alignment, Sequences, MSA};
 use crate::alphabets::{Alphabet, AMINOACIDS as aas, GAP, NUCLEOTIDES as nucls};
 use crate::error::{Error, EvolutionaryModelError};
-use crate::evolutionary_models::EvoModel;
+use crate::evolutionary_models::{EvoModel, FreqVector, SubstMatrix};
 use crate::io::read_sequences;
 use crate::likelihood::ModelSearchCost;
 use crate::phylo_info::{PhyloInfo, PhyloInfoBuilder as PIB};
 use crate::pip_model::{PIPCost, PIPCostBuilder as PIPB, PIPModel, PIPModelInfo, PIP_PARAM_N};
 use crate::substitution_models::{
-    dna_models::*, protein_models::*, FreqVector, QMatrix, QMatrixMaker, SubstMatrix, SubstModel,
+    dna_models::*, protein_models::*, QMatrix, QMatrixMaker, SubstModel,
 };
 use crate::{frequencies, record_wo_desc as record, tree};
 

@@ -1,10 +1,14 @@
 use std::fmt::Display;
 
 use dyn_clone::DynClone;
+use nalgebra::{DMatrix, DVector};
 
 use crate::alphabets::Alphabet;
-use crate::substitution_models::{FreqVector, SubstMatrix, TransitionMatrix};
 use crate::Result;
+
+pub type SubstMatrix = DMatrix<f64>;
+pub type TransitionMatrix = DMatrix<f64>;
+pub type FreqVector = DVector<f64>;
 
 #[derive(Clone, clap::ValueEnum, Debug, Copy)]
 pub enum FrequencyOptimisation {

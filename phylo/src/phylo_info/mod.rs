@@ -4,7 +4,7 @@ use hashbrown::HashMap;
 use crate::alignment::{
     Alignment, AncestralAlignment, InternalAlignments, Mapping, SeqMaps, Sequences,
 };
-use crate::substitution_models::FreqVector;
+use crate::evolutionary_models::FreqVector;
 use crate::tree::{
     NodeIdx::{self, Internal, Leaf},
     Tree,
