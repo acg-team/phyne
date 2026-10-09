@@ -737,7 +737,7 @@ mod tests {
         let model = K80::default();
         assert_eq!(model.freqs().as_slice(), &EQUAL_FREQS);
         assert_eq!(model.params().len(), K80::param_count());
-        assert_eq!(model.params(), &[2.0]);
+        assert_eq!(model.params(), &[DEFAULT_TS_TV_RATIO]);
     }
 
     #[test]
@@ -745,7 +745,7 @@ mod tests {
         let model = HKY::default();
         assert_eq!(model.freqs().as_slice(), &EQUAL_FREQS);
         assert_eq!(model.params().len(), HKY::param_count());
-        assert_eq!(model.params(), &[2.0]);
+        assert_eq!(model.params(), &[DEFAULT_TS_TV_RATIO]);
     }
 
     #[test]
@@ -753,7 +753,7 @@ mod tests {
         let model = TN93::default();
         assert_eq!(model.freqs().as_slice(), &EQUAL_FREQS);
         assert_eq!(model.params().len(), TN93::param_count());
-        assert_eq!(model.params(), &[1.0, 1.0]);
+        assert_eq!(model.params(), &DEFAULT_TN93_RATES);
     }
 
     #[test]
@@ -761,6 +761,6 @@ mod tests {
         let model = GTR::default();
         assert_eq!(model.freqs().as_slice(), &EQUAL_FREQS);
         assert_eq!(model.params().len(), GTR::param_count());
-        assert_eq!(model.params(), &[1.0; 5]);
+        assert_eq!(model.params(), &DEFAULT_GTR_RATES);
     }
 }
