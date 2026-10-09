@@ -231,6 +231,25 @@ mod tests {
     }
 
     #[test]
+    fn degenerate_frequencies() {
+        for i in 0..PROTEIN_N {
+            let mut degenerate_freqs = vec![0.0; PROTEIN_N];
+            degenerate_freqs[i] = 1.0;
+
+            match validate_protein_frequencies(&frequencies!(&degenerate_freqs)) {
+                Err(Error::SubstitutionModel(SubstitutionModelError::DegenerateFrequencies {
+                    name,
+                    index,
+                })) => {
+                    assert_eq!(name, "protein");
+                    assert_eq!(i, index);
+                }
+                _ => panic!("Expected DegenerateFrequencies error for index {}", i),
+            }
+        }
+    }
+
+    #[test]
     fn wag_default_params() {
         let model = WAG::default();
         assert_eq!(model.freqs().as_slice(), WAG_PI.as_slice());
