@@ -71,8 +71,8 @@ pub enum SubstitutionModelError {
     #[error("{name}: expects equal frequencies")]
     UnequalFrequencies { name: String },
 
-    #[error("{name}: degenerate frequencies provided: only one frequency is 1.0 at index {index}")]
-    DegenerateFrequencies { name: String, index: usize },
+    #[error("{name}: degenerate frequencies provided: at least 2 frequencies must be non-zero")]
+    DegenerateFrequencies { name: String },
 
     #[error("{name}: expected {expected} parameter values, got {actual}")]
     ParameterCount {

@@ -205,12 +205,11 @@ macro_rules! bail {
         ))
     };
 
-    // Usage: bail!(SubstitutionModel, DegenerateFrequencies, "DNA", index)
-    (SubstitutionModel, DegenerateFrequencies, $name:expr, $index:expr) => {
+    // Usage: bail!(SubstitutionModel, DegenerateFrequencies, "DNA")
+    (SubstitutionModel, DegenerateFrequencies, $name:expr) => {
         return Err($crate::Error::SubstitutionModel(
             $crate::error::SubstitutionModelError::DegenerateFrequencies {
                 name: $name.to_string(),
-                index: $index,
             },
         ))
     };
