@@ -17,7 +17,7 @@ use crate::substitution_models::{
     FreqVector, ProbabilityMatrix, QMatrix, QMatrixMaker, RateMatrix, SubstModel,
     SubstitutionCostBuilder as SCB,
 };
-use crate::{record_wo_desc as record, tree, Error, SubstitutionModelError};
+use crate::{frequencies, record_wo_desc as record, tree, Error, SubstitutionModelError};
 
 use super::{
     DEFAULT_GTR_RATES, DEFAULT_TN93_RATES, DEFAULT_TS_TV_RATIO, GTR_PARAM_N, HKY_PARAM_N,

@@ -6,7 +6,7 @@ use nalgebra::{DMatrix, DVector};
 use crate::alignment::{Alignment, Sequences, MSA};
 use crate::alphabets::{Alphabet, AMINOACIDS as aas, GAP, NUCLEOTIDES as nucls};
 use crate::error::{Error, EvolutionaryModelError};
-use crate::evolutionary_models::{EvoModel, FreqVector, RateMatrix};
+use crate::evolutionary_models::{EvoModel, RateMatrix};
 use crate::io::read_sequences;
 use crate::likelihood::ModelSearchCost;
 use crate::phylo_info::{PhyloInfo, PhyloInfoBuilder as PIB};

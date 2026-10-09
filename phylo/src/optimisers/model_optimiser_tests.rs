@@ -3,7 +3,7 @@ use std::path::Path;
 
 use approx::assert_relative_eq;
 
-use crate::evolutionary_models::{EvoModel, FreqVector, FrequencyOptimisation};
+use crate::evolutionary_models::{EvoModel, FrequencyOptimisation};
 use crate::frequencies;
 use crate::likelihood::ModelSearchCost;
 use crate::optimisers::{ModelOptimiser, StopCondition};

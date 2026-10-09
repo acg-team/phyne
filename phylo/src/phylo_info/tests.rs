@@ -5,7 +5,6 @@ use assert_matches::assert_matches;
 
 use crate::alignment::{Alignment, AncestralAlignment, Sequences, MASA, MSA};
 use crate::alphabets::{Alphabet, NUCLEOTIDES};
-use crate::evolutionary_models::FreqVector;
 use crate::io::read_sequences;
 use crate::phylo_info::{PhyloInfo, PhyloInfoBuilder as PIB};
 use crate::{frequencies, record_wo_desc as record, tree, Error};

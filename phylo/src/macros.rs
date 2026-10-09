@@ -114,6 +114,14 @@ macro_rules! aligned_seq {
     }};
 }
 
+#[macro_export]
+macro_rules! frequencies {
+    ($slice:expr) => {{
+        use $crate::evolutionary_models::FreqVector;
+        FreqVector::from_column_slice($slice)
+    }};
+}
+
 /// Create a parsimony site from a sequence and site flag.
 ///
 /// **Note:** This macro is intended for internal use within this crate only.

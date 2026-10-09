@@ -23,13 +23,6 @@ pub use dna_models::*;
 pub mod protein_models;
 pub use protein_models::*;
 
-#[macro_export]
-macro_rules! frequencies {
-    ($slice:expr) => {
-        FreqVector::from_column_slice($slice)
-    };
-}
-
 pub trait QMatrixMaker {
     fn create(frequencies: &[f64], params: &[f64]) -> Result<Self>
     where
