@@ -1477,3 +1477,26 @@ fn almost_degenerate_protein_frequencies() {
     almost_degenerate_freqs_template::<HIVB>(&[]);
     almost_degenerate_freqs_template::<BLOSUM>(&[]);
 }
+
+#[cfg(test)]
+fn equal_freqs_template<Q: QMatrix + QMatrixMaker>(params: &[f64]) {
+    let n = Q::alphabet().len();
+    let equal_freqs = vec![1.0 / n as f64; n];
+    assert!(SubstModel::<Q>::new(&equal_freqs, params).is_ok());
+}
+
+#[test]
+fn equal_freqs_dna() {
+    equal_freqs_template::<JC69>(&[]);
+    equal_freqs_template::<K80>(&[2.0; 1]);
+    equal_freqs_template::<HKY>(&[2.0; 1]);
+    equal_freqs_template::<TN93>(&[2.0; 2]);
+    equal_freqs_template::<GTR>(&[2.0; 5]);
+}
+
+#[test]
+fn equal_freqs_protein() {
+    equal_freqs_template::<WAG>(&[]);
+    equal_freqs_template::<HIVB>(&[]);
+    equal_freqs_template::<BLOSUM>(&[]);
+}
