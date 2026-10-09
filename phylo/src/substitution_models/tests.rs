@@ -1471,6 +1471,38 @@ fn dna_degenerate_freqs() {
 }
 
 #[cfg(test)]
+fn degenerate_freqs_w_precision_template<Q: QMatrix + QMatrixMaker>(params: &[f64]) {
+    let n = Q::alphabet().len();
+    for i in 0..n {
+        use crate::evolutionary_models::FREQUENCY_EPSILON;
+
+        let mut degenerate_freqs = vec![0.0; n];
+        degenerate_freqs[i] = 1.0 - FREQUENCY_EPSILON / std::f64::consts::E;
+
+        assert_matches!(
+            SubstModel::<Q>::new(&degenerate_freqs, params),
+            Err(Error::SubstitutionModel(
+                SubstitutionModelError::DegenerateFrequencies { .. }
+            ))
+        );
+    }
+}
+
+#[test]
+fn protein_degenerate_freqs_w_precision() {
+    degenerate_freqs_w_precision_template::<WAG>(&[]);
+    degenerate_freqs_w_precision_template::<HIVB>(&[]);
+    degenerate_freqs_w_precision_template::<BLOSUM>(&[]);
+}
+
+#[test]
+fn dna_degenerate_freqs_w_precision() {
+    degenerate_freqs_w_precision_template::<HKY>(&[2.0; HKY_PARAM_N]);
+    degenerate_freqs_w_precision_template::<TN93>(&[2.0; TN93_PARAM_N]);
+    degenerate_freqs_w_precision_template::<GTR>(&[2.0; GTR_PARAM_N]);
+}
+
+#[cfg(test)]
 fn almost_degenerate_freqs_template<Q: QMatrix + QMatrixMaker>(params: &[f64]) {
     let n = Q::alphabet().len();
     for i in 0..n {
