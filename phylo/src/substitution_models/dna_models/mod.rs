@@ -687,6 +687,25 @@ mod tests {
     }
 
     #[test]
+    fn degenerate_frequencies() {
+        for i in 0..DNA_N {
+            let mut degenerate_freqs = vec![0.0; DNA_N];
+            degenerate_freqs[i] = 1.0;
+
+            match validate_dna_frequencies(&frequencies!(&degenerate_freqs)) {
+                Err(Error::SubstitutionModel(SubstitutionModelError::DegenerateFrequencies {
+                    name,
+                    index,
+                })) => {
+                    assert_eq!(name, "DNA");
+                    assert_eq!(i, index);
+                }
+                _ => panic!("Expected DegenerateFrequencies error for index {}", i),
+            }
+        }
+    }
+
+    #[test]
     fn jc69_default_params() {
         let model = JC69::default();
         assert_eq!(model.freqs().as_slice(), &EQUAL_FREQS);
