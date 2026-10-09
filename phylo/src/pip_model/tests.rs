@@ -10,7 +10,7 @@ use crate::evolutionary_models::EvoModel;
 use crate::io::read_sequences;
 use crate::likelihood::ModelSearchCost;
 use crate::phylo_info::{PhyloInfo, PhyloInfoBuilder as PIB};
-use crate::pip_model::{PIPCost, PIPCostBuilder as PIPB, PIPModel, PIPModelInfo};
+use crate::pip_model::{PIPCost, PIPCostBuilder as PIPB, PIPModel, PIPModelInfo, PIP_PARAM_N};
 use crate::substitution_models::{
     dna_models::*, protein_models::*, FreqVector, QMatrix, QMatrixMaker, SubstMatrix, SubstModel,
 };
@@ -1109,7 +1109,9 @@ fn pip_default_subst_template<Q: QMatrix + Default>() {
         &model.freqs().as_slice()[..model.n() - 1],
         model.subst_q.freqs().as_slice()
     );
-    assert_eq!(model.params().len(), 2 + model.subst_q.params().len());
+    assert_eq!(model.params().len(), PIPModel::<Q>::param_count());
+    assert_eq!(model.subst_q.params().len(), Q::param_count());
+    assert_eq!(PIPModel::<Q>::param_count(), PIP_PARAM_N + Q::param_count());
 }
 
 #[test]
@@ -1138,35 +1140,38 @@ fn pip_default_subst_too_many_params_template<Q: QMatrix + Default>(params: &[f6
         })) => {
             assert_eq!(name, "PIP");
             assert_eq!(actual, params.len());
-            assert_eq!(expected, 2);
+            assert_eq!(expected, PIP_PARAM_N);
         }
         _ => panic!(
             "Expected ParameterCount error for PIP with actual = {} and expected = {}",
             params.len(),
-            2
+            PIP_PARAM_N
         ),
     }
 }
 
 #[test]
 fn pip_default_subst_too_many_params_dna() {
-    pip_default_subst_too_many_params_template::<JC69>(&[0.5; 5]);
-    pip_default_subst_too_many_params_template::<K80>(&[0.5; 5]);
-    pip_default_subst_too_many_params_template::<HKY>(&[0.5; 5]);
-    pip_default_subst_too_many_params_template::<TN93>(&[0.5; 5]);
-    pip_default_subst_too_many_params_template::<GTR>(&[0.5; 5]);
+    pip_default_subst_too_many_params_template::<JC69>(&[0.5; PIP_PARAM_N + 1]);
+    pip_default_subst_too_many_params_template::<K80>(&[0.5; PIP_PARAM_N + 1]);
+    pip_default_subst_too_many_params_template::<HKY>(&[0.5; PIP_PARAM_N + 1]);
+    pip_default_subst_too_many_params_template::<TN93>(&[0.5; PIP_PARAM_N + 1]);
+    pip_default_subst_too_many_params_template::<GTR>(&[0.5; PIP_PARAM_N + 1]);
 }
 
 #[test]
 fn pip_default_subst_too_many_params_protein() {
-    pip_default_subst_too_many_params_template::<WAG>(&[0.5; 5]);
-    pip_default_subst_too_many_params_template::<HIVB>(&[0.5; 5]);
-    pip_default_subst_too_many_params_template::<BLOSUM>(&[0.5; 5]);
+    pip_default_subst_too_many_params_template::<WAG>(&[0.5; PIP_PARAM_N + 1]);
+    pip_default_subst_too_many_params_template::<HIVB>(&[0.5; PIP_PARAM_N + 1]);
+    pip_default_subst_too_many_params_template::<BLOSUM>(&[0.5; PIP_PARAM_N + 1]);
 }
 
 #[cfg(test)]
-fn pip_too_few_params_template<Q: QMatrix + QMatrixMaker>(freqs: &[f64], params: &[f64]) {
-    match PIPModel::<Q>::new(freqs, params) {
+fn pip_too_few_params_template<Q: QMatrix + QMatrixMaker>(params: &[f64]) {
+    match PIPModel::<Q>::new(
+        &vec![1.0 / Q::alphabet().len() as f64; Q::alphabet().len()],
+        params,
+    ) {
         Err(Error::EvolutionaryModel(EvolutionaryModelError::ParameterCount {
             name,
             actual,
@@ -1174,30 +1179,30 @@ fn pip_too_few_params_template<Q: QMatrix + QMatrixMaker>(freqs: &[f64], params:
         })) => {
             assert_eq!(name, "PIP");
             assert_eq!(actual, params.len());
-            assert_eq!(expected, 2);
+            assert_eq!(expected, PIPModel::<Q>::param_count());
         }
         _ => panic!(
             "Expected ParameterCount error for PIP with actual = {} and expected = {}",
             params.len(),
-            2
+            PIPModel::<Q>::param_count()
         ),
     }
 }
 
 #[test]
 fn pip_too_few_params_dna() {
-    pip_too_few_params_template::<JC69>(&[0.25; 4], &[0.5; 0]);
-    pip_too_few_params_template::<K80>(&[0.25; 4], &[0.5; 0]);
-    pip_too_few_params_template::<HKY>(&[0.25; 4], &[0.5; 0]);
-    pip_too_few_params_template::<TN93>(&[0.25; 4], &[0.5; 0]);
-    pip_too_few_params_template::<GTR>(&[0.25; 4], &[0.5; 0]);
+    pip_too_few_params_template::<JC69>(&vec![0.5; JC69::param_count() + PIP_PARAM_N - 1]);
+    pip_too_few_params_template::<K80>(&vec![0.5; K80::param_count() + PIP_PARAM_N - 1]);
+    pip_too_few_params_template::<HKY>(&vec![0.5; HKY::param_count() + PIP_PARAM_N - 1]);
+    pip_too_few_params_template::<TN93>(&vec![0.5; TN93::param_count() + PIP_PARAM_N - 1]);
+    pip_too_few_params_template::<GTR>(&vec![0.5; GTR::param_count() + PIP_PARAM_N - 1]);
 }
 
 #[test]
 fn pip_too_few_params_protein() {
-    pip_too_few_params_template::<WAG>(&[], &[0.5; 0]);
-    pip_too_few_params_template::<HIVB>(&[], &[0.5; 0]);
-    pip_too_few_params_template::<BLOSUM>(&[], &[0.5; 0]);
+    pip_too_few_params_template::<WAG>(&vec![0.5; WAG::param_count() + PIP_PARAM_N - 1]);
+    pip_too_few_params_template::<HIVB>(&vec![0.5; HIVB::param_count() + PIP_PARAM_N - 1]);
+    pip_too_few_params_template::<BLOSUM>(&vec![0.5; BLOSUM::param_count() + PIP_PARAM_N - 1]);
 }
 
 #[cfg(test)]
@@ -1210,12 +1215,12 @@ fn pip_default_subst_too_few_params_template<Q: QMatrix + Default>(params: &[f64
         })) => {
             assert_eq!(name, "PIP");
             assert_eq!(actual, params.len());
-            assert_eq!(expected, 2);
+            assert_eq!(expected, PIP_PARAM_N);
         }
         _ => panic!(
             "Expected ParameterCount error for PIP with actual = {} and expected = {}",
             params.len(),
-            2
+            PIP_PARAM_N
         ),
     }
 }
