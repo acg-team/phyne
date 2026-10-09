@@ -6,7 +6,7 @@ use assert_matches::assert_matches;
 
 use crate::alignment::{Alignment, Sequences, MSA};
 use crate::alphabets::{Alphabet, AMINOACIDS, GAP};
-use crate::evolutionary_models::EvoModel;
+use crate::evolutionary_models::{EvoModel, FreqVector, ProbabilityMatrix, RateMatrix};
 use crate::io::read_sequences;
 use crate::likelihood::ModelSearchCost;
 use crate::parsimony::{DiagonalZeros as Z, ParsimonyModel, Rounding as R};
@@ -14,8 +14,7 @@ use crate::phylo_info::{PhyloInfo, PhyloInfoBuilder as PIB};
 use crate::substitution_models::{
     dna_models::{GTR, HKY, JC69, K80, TN93},
     protein_models::{BLOSUM, HIVB, WAG},
-    FreqVector, ProbabilityMatrix, QMatrix, QMatrixMaker, RateMatrix, SubstModel,
-    SubstitutionCostBuilder as SCB,
+    QMatrix, QMatrixMaker, SubstModel, SubstitutionCostBuilder as SCB,
 };
 use crate::{frequencies, record_wo_desc as record, tree, Error, SubstitutionModelError};
 

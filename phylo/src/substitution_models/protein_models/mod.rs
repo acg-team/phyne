@@ -4,8 +4,9 @@ use approx::relative_eq;
 use nalgebra::DMatrix;
 
 use crate::alphabets::{Alphabet, AMINOACID_INDEX};
+use crate::evolutionary_models::{FreqVector, RateMatrix, FREQUENCY_EPSILON};
 use crate::likelihood::{ParamRange, PARAM_RANGE_DUMMY};
-use crate::substitution_models::{FreqVector, QMatrix, QMatrixMaker, RateMatrix};
+use crate::substitution_models::{QMatrix, QMatrixMaker};
 use crate::{bail, frequencies, Result};
 
 pub(crate) mod protein_generics;

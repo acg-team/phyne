@@ -3,10 +3,10 @@ use std::fmt::Display;
 use approx::relative_eq;
 
 use crate::alphabets::{Alphabet, NUCLEOTIDE_INDEX};
-use crate::frequencies;
+use crate::evolutionary_models::{FreqVector, RateMatrix, FREQUENCY_EPSILON};
 use crate::likelihood::{ParamRange, PARAM_RANGE_DUMMY, PARAM_RANGE_POSITIVE};
-use crate::substitution_models::{FreqVector, QMatrix, QMatrixMaker, RateMatrix};
-use crate::{bail, Result};
+use crate::substitution_models::{QMatrix, QMatrixMaker};
+use crate::{bail, frequencies, Result};
 
 const DNA_N: usize = 4;
 const EQUAL_FREQS: [f64; DNA_N] = [0.25, 0.25, 0.25, 0.25];
