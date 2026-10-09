@@ -6,6 +6,7 @@ use std::vec;
 
 use hashbrown::HashMap;
 use lazy_static::lazy_static;
+use log::warn;
 use nalgebra::{DMatrix, DVector};
 
 use crate::alignment::{Alignment, Mapping};
@@ -117,6 +118,7 @@ impl<Q: QMatrix + QMatrixMaker> PIPModel<Q> {
         Self: Sized,
     {
         if params.len() != Self::param_count() {
+            warn!("PIP model expects at least 2 parameters plus the parameters for the substitution model");
             bail!(
                 EvolutionaryModel,
                 ParameterCount,
