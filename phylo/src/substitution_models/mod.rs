@@ -43,9 +43,7 @@ pub trait QMatrix: Debug + Clone + Display {
     fn q(&self) -> &SubstMatrix;
     fn rate(&self, i: u8, j: u8) -> f64;
     fn params(&self) -> &[f64];
-    fn param_count(&self) -> usize {
-        self.params().len()
-    }
+    fn param_count() -> usize;
     fn param(&self, param: usize) -> f64 {
         self.params()[param]
     }
@@ -198,7 +196,7 @@ impl<Q: QMatrix, A: Alignment> ModelSearchCost for SubstitutionCost<Q, A> {
     }
 
     fn param_count(&self) -> usize {
-        self.model.qmatrix.param_count()
+        Q::param_count()
     }
 
     fn param(&self, param: usize) -> f64 {
