@@ -8,7 +8,7 @@ use nalgebra::DMatrix;
 
 use crate::alignment::Alignment;
 use crate::alphabets::Alphabet;
-use crate::evolutionary_models::{EvoModel, FreqVector, RateMatrix, TransitionMatrix};
+use crate::evolutionary_models::{EvoModel, FreqVector, ProbabilityMatrix, RateMatrix};
 use crate::likelihood::{ModelSearchCost, ParamRange, TreeSearchCost};
 use crate::parsimony::{CostMatrix, DiagonalZeros, ParsimonyModel, Rounding};
 use crate::phylo_info::PhyloInfo;
@@ -84,7 +84,7 @@ impl<Q: QMatrix + QMatrixMaker> SubstModel<Q> {
 }
 
 impl<Q: QMatrix> EvoModel for SubstModel<Q> {
-    fn p(&self, time: f64) -> TransitionMatrix {
+    fn p(&self, time: f64) -> ProbabilityMatrix {
         // If time > 1e10f64 the matrix exponentiation breaks and stops converging, but before it breaks
         // starting with 1e5f64 it converges to the same result.
         if time > MAX_BLEN {

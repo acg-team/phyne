@@ -7,7 +7,7 @@ use crate::alphabets::Alphabet;
 use crate::Result;
 
 pub type RateMatrix = DMatrix<f64>;
-pub type TransitionMatrix = DMatrix<f64>;
+pub type ProbabilityMatrix = DMatrix<f64>;
 pub type FreqVector = DVector<f64>;
 
 #[derive(Clone, clap::ValueEnum, Debug, Copy)]
@@ -20,7 +20,7 @@ pub enum FrequencyOptimisation {
 }
 
 pub trait EvoModel: Display + DynClone {
-    fn p(&self, time: f64) -> TransitionMatrix;
+    fn p(&self, time: f64) -> ProbabilityMatrix;
     fn q(&self) -> &RateMatrix;
     fn rate(&self, i: u8, j: u8) -> f64;
     fn params(&self) -> &[f64];

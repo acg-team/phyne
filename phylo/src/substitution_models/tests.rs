@@ -14,8 +14,8 @@ use crate::phylo_info::{PhyloInfo, PhyloInfoBuilder as PIB};
 use crate::substitution_models::{
     dna_models::{GTR, HKY, JC69, K80, TN93},
     protein_models::{BLOSUM, HIVB, WAG},
-    FreqVector, QMatrix, QMatrixMaker, RateMatrix, SubstModel, SubstitutionCostBuilder as SCB,
-    TransitionMatrix,
+    FreqVector, ProbabilityMatrix, QMatrix, QMatrixMaker, RateMatrix, SubstModel,
+    SubstitutionCostBuilder as SCB,
 };
 use crate::{record_wo_desc as record, tree, Error, SubstitutionModelError};
 
@@ -212,7 +212,7 @@ fn dna_k80_invalid_inputs() {
 }
 
 #[cfg(test)]
-fn check_freq_convergence(p: TransitionMatrix, pi: &FreqVector, epsilon: f64) {
+fn check_freq_convergence(p: ProbabilityMatrix, pi: &FreqVector, epsilon: f64) {
     assert_eq!(p.nrows(), pi.len());
     assert_eq!(p.ncols(), pi.len());
     for row in p.row_iter() {

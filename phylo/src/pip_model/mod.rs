@@ -11,7 +11,7 @@ use nalgebra::{DMatrix, DVector};
 
 use crate::alignment::{Alignment, Mapping};
 use crate::alphabets::{Alphabet, GAP};
-use crate::evolutionary_models::{EvoModel, FreqVector, TransitionMatrix, RateMatrix};
+use crate::evolutionary_models::{EvoModel, FreqVector, ProbabilityMatrix, RateMatrix};
 use crate::likelihood::{ModelSearchCost, ParamRange, TreeSearchCost, PARAM_RANGE_POSITIVE};
 use crate::phylo_info::PhyloInfo;
 use crate::substitution_models::{QMatrix, QMatrixMaker};
@@ -139,7 +139,7 @@ impl<Q: QMatrix + QMatrixMaker> PIPModel<Q> {
 // TODO: where is this ever used?
 // See issue #119 https://github.com/acg-team/rust-phylo/issues/119
 impl<Q: QMatrix> EvoModel for PIPModel<Q> {
-    fn p(&self, time: f64) -> TransitionMatrix {
+    fn p(&self, time: f64) -> ProbabilityMatrix {
         (self.q().clone() * time).exp()
     }
 
