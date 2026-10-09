@@ -70,7 +70,7 @@ impl QMatrixMaker for JC69 {
                 SubstitutionModel,
                 ParameterCount,
                 "JC69",
-                JC69_PARAM_N,
+                Self::param_count(),
                 params.len()
             );
         }
@@ -85,6 +85,9 @@ impl QMatrix for JC69 {
     }
     fn rate(&self, i: u8, j: u8) -> f64 {
         self.q[(NUCLEOTIDE_INDEX[i as usize], NUCLEOTIDE_INDEX[j as usize])]
+    }
+    fn param_count() -> usize {
+        JC69_PARAM_N
     }
     fn params(&self) -> &[f64] {
         &[]
@@ -146,12 +149,12 @@ impl QMatrixMaker for K80 {
             bail!(SubstitutionModel, UnequalFrequencies, "K80");
         }
 
-        let kappa = if params.len() != K80_PARAM_N {
+        let kappa = if params.len() != K80::param_count() {
             bail!(
                 SubstitutionModel,
                 ParameterCount,
                 "K80",
-                K80_PARAM_N,
+                K80::param_count(),
                 params.len()
             );
         } else {
@@ -174,6 +177,9 @@ impl QMatrix for K80 {
     }
     fn rate(&self, i: u8, j: u8) -> f64 {
         self.q[(NUCLEOTIDE_INDEX[i as usize], NUCLEOTIDE_INDEX[j as usize])]
+    }
+    fn param_count() -> usize {
+        K80_PARAM_N
     }
     fn params(&self) -> &[f64] {
         &self.kappa
@@ -250,7 +256,7 @@ impl Default for HKY {
         HKY {
             freqs,
             q,
-            kappa: vec![kappa],
+            kappa: vec![kappa; Self::param_count()],
         }
     }
 }
@@ -260,12 +266,12 @@ impl QMatrixMaker for HKY {
         let freqs = frequencies!(freqs);
         validate_dna_frequencies(&freqs)?;
 
-        let kappa = if params.len() != HKY_PARAM_N {
+        let kappa = if params.len() != HKY::param_count() {
             bail!(
                 SubstitutionModel,
                 ParameterCount,
                 "HKY",
-                HKY_PARAM_N,
+                HKY::param_count(),
                 params.len()
             );
         } else {
@@ -277,7 +283,7 @@ impl QMatrixMaker for HKY {
         Ok(HKY {
             freqs,
             q,
-            kappa: vec![kappa],
+            kappa: vec![kappa; Self::param_count()],
         })
     }
 }
@@ -288,6 +294,9 @@ impl QMatrix for HKY {
     }
     fn rate(&self, i: u8, j: u8) -> f64 {
         self.q[(NUCLEOTIDE_INDEX[i as usize], NUCLEOTIDE_INDEX[j as usize])]
+    }
+    fn param_count() -> usize {
+        HKY_PARAM_N
     }
     fn params(&self) -> &[f64] {
         &self.kappa
@@ -373,7 +382,7 @@ pub struct TN93 {
 
 impl Default for TN93 {
     fn default() -> Self {
-        let params = vec![1.0; TN93_PARAM_N];
+        let params = vec![1.0; Self::param_count()];
         let freqs = frequencies!(&EQUAL_FREQS);
         let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
         tn93_q(&mut q, &freqs, &params);
@@ -386,12 +395,12 @@ impl QMatrixMaker for TN93 {
         let freqs = frequencies!(freqs);
         validate_dna_frequencies(&freqs)?;
 
-        if params.len() != TN93_PARAM_N {
+        if params.len() != Self::param_count() {
             bail!(
                 SubstitutionModel,
                 ParameterCount,
                 "TN93",
-                TN93_PARAM_N,
+                Self::param_count(),
                 params.len()
             );
         }
@@ -412,6 +421,9 @@ impl QMatrix for TN93 {
     }
     fn rate(&self, i: u8, j: u8) -> f64 {
         self.q[(NUCLEOTIDE_INDEX[i as usize], NUCLEOTIDE_INDEX[j as usize])]
+    }
+    fn param_count() -> usize {
+        TN93_PARAM_N
     }
     fn params(&self) -> &[f64] {
         &self.params
@@ -503,7 +515,7 @@ pub struct GTR {
 
 impl Default for GTR {
     fn default() -> Self {
-        let params = vec![1.0; GTR_PARAM_N];
+        let params = vec![1.0; Self::param_count()];
         let freqs = frequencies!(&EQUAL_FREQS);
         let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
         gtr_q(&mut q, &freqs, &params);
@@ -516,12 +528,12 @@ impl QMatrixMaker for GTR {
         let freqs = frequencies!(freqs);
         validate_dna_frequencies(&freqs)?;
 
-        if params.len() != GTR_PARAM_N {
+        if params.len() != Self::param_count() {
             bail!(
                 SubstitutionModel,
                 ParameterCount,
                 "GTR",
-                GTR_PARAM_N,
+                Self::param_count(),
                 params.len()
             );
         }
@@ -542,6 +554,9 @@ impl QMatrix for GTR {
     }
     fn rate(&self, i: u8, j: u8) -> f64 {
         self.q[(NUCLEOTIDE_INDEX[i as usize], NUCLEOTIDE_INDEX[j as usize])]
+    }
+    fn param_count() -> usize {
+        GTR_PARAM_N
     }
     fn params(&self) -> &[f64] {
         &self.params
@@ -709,14 +724,14 @@ mod tests {
     fn jc69_default_params() {
         let model = JC69::default();
         assert_eq!(model.freqs().as_slice(), &EQUAL_FREQS);
-        assert_eq!(model.params().len(), JC69_PARAM_N);
+        assert_eq!(model.params().len(), JC69::param_count());
     }
 
     #[test]
     fn k80_default_params() {
         let model = K80::default();
         assert_eq!(model.freqs().as_slice(), &EQUAL_FREQS);
-        assert_eq!(model.params().len(), K80_PARAM_N);
+        assert_eq!(model.params().len(), K80::param_count());
         assert_eq!(model.params(), &[2.0]);
     }
 
@@ -724,7 +739,7 @@ mod tests {
     fn hky_default_params() {
         let model = HKY::default();
         assert_eq!(model.freqs().as_slice(), &EQUAL_FREQS);
-        assert_eq!(model.params().len(), HKY_PARAM_N);
+        assert_eq!(model.params().len(), HKY::param_count());
         assert_eq!(model.params(), &[2.0]);
     }
 
@@ -732,7 +747,7 @@ mod tests {
     fn tn93_default_params() {
         let model = TN93::default();
         assert_eq!(model.freqs().as_slice(), &EQUAL_FREQS);
-        assert_eq!(model.params().len(), TN93_PARAM_N);
+        assert_eq!(model.params().len(), TN93::param_count());
         assert_eq!(model.params(), &[1.0, 1.0]);
     }
 
@@ -740,7 +755,7 @@ mod tests {
     fn gtr_default_params() {
         let model = GTR::default();
         assert_eq!(model.freqs().as_slice(), &EQUAL_FREQS);
-        assert_eq!(model.params().len(), GTR_PARAM_N);
+        assert_eq!(model.params().len(), GTR::param_count());
         assert_eq!(model.params(), &[1.0; 5]);
     }
 }
