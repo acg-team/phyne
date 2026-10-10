@@ -113,7 +113,7 @@ impl<A: Alignment> PhyloInfo<A> {
     /// ```
     /// use phylo::frequencies;
     /// use phylo::phylo_info::PhyloInfoBuilder;
-    /// use phylo::substitution_models::FreqVector;
+    /// use phylo::evolutionary_models::FreqVector;
     /// # use phylo::Result;
     ///
     /// # fn main() -> Result<()> {
