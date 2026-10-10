@@ -114,6 +114,14 @@ macro_rules! aligned_seq {
     }};
 }
 
+#[macro_export]
+macro_rules! frequencies {
+    ($slice:expr) => {{
+        use $crate::evolutionary_models::FreqVector;
+        FreqVector::from_column_slice($slice)
+    }};
+}
+
 /// Create a parsimony site from a sequence and site flag.
 ///
 /// **Note:** This macro is intended for internal use within this crate only.
@@ -133,7 +141,11 @@ macro_rules! site {
     }};
 }
 
+/// Macro for early returning errors within the crate.
+///
+/// This macro simplifies error handling by providing a concise way to return errors from various parts of the crate.
 #[macro_export]
+#[doc(hidden)] // Hide from public documentation
 macro_rules! bail {
     // Usage: bail!(TreeParsing, "message", pest_error)
     (TreeParsing, $fmt:literal, $pest_err:expr $(, $arg:expr)*) => {
@@ -147,6 +159,87 @@ macro_rules! bail {
     (Other, $err:expr) => {
         return Err($crate::Error::Other($err.into()))
     };
+    // Usage: bail!(SubstitutionModel, FrequencyCount, "DNA", 4, actual)
+    (SubstitutionModel, FrequencyCount, $name:expr, $expected:expr, $actual:expr) => {
+        return Err($crate::Error::SubstitutionModel(
+            $crate::error::SubstitutionModelError::FrequencyCount {
+                name: $name.to_string(),
+                expected: $expected,
+                actual: $actual,
+            },
+        ))
+    };
+    // Usage: bail!(SubstitutionModel, FrequencySum, "DNA")
+    (SubstitutionModel, FrequencySum, $name:expr) => {
+        return Err($crate::Error::SubstitutionModel(
+            $crate::error::SubstitutionModelError::FrequencySum {
+                name: $name.to_string(),
+            },
+        ))
+    };
+    // Usage: bail!(SubstitutionModel, NegativeFrequency, "DNA")
+    (SubstitutionModel, NegativeFrequency, $name:expr) => {
+        return Err($crate::Error::SubstitutionModel(
+            $crate::error::SubstitutionModelError::NegativeFrequency {
+                name: $name.to_string(),
+            },
+        ))
+    };
+    // Usage: bail!(SubstitutionModel, ParameterCount, "JC69", expected, actual)
+    (SubstitutionModel, ParameterCount, $name:expr, $expected:expr, $actual:expr) => {
+        return Err($crate::Error::SubstitutionModel(
+            $crate::error::SubstitutionModelError::ParameterCount {
+                name: $name.to_string(),
+                expected: $expected,
+                actual: $actual,
+            },
+        ))
+    };
+
+    // Usage: bail!(SubstitutionModel, UnequalFrequencies, "JC69")
+    (SubstitutionModel, UnequalFrequencies, $name:expr) => {
+        return Err($crate::Error::SubstitutionModel(
+            $crate::error::SubstitutionModelError::UnequalFrequencies {
+                name: $name.to_string(),
+            },
+        ))
+    };
+
+    // Usage: bail!(SubstitutionModel, DegenerateFrequencies, "DNA")
+    (SubstitutionModel, DegenerateFrequencies, $name:expr) => {
+        return Err($crate::Error::SubstitutionModel(
+            $crate::error::SubstitutionModelError::DegenerateFrequencies {
+                name: $name.to_string(),
+            },
+        ))
+    };
+
+    // Usage: bail!(SubstitutionModel, message)
+    (SubstitutionModel, $err:expr) => {
+        return Err($crate::Error::SubstitutionModel(
+            $crate::error::SubstitutionModelError::Other($err.to_string()),
+        ))
+    };
+
+    // Usage: bail!(EvolutionaryModel, ParameterCount, "PIP", expected, actual)
+    (EvolutionaryModel, ParameterCount, $name:expr, $expected:expr, $actual:expr) => {
+        return Err($crate::Error::EvolutionaryModel(
+            $crate::error::EvolutionaryModelError::ParameterCount {
+                name: $name.to_string(),
+                expected: $expected,
+                actual: $actual,
+            },
+        ))
+    };
+
+    // Usage: bail!(EvolutionaryModel, message)
+    (EvolutionaryModel, $err:expr) => {
+        return Err($crate::Error::EvolutionaryModel(
+            $crate::error::EvolutionaryModelError::Other($err.to_string()),
+        ))
+    };
+
+
     // Usage: bail!(Alignment, "Sequences must be aligned")
     ($variant:ident, $fmt:literal $(, $arg:expr)*) => {
         return Err($crate::Error::$variant(format!($fmt $(, $arg)*)))
@@ -164,6 +257,7 @@ mod tests {
 
     use assert_matches::assert_matches;
 
+    use crate::error::SubstitutionModelError;
     use crate::parsimony::{ParsimonySite, SiteFlag};
     use crate::tree::Tree;
     use crate::{Error::*, Record, Result};
@@ -475,6 +569,80 @@ mod tests {
             fail_variable(),
             Err(Io(msg)) if msg == "Variable error"
         );
+    }
+
+    #[test]
+    fn bail_subst_model_frequency_count() {
+        fn fail_frequency_count() -> Result<()> {
+            bail!(SubstitutionModel, FrequencyCount, "DNA", 4, 3);
+        }
+        assert_matches!(
+            fail_frequency_count(),
+            Err(SubstitutionModel(SubstitutionModelError::FrequencyCount {
+                ref name,
+                expected: 4,
+                actual: 3,
+            })) if name == "DNA"
+        );
+    }
+
+    #[test]
+    fn bail_subst_model_frequency_sum() {
+        fn fail_frequency_sum() -> Result<()> {
+            bail!(SubstitutionModel, FrequencySum, "DNA");
+        }
+        assert_matches!(
+            fail_frequency_sum(),
+            Err(SubstitutionModel(SubstitutionModelError::FrequencySum { ref name }))
+                if name == "DNA"
+        );
+    }
+
+    #[test]
+    fn bail_subst_model_negative_frequencies() {
+        fn fail_negative_frequency() -> Result<()> {
+            bail!(SubstitutionModel, NegativeFrequency, "DNA");
+        }
+        assert_matches!(
+            fail_negative_frequency(),
+            Err(SubstitutionModel(SubstitutionModelError::NegativeFrequency { ref name }))
+                if name == "DNA"
+        );
+    }
+
+    #[test]
+    fn bail_subst_model_frequency_unequal() {
+        fn fail_unequal_frequencies() -> Result<()> {
+            bail!(SubstitutionModel, UnequalFrequencies, "K80");
+        }
+        assert_matches!(
+            fail_unequal_frequencies(),
+            Err(SubstitutionModel(SubstitutionModelError::UnequalFrequencies { ref name }))
+                if name == "K80"
+        );
+    }
+
+    #[test]
+    fn bail_subst_model_parameter_count() {
+        fn fail_parameter_count() -> Result<()> {
+            bail!(SubstitutionModel, ParameterCount, "JC69", 1, 0);
+        }
+        assert_matches!(
+            fail_parameter_count(),
+            Err(SubstitutionModel(SubstitutionModelError::ParameterCount {
+                ref name,
+                expected: 1,
+                actual: 0,
+            })) if name == "JC69"
+        );
+    }
+
+    #[test]
+    fn bail_subst_model_other() {
+        fn fail_other() -> Result<()> {
+            bail!(SubstitutionModel, "test error");
+        }
+        assert_matches!(fail_other(), Err(SubstitutionModel(SubstitutionModelError::Other(ref msg))) if msg == "test error");
     }
 
     #[test]

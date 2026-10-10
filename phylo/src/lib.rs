@@ -4,7 +4,7 @@
 pub use bio::io::fasta::Record;
 
 pub mod error;
-pub use error::Error;
+pub use error::*;
 
 pub mod alignment;
 pub mod alphabets;

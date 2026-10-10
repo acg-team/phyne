@@ -180,8 +180,7 @@ mod private_tests {
     use crate::phylo_info::{PhyloInfo, PhyloInfoBuilder as PIB};
     use crate::pip_model::{PIPCostBuilder as PIPCB, PIPModel};
     use crate::substitution_models::{
-        dna_models::*, protein_models::*, QMatrix, QMatrixMaker, SubstModel,
-        SubstitutionCostBuilder as SCB,
+        dna_models::*, protein_models::*, QMatrix, SubstModel, SubstitutionCostBuilder as SCB,
     };
 
     use super::*;
@@ -203,8 +202,8 @@ mod private_tests {
     }
 
     #[cfg(test)]
-    fn single_iter_pip_template<Q: QMatrix + QMatrixMaker>(info: PhyloInfo<MSA>) {
-        let model = PIPModel::<Q>::new(&[], &[]);
+    fn single_iter_pip_template<Q: QMatrix + Default>(info: PhyloInfo<MSA>) {
+        let model = PIPModel::<Q>::default();
         let c = PIPCB::new(model.clone(), info.clone()).build().unwrap();
         let init_cost = c.cost();
 
@@ -244,8 +243,8 @@ mod private_tests {
     }
 
     #[cfg(test)]
-    fn single_iter_substitution_template<Q: QMatrix + QMatrixMaker>(info: PhyloInfo<MSA>) {
-        let model = SubstModel::<Q>::new(&[], &[]);
+    fn single_iter_substitution_template<Q: QMatrix + Default>(info: PhyloInfo<MSA>) {
+        let model = SubstModel::<Q>::default();
         let c = SCB::new(model.clone(), info.clone()).build().unwrap();
         let init_cost = c.cost();
 

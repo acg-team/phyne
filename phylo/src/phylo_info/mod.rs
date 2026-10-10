@@ -4,7 +4,7 @@ use hashbrown::HashMap;
 use crate::alignment::{
     Alignment, AncestralAlignment, InternalAlignments, Mapping, SeqMaps, Sequences,
 };
-use crate::substitution_models::FreqVector;
+use crate::evolutionary_models::FreqVector;
 use crate::tree::{
     NodeIdx::{self, Internal, Leaf},
     Tree,
@@ -113,7 +113,7 @@ impl<A: Alignment> PhyloInfo<A> {
     /// ```
     /// use phylo::frequencies;
     /// use phylo::phylo_info::PhyloInfoBuilder;
-    /// use phylo::substitution_models::FreqVector;
+    /// use phylo::evolutionary_models::FreqVector;
     /// # use phylo::Result;
     ///
     /// # fn main() -> Result<()> {

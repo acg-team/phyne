@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
-use std::iter;
-use std::marker::PhantomData;
+use std::marker::{PhantomData, Sized};
 use std::ops::Mul;
 use std::vec;
 
@@ -12,10 +11,10 @@ use nalgebra::{DMatrix, DVector};
 
 use crate::alignment::{Alignment, Mapping};
 use crate::alphabets::{Alphabet, GAP};
-use crate::evolutionary_models::EvoModel;
+use crate::evolutionary_models::{EvoModel, FreqVector, ProbabilityMatrix, RateMatrix};
 use crate::likelihood::{ModelSearchCost, ParamRange, TreeSearchCost, PARAM_RANGE_POSITIVE};
 use crate::phylo_info::PhyloInfo;
-use crate::substitution_models::{FreqVector, QMatrix, QMatrixMaker, SubstMatrix};
+use crate::substitution_models::{QMatrix, QMatrixMaker};
 use crate::tree::{
     NodeIdx::{self, Internal as Int, Leaf},
     Tree,
@@ -39,12 +38,15 @@ fn log_factorial_shifted(n: usize) -> f64 {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PIPModel<Q: QMatrix> {
     pub(crate) subst_q: Q,
-    q: SubstMatrix,
+    q: RateMatrix,
     freqs: FreqVector,
     params: Vec<f64>,
 }
 
-fn pip_q(q: &mut SubstMatrix, subst_q: &SubstMatrix, mu: f64) {
+const DEFAULT_PIP_PARAM: f64 = 1.5;
+const PIP_PARAM_N: usize = 2;
+
+fn pip_q(q: &mut RateMatrix, subst_q: &RateMatrix, mu: f64) {
     let n = subst_q.ncols();
     q.view_mut((0, 0), (n, n)).copy_from(subst_q);
     q.fill_column(n, mu);
@@ -54,6 +56,21 @@ fn pip_q(q: &mut SubstMatrix, subst_q: &SubstMatrix, mu: f64) {
 }
 
 impl<Q: QMatrix> PIPModel<Q> {
+    fn from_substitution_with_params(subst_q: Q, pip_parameters: &[f64]) -> Self {
+        let n = subst_q.n();
+        let freqs = subst_q.freqs().clone().insert_row(n, 0.0);
+        let mut q = RateMatrix::zeros(n + 1, n + 1);
+        pip_q(&mut q, subst_q.q(), pip_parameters[1]);
+        let mut params = pip_parameters.to_vec();
+        params.extend(subst_q.params());
+        PIPModel {
+            subst_q,
+            q,
+            freqs,
+            params,
+        }
+    }
+
     fn lambda(&self) -> f64 {
         self.params[0]
     }
@@ -62,43 +79,71 @@ impl<Q: QMatrix> PIPModel<Q> {
         self.params[1]
     }
 
+    fn param_count() -> usize {
+        PIP_PARAM_N + Q::param_count()
+    }
+
     fn param_range(&self, _: usize) -> ParamRange {
         PARAM_RANGE_POSITIVE
     }
 }
 
-impl<Q: QMatrix + QMatrixMaker> PIPModel<Q> {
-    pub fn new(frequencies: &[f64], params: &[f64]) -> Self {
-        let mut params = params.to_vec();
-        if params.len() < 2 {
-            warn!("Too few values provided for PIP, 2 values required, lambda and mu");
-            warn!("Falling back to default values");
-            params.extend(iter::repeat_n(1.5, 2 - params.len()));
-        }
-        let mu = params[1];
+impl<Q: QMatrix + Default> Default for PIPModel<Q> {
+    fn default() -> Self {
+        Self::with_default_substitution(&[DEFAULT_PIP_PARAM; PIP_PARAM_N]).unwrap()
+    }
+}
 
-        let subst_q = Q::create(frequencies, &params[2..]);
-        let n = subst_q.n();
-        let freqs = subst_q.freqs().clone().insert_row(n, 0.0);
-        let mut q = SubstMatrix::zeros(n + 1, n + 1);
-        pip_q(&mut q, subst_q.q(), mu);
-        PIPModel {
-            subst_q,
-            q,
-            freqs,
-            params: params.to_vec(),
+impl<Q: QMatrix + Default> PIPModel<Q> {
+    pub fn with_default_substitution(params: &[f64]) -> Result<Self> {
+        // Only 2 parameters are expected as the substitution model uses defaults
+        if params.len() != PIP_PARAM_N {
+            bail!(
+                EvolutionaryModel,
+                ParameterCount,
+                "PIP",
+                PIP_PARAM_N,
+                params.len()
+            );
         }
+
+        let subst_q = Q::default();
+        Ok(Self::from_substitution_with_params(subst_q, params))
+    }
+}
+
+impl<Q: QMatrix + QMatrixMaker> PIPModel<Q> {
+    pub fn new(frequencies: &[f64], params: &[f64]) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        if params.len() != Self::param_count() {
+            warn!("PIP model expects at least 2 parameters plus the parameters for the substitution model");
+            bail!(
+                EvolutionaryModel,
+                ParameterCount,
+                "PIP",
+                Self::param_count(),
+                params.len()
+            );
+        }
+
+        let subst_q = Q::create(frequencies, &params[PIP_PARAM_N..])?;
+        Ok(Self::from_substitution_with_params(
+            subst_q,
+            &params[..PIP_PARAM_N],
+        ))
     }
 }
 
 // TODO: where is this ever used?
 // See issue #119 https://github.com/acg-team/rust-phylo/issues/119
 impl<Q: QMatrix> EvoModel for PIPModel<Q> {
-    fn p(&self, time: f64) -> SubstMatrix {
+    fn p(&self, time: f64) -> ProbabilityMatrix {
         (self.q().clone() * time).exp()
     }
 
-    fn q(&self) -> &SubstMatrix {
+    fn q(&self) -> &RateMatrix {
         &self.q
     }
 
@@ -117,14 +162,13 @@ impl<Q: QMatrix> EvoModel for PIPModel<Q> {
         &self.freqs
     }
 
-    // This assumes correct dimensions to minimise runtime checks
-    fn set_freqs(&mut self, pi: FreqVector) {
-        debug_assert!(self.freqs.nrows() - 1 == pi.nrows() || self.freqs.nrows() == pi.nrows());
-        self.subst_q.set_freqs(pi);
+    fn set_freqs(&mut self, pi: FreqVector) -> Result<()> {
+        self.subst_q.set_freqs(pi)?;
         self.freqs
             .view_mut((0, 0), self.subst_q.freqs().shape())
             .copy_from(self.subst_q.freqs());
         pip_q(&mut self.q, self.subst_q.q(), self.params[1]);
+        Ok(())
     }
 
     fn params(&self) -> &[f64] {
@@ -162,7 +206,9 @@ impl<Q: QMatrix + Display> Display for PIPModel<Q> {
         write!(
             f,
             "PIP with [lambda = {:.5}, mu = {:.5}]\n and {}",
-            self.params[0], self.params[1], self.subst_q
+            self.lambda(),
+            self.mu(),
+            self.subst_q
         )
     }
 }
@@ -178,7 +224,7 @@ pub struct PIPModelInfo<Q: QMatrix> {
     c0_f1: Vec<f64>,
     c0_pnu: Vec<f64>,
     valid: Vec<bool>,
-    models: Vec<SubstMatrix>,
+    models: Vec<RateMatrix>,
     models_valid: Vec<bool>,
     leaf_seq_info: HashMap<NodeIdx, DMatrix<f64>>,
 }
@@ -219,7 +265,7 @@ impl<Q: QMatrix> PIPModelInfo<Q> {
             c0_pnu: vec![0.0; node_count],
             anc: vec![DMatrix::<f64>::zeros(msa_length, 3); node_count],
             valid: vec![false; node_count],
-            models: vec![SubstMatrix::zeros(n, n); node_count],
+            models: vec![RateMatrix::zeros(n, n); node_count],
             models_valid: vec![false; node_count],
             leaf_seq_info,
         })
@@ -282,7 +328,7 @@ impl<Q: QMatrix, M: Alignment> ModelSearchCost for PIPCost<Q, M> {
     }
 
     fn param_count(&self) -> usize {
-        self.model.params.len()
+        <PIPModel<Q>>::param_count()
     }
 
     fn param(&self, param: usize) -> f64 {
@@ -298,9 +344,10 @@ impl<Q: QMatrix, M: Alignment> ModelSearchCost for PIPCost<Q, M> {
         self.model.param_range(param)
     }
 
-    fn set_freqs(&mut self, freqs: FreqVector) {
-        self.model.set_freqs(freqs);
+    fn set_freqs(&mut self, freqs: FreqVector) -> Result<()> {
+        self.model.set_freqs(freqs)?;
         self.tmp.borrow_mut().models_valid.fill(false);
+        Ok(())
     }
 
     fn empirical_freqs(&self) -> FreqVector {

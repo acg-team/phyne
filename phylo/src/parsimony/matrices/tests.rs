@@ -670,7 +670,7 @@ fn assert_float_relative_matrix_eq(actual: &[Vec<f64>], expected: &[Vec<f64>], e
 fn fill_matrix_diff_branch_models() {
     // Sequence file: sequences_diff_branch_lengths_1.fasta
     // Tree file: tree_diff_branch_lengths_1.newick
-    let scoring = MCB::new(SubstModel::<K80>::new(&[], &[]))
+    let scoring = MCB::new(SubstModel::<K80>::default())
         .gap_cost(GC::new(2.0, 0.5))
         .times(vec![1.0, 2.0])
         .build()
@@ -749,7 +749,7 @@ fn traceback_diff_branch_models() {
     // Sequence file: sequences_diff_branch_lengths_1.fasta
     // Tree file: tree_diff_branch_lengths_1.newick
 
-    let scoring = MCB::new(SubstModel::<K80>::new(&[], &[]))
+    let scoring = MCB::new(SubstModel::<K80>::default())
         .gap_cost(GC::new(2.0, 0.5))
         .times(vec![1.0, 2.0])
         .build()
@@ -784,7 +784,7 @@ fn fill_matrix_diff_branch_models_2() {
     // Sequence file: sequences_diff_branch_lengths_2.fasta
     // Tree file: tree_diff_branch_lengths_2.newick
 
-    let scoring = MCB::new(SubstModel::<K80>::new(&[], &[]))
+    let scoring = MCB::new(SubstModel::<K80>::default())
         .gap_cost(GC::new(1.5, 0.75))
         .times(vec![3.5, 3.0])
         .build()
@@ -875,7 +875,7 @@ fn traceback_diff_branch_models_2() {
     // Sequence file: sequences_diff_branch_lengths_2.fasta
     // Tree file: tree_diff_branch_lengths_2.newick
 
-    let scoring = MCB::new(SubstModel::<K80>::new(&[], &[]))
+    let scoring = MCB::new(SubstModel::<K80>::default())
         .gap_cost(GC::new(1.5, 0.75))
         .times(vec![3.5, 3.0])
         .build()
@@ -917,7 +917,7 @@ fn traceback_diff_branch_models_2() {
 fn fill_matrix_diff_branch_models_3() {
     // Sequence file: sequences_diff_branch_lengths_3.fasta
     // Tree file: tree_diff_branch_lengths_3.newick
-    let scoring = MCB::new(SubstModel::<K80>::new(&[], &[]))
+    let scoring = MCB::new(SubstModel::<K80>::default())
         .gap_cost(GC::new(1.0, 0.75))
         .times(vec![0.52, 2.58])
         .build()
@@ -1009,7 +1009,7 @@ fn fill_matrix_diff_branch_models_3() {
 fn traceback_diff_branch_models_3() {
     // Sequence file: sequences_diff_branch_lengths_3.fasta
     // Tree file: tree_diff_branch_lengths_3.newick
-    let scoring = MCB::new(SubstModel::<K80>::new(&[], &[]))
+    let scoring = MCB::new(SubstModel::<K80>::default())
         .gap_cost(GC::new(1.5, 0.75))
         .times(vec![0.52, 2.58])
         .build()

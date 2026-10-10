@@ -409,7 +409,8 @@ fn tkf_indel_get_and_set_params_and_freqs() {
 
 #[test]
 fn tkf_get_and_set_params() {
-    let subst_model = SubstModel::<GTR>::new(&[0.1, 0.2, 0.3, 0.4], &[0.5, 0.6, 0.7, 0.8, 0.9]);
+    let subst_model =
+        SubstModel::<GTR>::new(&[0.1, 0.2, 0.3, 0.4], &[0.5, 0.6, 0.7, 0.8, 0.9]).unwrap();
     let mut tkf_cost = TKF92CostBuilder::new(
         &[1.0, 2.0, 0.3],
         subst_model,
@@ -460,7 +461,7 @@ fn tkf91_indel_cost_fmt() {
 
 #[test]
 fn tkf91_cost_fmt() {
-    let subst_model = SubstModel::<JC69>::new(&[], &[]);
+    let subst_model = SubstModel::<JC69>::default();
     let tkf_cost =
         TKF91CostBuilder::new(&[1.0, 2.0], subst_model, setup_test_phylo(Alphabet::dna()))
             .build()
@@ -485,7 +486,7 @@ fn tkf92_indel_cost_fmt() {
 
 #[test]
 fn tkf92_cost_fmt() {
-    let subst_model = SubstModel::<JC69>::new(&[], &[]);
+    let subst_model = SubstModel::<JC69>::default();
     let tkf_cost = TKF92CostBuilder::new(
         &[1.0, 2.0, 0.3],
         subst_model,
@@ -501,7 +502,8 @@ fn tkf92_cost_fmt() {
 
 #[test]
 fn tkf_get_and_set_freqs() {
-    let subst_model = SubstModel::<GTR>::new(&[0.1, 0.2, 0.3, 0.4], &[0.5, 0.6, 0.7, 0.8, 0.9]);
+    let subst_model =
+        SubstModel::<GTR>::new(&[0.1, 0.2, 0.3, 0.4], &[0.5, 0.6, 0.7, 0.8, 0.9]).unwrap();
     let mut tkf_cost = TKF92CostBuilder::new(
         &[1.0, 2.0, 0.3],
         subst_model,
@@ -510,13 +512,15 @@ fn tkf_get_and_set_freqs() {
     .build()
     .unwrap();
     assert_eq!(tkf_cost.freqs().as_slice(), &[0.1, 0.2, 0.3, 0.4]);
-    tkf_cost.set_freqs(frequencies!(&[0.4, 0.3, 0.2, 0.1]));
+    tkf_cost
+        .set_freqs(frequencies!(&[0.4, 0.3, 0.2, 0.1]))
+        .unwrap();
     assert_eq!(tkf_cost.freqs().as_slice(), &[0.4, 0.3, 0.2, 0.1]);
 }
 
 #[test]
 fn tkf91_param_range() {
-    let subst_model = SubstModel::<GTR>::new(&[], &[]);
+    let subst_model = SubstModel::<GTR>::default();
     let tkf_cost =
         TKF91CostBuilder::new(&[1.0, 2.0], subst_model, setup_test_phylo(Alphabet::dna()))
             .build()
@@ -560,7 +564,7 @@ fn tkf92_indel_param_range<T: TKFModel, AA: AncestralAlignment>(cost: &TKFIndelC
 }
 #[test]
 fn tkf92_param_range() {
-    let subst_model = SubstModel::<GTR>::new(&[], &[]);
+    let subst_model = SubstModel::<GTR>::default();
     let tkf_cost = TKF92CostBuilder::new(
         &[1.0, 2.0, 0.3],
         subst_model,
@@ -757,7 +761,7 @@ fn tkf92_indel_logl_half_manual() {
 #[test]
 fn tkf91_cost_builder_fails() {
     let phylo = setup_test_phylo(Alphabet::protein());
-    let subst_model = SubstModel::<GTR>::new(&[], &[]);
+    let subst_model = SubstModel::<GTR>::default();
 
     let tkf91_err = TKF91CostBuilder::new(&[0.1, 0.2], subst_model, phylo).build();
 
@@ -788,7 +792,7 @@ fn tkf91_build_default_one_param() {
 #[test]
 fn tkf92_cost_builder_fails() {
     let phylo = setup_test_phylo(Alphabet::protein());
-    let subst_model = SubstModel::<GTR>::new(&[], &[]);
+    let subst_model = SubstModel::<GTR>::default();
 
     let tkf92_err = TKF92CostBuilder::new(&[0.1, 0.2, 0.3], subst_model, phylo).build();
 
@@ -833,7 +837,8 @@ fn tkf92_fixed_build_default() {
 fn tkf91_logl_with_substitution() {
     // arrange
     let phylo = setup_test_phylo(Alphabet::dna());
-    let subst_model = SubstModel::<GTR>::new(&[0.1, 0.3, 0.4, 0.2], &[1.2, 0.5, 5.0, 1.0, 1.0]);
+    let subst_model =
+        SubstModel::<GTR>::new(&[0.1, 0.3, 0.4, 0.2], &[1.2, 0.5, 5.0, 1.0, 1.0]).unwrap();
     let subst_cost = SCB::new(subst_model.clone(), phylo.clone())
         .build()
         .unwrap();
@@ -859,7 +864,8 @@ fn tkf91_logl_with_substitution() {
 fn tkf92_logl_with_substitution() {
     // arrange
     let phylo = setup_test_phylo(Alphabet::dna());
-    let subst_model = SubstModel::<GTR>::new(&[0.1, 0.3, 0.4, 0.2], &[1.2, 0.5, 5.0, 1.0, 1.0]);
+    let subst_model =
+        SubstModel::<GTR>::new(&[0.1, 0.3, 0.4, 0.2], &[1.2, 0.5, 5.0, 1.0, 1.0]).unwrap();
     let subst_cost = SCB::new(subst_model.clone(), phylo.clone())
         .build()
         .unwrap();
@@ -910,7 +916,8 @@ fn tkf_indel_history_doesnt_change_felsenstein() {
     let lambda = 0.1;
     let mu = 0.2;
     let r = 0.3;
-    let subst_model = SubstModel::<GTR>::new(&[0.1, 0.3, 0.4, 0.2], &[1.2, 0.5, 5.0, 1.0, 1.0]);
+    let subst_model =
+        SubstModel::<GTR>::new(&[0.1, 0.3, 0.4, 0.2], &[1.2, 0.5, 5.0, 1.0, 1.0]).unwrap();
     let tkf_cost1 = TKF92CostBuilder::new(&[lambda, mu, r], subst_model.clone(), phylo1)
         .build()
         .unwrap();
@@ -940,12 +947,13 @@ fn tkf_indel_history_doesnt_change_felsenstein() {
 }
 
 #[cfg(test)]
-fn modify_tkf92_subst_params_costs_match_template<Q: QMatrix + QMatrixMaker>() {
+fn modify_tkf92_subst_params_costs_match_template<Q: QMatrix + QMatrixMaker + Default>() {
+    use crate::evolutionary_models::EvoModel;
+
     let phylo = setup_test_phylo(Q::alphabet());
-    let subst_original_param = 1.0;
     let subst_changed_param = 0.5;
-    let subst_model = SubstModel::<Q>::new(&[], &[subst_original_param]);
-    let mut tkf_cost = TKF92CostBuilder::new(&[0.1, 0.2, 0.3], subst_model, phylo.clone())
+    let subst_model = SubstModel::<Q>::default();
+    let mut tkf_cost = TKF92CostBuilder::new(&[0.1, 0.2, 0.3], subst_model.clone(), phylo.clone())
         .build()
         .unwrap();
 
@@ -960,8 +968,11 @@ fn modify_tkf92_subst_params_costs_match_template<Q: QMatrix + QMatrixMaker>() {
     assert_ne!(logl, logl2);
 
     // The likelihood should be the same if we rebuild from scratch with the same modification
-    let subst_model = SubstModel::<Q>::new(&[], &[subst_changed_param]);
-    let tkf_cost = TKF92CostBuilder::new(&[0.1, 0.2, 0.3], subst_model, phylo)
+    let mut new_params = subst_model.params().to_vec();
+    new_params[0] = subst_changed_param;
+    let new_subst_model =
+        SubstModel::<Q>::new(subst_model.freqs().as_slice(), &new_params).unwrap();
+    let tkf_cost = TKF92CostBuilder::new(&[0.1, 0.2, 0.3], new_subst_model, phylo)
         .build()
         .unwrap();
     let new_logl = ModelSearchCost::cost(&tkf_cost);
@@ -970,9 +981,9 @@ fn modify_tkf92_subst_params_costs_match_template<Q: QMatrix + QMatrixMaker>() {
 }
 
 #[cfg(test)]
-fn modify_tkf92_indel_params_costs_match_template<Q: QMatrix + QMatrixMaker>() {
+fn modify_tkf92_indel_params_costs_match_template<Q: QMatrix + Default>() {
     let phylo = setup_test_phylo(Q::alphabet());
-    let subst_model = SubstModel::<Q>::new(&[], &[]);
+    let subst_model = SubstModel::<Q>::default();
     let tkf_original_mu = 0.2;
     let tkf_changed_mu = 0.25;
     let mut tkf_cost =
@@ -991,8 +1002,8 @@ fn modify_tkf92_indel_params_costs_match_template<Q: QMatrix + QMatrixMaker>() {
     assert_ne!(logl, logl2);
 
     // The likelihood should be the same if we rebuild from scratch with the same modification
-    let subst_model = SubstModel::<Q>::new(&[], &[]);
-    let tkf_cost = TKF92CostBuilder::new(&[0.1, tkf_changed_mu, 0.3], subst_model, phylo)
+    let new_subst_model = SubstModel::<Q>::default();
+    let tkf_cost = TKF92CostBuilder::new(&[0.1, tkf_changed_mu, 0.3], new_subst_model, phylo)
         .build()
         .unwrap();
     let new_logl = ModelSearchCost::cost(&tkf_cost);
@@ -1035,7 +1046,7 @@ fn tkf_update_tree() {
     )
     .unwrap();
     let phylo = PhyloInfo { msa, tree };
-    let subst_model = SubstModel::<GTR>::new(&[], &[]);
+    let subst_model = SubstModel::<GTR>::default();
     let lambda = 0.1;
     let mu = 0.2;
     let r = 0.3;

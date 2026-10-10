@@ -1,5 +1,6 @@
-use crate::substitution_models::FreqVector;
+use crate::evolutionary_models::FreqVector;
 use crate::tree::Tree;
+use crate::Result;
 
 /// The valid range for a model parameter [min, max], inclusive.
 pub type ParamRange = (f64, f64);
@@ -40,7 +41,7 @@ pub trait ModelSearchCost {
     fn set_param(&mut self, param: usize, value: f64);
     /// Returns the valid range for a model parameter [min, max], inclusive.
     fn param_range(&self, param: usize) -> ParamRange;
-    fn set_freqs(&mut self, freqs: FreqVector);
+    fn set_freqs(&mut self, freqs: FreqVector) -> Result<()>;
     fn empirical_freqs(&self) -> FreqVector;
     fn freqs(&self) -> &FreqVector;
 }

@@ -44,7 +44,7 @@ impl<C: ModelSearchCost + Display + Clone> ModelOptimiser<C> {
         let init_cost = self.c.cost();
         info!("Initial cost: {init_cost}");
 
-        let mut curr_cost = self.optimise_frequencies();
+        let mut curr_cost = self.optimise_frequencies()?;
         // Set previous cost to negative infinity to ensure at least one iteration if frequency optimisation did not change the cost
         let mut prev_cost = f64::NEG_INFINITY;
         let mut iterations = 0;
@@ -75,15 +75,23 @@ impl<C: ModelSearchCost + Display + Clone> ModelOptimiser<C> {
         })
     }
 
-    fn optimise_frequencies(&mut self) -> f64 {
+    /// Optimises the stationary frequencies of the model according to the specified strategy, empirical
+    /// (from the alignment), maximum likelihood estimated (not implemented yet), or fixed.
+    /// Returns the cost after frequency optimisation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if setting the empirical frequencies fails, in particular when trying to
+    /// set unequal frequencies for JC69 or K80.
+    fn optimise_frequencies(&mut self) -> Result<f64> {
         match self.freq_opt {
             FrequencyOptimisation::Empirical => {
                 info!("Setting stationary frequencies to empirical");
-                self.empirical_freqs();
+                self.set_empirical_freqs()?;
             }
             FrequencyOptimisation::Estimated => {
                 warn!("Stationary frequency estimation not available, falling back on empirical");
-                self.empirical_freqs();
+                self.set_empirical_freqs()?;
             }
             FrequencyOptimisation::Fixed => {
                 info!("Not optimising stationary frequencies");
@@ -91,7 +99,7 @@ impl<C: ModelSearchCost + Display + Clone> ModelOptimiser<C> {
         }
         let cost = self.c.cost();
         info!("Cost after frequency optimisation: {cost}");
-        cost
+        Ok(cost)
     }
 
     fn single_optimisation_iteration(&mut self) -> Result<f64> {
@@ -115,9 +123,10 @@ impl<C: ModelSearchCost + Display + Clone> ModelOptimiser<C> {
         Ok(curr_cost)
     }
 
-    fn empirical_freqs(&mut self) {
+    fn set_empirical_freqs(&mut self) -> Result<()> {
         let emp_freqs = self.c.empirical_freqs();
-        self.c.set_freqs(emp_freqs);
+        self.c.set_freqs(emp_freqs)?;
+        Ok(())
     }
 
     fn opt_parameter(&self, param: usize, start_value: f64) -> Result<SingleValOptResult> {
@@ -188,12 +197,12 @@ mod tests {
             .build()
             .unwrap();
 
-        let model = SubstModel::<GTR>::new(&[], &[]);
+        let model = SubstModel::<GTR>::default();
         let cost = SCB::new(model, info).build().unwrap();
         let mut opt = ModelOptimiser::new(cost.clone(), FrequencyOptimisation::Estimated);
         assert_matches!(opt.freq_opt, FrequencyOptimisation::Estimated);
 
-        opt.optimise_frequencies();
+        assert!(opt.optimise_frequencies().is_ok());
         assert_eq!(opt.c.freqs(), &opt.c.empirical_freqs());
     }
 
@@ -204,12 +213,12 @@ mod tests {
             .build()
             .unwrap();
 
-        let model = SubstModel::<WAG>::new(&[], &[]);
+        let model = SubstModel::<WAG>::default();
         let cost = SCB::new(model, info).build().unwrap();
         let mut opt = ModelOptimiser::new(cost.clone(), FrequencyOptimisation::Estimated);
         assert_matches!(opt.freq_opt, FrequencyOptimisation::Estimated);
 
-        opt.optimise_frequencies();
+        assert!(opt.optimise_frequencies().is_ok());
         assert_eq!(opt.c.freqs(), &opt.c.empirical_freqs());
     }
 
@@ -220,12 +229,12 @@ mod tests {
             .build()
             .unwrap();
 
-        let model = PIPModel::<GTR>::new(&[], &[]);
+        let model = PIPModel::<GTR>::default();
         let cost = PIPCB::new(model, info).build().unwrap();
         let mut opt = ModelOptimiser::new(cost.clone(), FrequencyOptimisation::Estimated);
         assert_matches!(opt.freq_opt, FrequencyOptimisation::Estimated);
 
-        opt.optimise_frequencies();
+        assert!(opt.optimise_frequencies().is_ok());
         assert_eq!(opt.c.freqs().view((0, 0), (4, 1)), opt.c.empirical_freqs());
     }
 
@@ -236,12 +245,12 @@ mod tests {
             .build()
             .unwrap();
 
-        let model = PIPModel::<WAG>::new(&[], &[]);
+        let model = PIPModel::<WAG>::default();
         let cost = PIPCB::new(model, info).build().unwrap();
         let mut opt = ModelOptimiser::new(cost.clone(), FrequencyOptimisation::Estimated);
         assert_matches!(opt.freq_opt, FrequencyOptimisation::Estimated);
 
-        opt.optimise_frequencies();
+        assert!(opt.optimise_frequencies().is_ok());
         assert_eq!(opt.c.freqs().view((0, 0), (20, 1)), opt.c.empirical_freqs());
     }
 }

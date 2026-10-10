@@ -9,7 +9,7 @@ use phylo::likelihood::TreeSearchCost;
 use phylo::optimisers::{Compatible, SprOptimiser, StopCondition, TopologyOptimiser};
 use phylo::pip_model::PIPCost;
 use phylo::random::FakeGenerator;
-use phylo::substitution_models::{QMatrix, QMatrixMaker, JC69, WAG};
+use phylo::substitution_models::{QMatrix, HKY, WAG};
 
 mod helpers;
 use helpers::{
@@ -31,7 +31,7 @@ fn run_fixed_iter_topo<C: TreeSearchCost + Clone + Display + Send + Compatible<S
     Ok(topo_opt.run()?.final_cost)
 }
 
-fn run_simulated_topo_for_sizes<Q: QMatrix + QMatrixMaker + Send>(
+fn run_simulated_topo_for_sizes<Q: QMatrix + Default + Send>(
     paths: &SequencePaths,
     group_name: &'static str,
     criterion: &mut Criterion,
@@ -57,7 +57,7 @@ fn run_simulated_topo_for_sizes<Q: QMatrix + QMatrixMaker + Send>(
 
 fn topo_dna(criterion: &mut Criterion) {
     let paths = SequencePaths::from([("5X1000", DNA_EASY_5X1000), ("8X1252", DNA_EASY_8X1252)]);
-    run_simulated_topo_for_sizes::<JC69>(&paths, "topology optimiser DNA", criterion);
+    run_simulated_topo_for_sizes::<HKY>(&paths, "topology optimiser DNA", criterion);
 }
 
 fn topo_aa(criterion: &mut Criterion) {

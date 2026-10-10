@@ -1,4 +1,3 @@
-use std::f64;
 use std::fmt::Display;
 
 use crate::likelihood::TreeSearchCost;
@@ -281,7 +280,7 @@ mod private_nni_tests {
         let info = PhyloInfo { msa, tree };
         let node_id = "A0";
 
-        let cost = SCB::new(SubstModel::<JC69>::new(&[], &[]), info)
+        let cost = SCB::new(SubstModel::<JC69>::default(), info)
             .build()
             .unwrap();
 
@@ -306,7 +305,7 @@ mod private_nni_tests {
         let info = PhyloInfo { msa, tree };
         let node_id = "I1";
 
-        let cost = SCB::new(SubstModel::<JC69>::new(&[], &[]), info)
+        let cost = SCB::new(SubstModel::<JC69>::default(), info)
             .build()
             .unwrap();
 

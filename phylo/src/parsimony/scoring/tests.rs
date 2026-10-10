@@ -74,7 +74,7 @@ fn protein_branch_scoring() {
 
     let times = vec![0.1, 0.7];
 
-    let model = SubstModel::<WAG>::new(&[], &[]);
+    let model = SubstModel::<WAG>::default();
     let cost = MCB::new(model.clone())
         .gap_cost(gap)
         .rounding(R::zero())
@@ -114,7 +114,7 @@ fn protein_scoring() {
     };
 
     let times = vec![0.1, 0.3, 0.5, 0.7];
-    let model = SubstModel::<WAG>::new(&[], &[]);
+    let model = SubstModel::<WAG>::default();
     let cost = MCB::new(model)
         .gap_cost(gap)
         .rounding(R::zero())
@@ -142,7 +142,7 @@ fn protein_branch_scoring_nearest() {
         ext: 0.1,
     };
     let times = vec![0.1, 0.5];
-    let model = SubstModel::<WAG>::new(&[], &[]);
+    let model = SubstModel::<WAG>::default();
 
     let cost = MCB::new(model)
         .gap_cost(gap)
@@ -177,7 +177,7 @@ fn dna_branch_scoring() {
     };
     let times = vec![0.1, 0.7];
 
-    let model = SubstModel::<JC69>::new(&[], &[]);
+    let model = SubstModel::<JC69>::default();
     let cost = MCB::new(model.clone())
         .gap_cost(gap)
         .times(times.clone())
@@ -217,7 +217,7 @@ fn dna_branch_scoring_nearest() {
     };
     let times = vec![0.1, 0.7];
 
-    let model = SubstModel::<JC69>::new(&[], &[]);
+    let model = SubstModel::<JC69>::default();
     let cost = MCB::new(model)
         .gap_cost(gap)
         .times(times)
@@ -265,7 +265,7 @@ fn display_simple_scorings() {
 
 #[test]
 fn display_model_scorings() {
-    let model = SubstModel::<GTR>::new(&[], &[]);
+    let model = SubstModel::<GTR>::default();
     let gap = GapCost {
         open: 2.4,
         ext: 1.2,
@@ -284,8 +284,8 @@ fn display_model_scorings() {
 }
 
 #[cfg(test)]
-fn min_match_model_template<Q: QMatrix + QMatrixMaker>(set1: &ParsimonySet, set2: &ParsimonySet) {
-    let model = SubstModel::<Q>::new(&[], &[]);
+fn min_match_model_template<Q: QMatrix + Default>(set1: &ParsimonySet, set2: &ParsimonySet) {
+    let model = SubstModel::<Q>::default();
     let gap = GapCost {
         open: 2.4,
         ext: 1.2,

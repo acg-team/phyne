@@ -11,7 +11,7 @@ use phylo::optimisers::ModelOptimiser;
 use phylo::phylo_info::{PhyloInfo, PhyloInfoBuilder};
 use phylo::pip_model::{PIPCost, PIPCostBuilder, PIPModel};
 use phylo::random::FakeGenerator;
-use phylo::substitution_models::{QMatrix, QMatrixMaker};
+use phylo::substitution_models::QMatrix;
 
 pub type BenchPath = &'static str;
 pub type SequencePaths = HashMap<&'static str, BenchPath>;
@@ -47,12 +47,12 @@ pub fn black_box_deterministic_phylo_info(seq_file: impl Into<PathBuf>) -> Phylo
     )
 }
 
-pub fn black_box_pip_cost<Model: QMatrix + QMatrixMaker>(
+pub fn black_box_pip_cost<Model: QMatrix + Default>(
     path: impl Into<PathBuf>,
     freq_opt: FrequencyOptimisation,
 ) -> PIPCost<Model, MSA> {
     let info = black_box_deterministic_phylo_info(path);
-    let pip_cost = PIPCostBuilder::new(PIPModel::<Model>::new(&[], &[]), info)
+    let pip_cost = PIPCostBuilder::new(PIPModel::<Model>::default(), info)
         .build()
         .expect("failed to build pip cost optimiser");
 
@@ -68,31 +68,25 @@ pub fn black_box_pip_cost<Model: QMatrix + QMatrixMaker>(
 
 #[derive(Clone)]
 pub struct PIPConfig {
-    pub freqs: Vec<f64>,
-    pub params: Vec<f64>,
     pub freq_opt: FrequencyOptimisation,
     pub max_iters: usize,
     pub epsilon: f64,
 }
-pub fn black_box_raw_pip_cost_with_config<Model: QMatrix + QMatrixMaker>(
+
+pub fn black_box_raw_pip_cost_with_config<Model: QMatrix + Default>(
     seq_path: impl Into<PathBuf>,
 ) -> (PIPConfig, PIPCost<Model, MSA>) {
     let info = black_box_deterministic_phylo_info(seq_path);
 
     let cfg = black_box(PIPConfig {
-        params: vec![],
-        freqs: vec![],
         freq_opt: FrequencyOptimisation::Empirical,
         epsilon: 1e-2,
         max_iters: 5,
     });
 
-    let pip_cost = black_box(PIPCostBuilder::new(
-        PIPModel::<Model>::new(&cfg.freqs, &cfg.params),
-        info,
-    ))
-    .build()
-    .expect("failed to build pip cost optimiser");
+    let pip_cost = black_box(PIPCostBuilder::new(PIPModel::<Model>::default(), info))
+        .build()
+        .expect("failed to build pip cost optimiser");
 
     (cfg, pip_cost)
 }

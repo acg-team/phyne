@@ -1,14 +1,14 @@
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
-use std::marker::PhantomData;
+use std::marker::{PhantomData, Sized};
 use std::ops::Mul;
 
 use hashbrown::HashMap;
-use nalgebra::{DMatrix, DVector};
+use nalgebra::DMatrix;
 
 use crate::alignment::Alignment;
 use crate::alphabets::Alphabet;
-use crate::evolutionary_models::EvoModel;
+use crate::evolutionary_models::{EvoModel, FreqVector, ProbabilityMatrix, RateMatrix};
 use crate::likelihood::{ModelSearchCost, ParamRange, TreeSearchCost};
 use crate::parsimony::{CostMatrix, DiagonalZeros, ParsimonyModel, Rounding};
 use crate::phylo_info::PhyloInfo;
@@ -23,27 +23,17 @@ pub use dna_models::*;
 pub mod protein_models;
 pub use protein_models::*;
 
-pub type SubstMatrix = DMatrix<f64>;
-pub type FreqVector = DVector<f64>;
-
-#[macro_export]
-macro_rules! frequencies {
-    ($slice:expr) => {
-        FreqVector::from_column_slice($slice)
-    };
-}
-
 pub trait QMatrixMaker {
-    fn create(frequencies: &[f64], params: &[f64]) -> Self;
+    fn create(frequencies: &[f64], params: &[f64]) -> Result<Self>
+    where
+        Self: Sized;
 }
 
 pub trait QMatrix: Debug + Clone + Display {
-    fn q(&self) -> &SubstMatrix;
+    fn q(&self) -> &RateMatrix;
     fn rate(&self, i: u8, j: u8) -> f64;
     fn params(&self) -> &[f64];
-    fn param_count(&self) -> usize {
-        self.params().len()
-    }
+    fn param_count() -> usize;
     fn param(&self, param: usize) -> f64 {
         self.params()[param]
     }
@@ -51,7 +41,7 @@ pub trait QMatrix: Debug + Clone + Display {
     /// Returns the valid range for a model parameter [min, max], inclusive.
     fn param_range(&self, param: usize) -> ParamRange;
     fn freqs(&self) -> &FreqVector;
-    fn set_freqs(&mut self, freqs: FreqVector);
+    fn set_freqs(&mut self, freqs: FreqVector) -> Result<()>;
     fn n(&self) -> usize;
     fn alphabet() -> &'static Alphabet;
 }
@@ -61,6 +51,14 @@ pub struct SubstModel<Q: QMatrix> {
     pub(crate) qmatrix: Q,
 }
 
+impl<Q: QMatrix + Default> Default for SubstModel<Q> {
+    fn default() -> Self {
+        SubstModel {
+            qmatrix: Q::default(),
+        }
+    }
+}
+
 impl<Q: QMatrix + Display> Display for SubstModel<Q> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.qmatrix)
@@ -68,18 +66,18 @@ impl<Q: QMatrix + Display> Display for SubstModel<Q> {
 }
 
 impl<Q: QMatrix + QMatrixMaker> SubstModel<Q> {
-    pub fn new(frequencies: &[f64], params: &[f64]) -> Self
+    pub fn new(frequencies: &[f64], params: &[f64]) -> Result<Self>
     where
         Self: Sized,
     {
-        SubstModel {
-            qmatrix: Q::create(frequencies, params),
-        }
+        Ok(SubstModel {
+            qmatrix: Q::create(frequencies, params)?,
+        })
     }
 }
 
 impl<Q: QMatrix> EvoModel for SubstModel<Q> {
-    fn p(&self, time: f64) -> SubstMatrix {
+    fn p(&self, time: f64) -> ProbabilityMatrix {
         // If time > 1e10f64 the matrix exponentiation breaks and stops converging, but before it breaks
         // starting with 1e5f64 it converges to the same result.
         if time > MAX_BLEN {
@@ -89,7 +87,7 @@ impl<Q: QMatrix> EvoModel for SubstModel<Q> {
         }
     }
 
-    fn q(&self) -> &SubstMatrix {
+    fn q(&self) -> &RateMatrix {
         self.qmatrix.q()
     }
 
@@ -109,8 +107,8 @@ impl<Q: QMatrix> EvoModel for SubstModel<Q> {
         self.qmatrix.freqs()
     }
 
-    fn set_freqs(&mut self, pi: FreqVector) {
-        self.qmatrix.set_freqs(pi);
+    fn set_freqs(&mut self, pi: FreqVector) -> Result<()> {
+        self.qmatrix.set_freqs(pi)
     }
 
     fn n(&self) -> usize {
@@ -188,7 +186,7 @@ impl<Q: QMatrix, A: Alignment> ModelSearchCost for SubstitutionCost<Q, A> {
     }
 
     fn param_count(&self) -> usize {
-        self.model.qmatrix.param_count()
+        Q::param_count()
     }
 
     fn param(&self, param: usize) -> f64 {
@@ -204,9 +202,10 @@ impl<Q: QMatrix, A: Alignment> ModelSearchCost for SubstitutionCost<Q, A> {
         self.model.qmatrix.param_range(param)
     }
 
-    fn set_freqs(&mut self, freqs: FreqVector) {
-        self.model.set_freqs(freqs);
+    fn set_freqs(&mut self, freqs: FreqVector) -> Result<()> {
+        self.model.set_freqs(freqs)?;
         self.tmp.borrow_mut().node_models_valid.fill(false);
+        Ok(())
     }
 
     fn empirical_freqs(&self) -> FreqVector {
@@ -305,7 +304,7 @@ pub struct SubstModelInfo<Q: QMatrix> {
     phantom: PhantomData<Q>,
     node_info: Vec<DMatrix<f64>>,
     node_info_valid: Vec<bool>,
-    node_models: Vec<SubstMatrix>,
+    node_models: Vec<RateMatrix>,
     node_models_valid: Vec<bool>,
     leaf_seq_info: HashMap<NodeIdx, DMatrix<f64>>,
 }
@@ -334,7 +333,7 @@ impl<Q: QMatrix> SubstModelInfo<Q> {
             phantom: PhantomData,
             node_info: vec![DMatrix::<f64>::zeros(n, msa_length); node_count],
             node_info_valid: vec![false; node_count],
-            node_models: vec![SubstMatrix::zeros(n, n); node_count],
+            node_models: vec![RateMatrix::zeros(n, n); node_count],
             node_models_valid: vec![false; node_count],
             leaf_seq_info,
         })

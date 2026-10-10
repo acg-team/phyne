@@ -1,9 +1,11 @@
 use std::fmt::Display;
 
 use crate::alignment::AncestralAlignment;
+use crate::evolutionary_models::FreqVector;
 use crate::likelihood::{ModelSearchCost, ParamRange, TreeSearchCost};
-use crate::substitution_models::{FreqVector, QMatrix, SubstitutionCost};
+use crate::substitution_models::{QMatrix, SubstitutionCost};
 use crate::tree::Tree;
+use crate::Result;
 
 pub mod tkf91;
 pub use tkf91::*;
@@ -72,8 +74,8 @@ impl<Q: QMatrix, T: TKFModel, AA: AncestralAlignment> ModelSearchCost for TKFCos
         self.subst_cost.param_range(idx)
     }
 
-    fn set_freqs(&mut self, freqs: FreqVector) {
-        self.subst_cost.set_freqs(freqs);
+    fn set_freqs(&mut self, freqs: FreqVector) -> Result<()> {
+        self.subst_cost.set_freqs(freqs)
     }
 
     fn empirical_freqs(&self) -> FreqVector {
@@ -127,7 +129,7 @@ impl<Q: QMatrix, T: TKFModel, AA: AncestralAlignment> TKFCost<Q, T, AA> {
     ///   &tree,
     /// )?;
     /// let phylo = PhyloInfo { msa, tree };
-    /// let subst_model = SubstModel::<GTR>::new(&[], &[]);
+    /// let subst_model = SubstModel::<GTR>::default();
     /// let cost = TKF92CostBuilder::new(&[0.4, 0.5, 0.8], subst_model, phylo).build()?;
     /// assert_eq!(cost.masa().seqs().len(), 3);
     /// assert_eq!(cost.masa().ancestral_seqs().len(), 2);
@@ -162,7 +164,7 @@ impl<Q: QMatrix, T: TKFModel, AA: AncestralAlignment> TKFCost<Q, T, AA> {
     ///   &tree,
     /// )?;
     /// let phylo = PhyloInfo { msa, tree };
-    /// let subst_model = SubstModel::<GTR>::new(&[], &[]);
+    /// let subst_model = SubstModel::<GTR>::default();
     /// let cost = TKF92CostBuilder::new(&[0.4, 0.5, 0.8], subst_model, phylo).build()?;
     /// // under the TKF92 model the blocks are the positions in the alignment where there is
     /// // a sequence that changes from gap to non-gap or vice versa (always including the last

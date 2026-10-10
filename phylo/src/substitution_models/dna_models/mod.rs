@@ -1,62 +1,97 @@
-use std::cmp::Ordering;
 use std::fmt::Display;
-use std::iter;
 
 use approx::relative_eq;
-use log::warn;
 
 use crate::alphabets::{Alphabet, NUCLEOTIDE_INDEX};
-use crate::frequencies;
+use crate::evolutionary_models::{FreqVector, RateMatrix, FREQUENCY_EPSILON};
 use crate::likelihood::{ParamRange, PARAM_RANGE_DUMMY, PARAM_RANGE_POSITIVE};
-use crate::substitution_models::{FreqVector, QMatrix, QMatrixMaker, SubstMatrix};
+use crate::substitution_models::{QMatrix, QMatrixMaker};
+use crate::{bail, frequencies, Result};
 
 const DNA_N: usize = 4;
 const EQUAL_FREQS: [f64; DNA_N] = [0.25, 0.25, 0.25, 0.25];
 
-fn set_dna_freqs(freqs: FreqVector) -> FreqVector {
-    if freqs.len() < DNA_N {
-        warn!("Too few frequencies provided, using equal");
-        frequencies!(&EQUAL_FREQS)
-    } else {
-        if freqs.len() > DNA_N {
-            warn!("Too many frequencies provided, using the first {DNA_N}");
-        }
-        if !relative_eq!(freqs.into_iter().take(DNA_N).sum::<f64>().abs(), 1.0) {
-            warn!("Invalid frequencies provided, using equal");
-            frequencies!(&EQUAL_FREQS)
-        } else {
-            FreqVector::from(freqs.rows(0, DNA_N))
-        }
+pub(super) const JC69_PARAM_N: usize = 0;
+pub(super) const K80_PARAM_N: usize = 1;
+pub(super) const HKY_PARAM_N: usize = 1;
+pub(super) const TN93_PARAM_N: usize = 2;
+pub(super) const GTR_PARAM_N: usize = 5;
+
+// Default transition/transversion ratio for K80 and HKY models
+pub(super) const DEFAULT_TS_TV_RATIO: f64 = 2.0;
+pub(super) const DEFAULT_GTR_RATES: [f64; GTR_PARAM_N] = [1.0, 1.0, 1.0, 1.0, 1.0];
+pub(super) const DEFAULT_TN93_RATES: [f64; TN93_PARAM_N] = [1.0, 1.0];
+
+fn validate_dna_frequencies(freqs: &FreqVector) -> Result<()> {
+    if freqs.len() != DNA_N {
+        bail!(SubstitutionModel, FrequencyCount, "DNA", DNA_N, freqs.len());
+    } else if freqs.iter().any(|x| *x < 0.0) {
+        bail!(SubstitutionModel, NegativeFrequency, "DNA");
+    } else if !relative_eq!(
+        freqs.iter().sum::<f64>().abs(),
+        1.0,
+        epsilon = FREQUENCY_EPSILON
+    ) {
+        bail!(SubstitutionModel, FrequencySum, "DNA");
+    } else if freqs.iter().filter(|x| **x == 0.0).count() == DNA_N - 1 {
+        bail!(SubstitutionModel, DegenerateFrequencies, "DNA");
     }
+    Ok(())
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct JC69 {
     freqs: FreqVector,
-    q: SubstMatrix,
+    q: RateMatrix,
 }
 
-impl QMatrixMaker for JC69 {
-    fn create(_: &[f64], _: &[f64]) -> JC69 {
+impl Default for JC69 {
+    fn default() -> Self {
         let r = 1.0 / 3.0;
-        let q = SubstMatrix::from_row_slice(
+        let q = RateMatrix::from_row_slice(
             DNA_N,
             DNA_N,
             &[-1.0, r, r, r, r, -1.0, r, r, r, r, -1.0, r, r, r, r, -1.0],
         );
         JC69 {
-            freqs: frequencies!(&[1.0 / DNA_N as f64; DNA_N]),
+            freqs: frequencies!(&EQUAL_FREQS),
             q,
         }
     }
 }
 
+impl QMatrixMaker for JC69 {
+    fn create(freqs: &[f64], params: &[f64]) -> Result<JC69> {
+        let freqs = frequencies!(freqs);
+        validate_dna_frequencies(&freqs)?;
+
+        if freqs != frequencies!(&EQUAL_FREQS) {
+            bail!(SubstitutionModel, UnequalFrequencies, "JC69");
+        }
+
+        if !params.is_empty() {
+            bail!(
+                SubstitutionModel,
+                ParameterCount,
+                "JC69",
+                Self::param_count(),
+                params.len()
+            );
+        }
+
+        Ok(JC69::default())
+    }
+}
+
 impl QMatrix for JC69 {
-    fn q(&self) -> &SubstMatrix {
+    fn q(&self) -> &RateMatrix {
         &self.q
     }
     fn rate(&self, i: u8, j: u8) -> f64 {
         self.q[(NUCLEOTIDE_INDEX[i as usize], NUCLEOTIDE_INDEX[j as usize])]
+    }
+    fn param_count() -> usize {
+        JC69_PARAM_N
     }
     fn params(&self) -> &[f64] {
         &[]
@@ -68,7 +103,13 @@ impl QMatrix for JC69 {
     fn freqs(&self) -> &FreqVector {
         &self.freqs
     }
-    fn set_freqs(&mut self, _: FreqVector) {}
+    fn set_freqs(&mut self, freqs: FreqVector) -> Result<()> {
+        validate_dna_frequencies(&freqs)?;
+        if freqs != frequencies!(&EQUAL_FREQS) {
+            bail!(SubstitutionModel, UnequalFrequencies, "JC69");
+        }
+        Ok(())
+    }
     fn n(&self) -> usize {
         DNA_N
     }
@@ -86,41 +127,63 @@ impl Display for JC69 {
 #[derive(Clone, Debug, PartialEq)]
 pub struct K80 {
     freqs: FreqVector,
-    q: SubstMatrix,
+    q: RateMatrix,
     kappa: Vec<f64>,
 }
 
-impl QMatrixMaker for K80 {
-    fn create(_: &[f64], params: &[f64]) -> K80 {
-        let kappa = match params.len().cmp(&1) {
-            Ordering::Less => {
-                warn!("Too few values provided for K80, required one value for kappa");
-                warn!("Falling back to default value");
-                2.0
-            }
-            Ordering::Greater => {
-                warn!("Too many values provided for K80, required one value for kappa");
-                warn!("Will only use the first value provided");
-                params[0]
-            }
-            Ordering::Equal => params[0],
-        };
-        let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
+impl Default for K80 {
+    fn default() -> Self {
+        let kappa = DEFAULT_TS_TV_RATIO;
+        let mut q = RateMatrix::zeros(DNA_N, DNA_N);
         k80_q(&mut q, kappa);
         K80 {
-            freqs: frequencies!(&[1.0 / DNA_N as f64; DNA_N]),
+            freqs: frequencies!(&EQUAL_FREQS),
             q,
             kappa: vec![kappa],
         }
     }
 }
 
+impl QMatrixMaker for K80 {
+    fn create(freqs: &[f64], params: &[f64]) -> Result<K80> {
+        let freqs = frequencies!(freqs);
+        validate_dna_frequencies(&freqs)?;
+
+        if freqs != frequencies!(&EQUAL_FREQS) {
+            bail!(SubstitutionModel, UnequalFrequencies, "K80");
+        }
+
+        let kappa = if params.len() != K80::param_count() {
+            bail!(
+                SubstitutionModel,
+                ParameterCount,
+                "K80",
+                K80::param_count(),
+                params.len()
+            );
+        } else {
+            params[0]
+        };
+
+        let mut q = RateMatrix::zeros(DNA_N, DNA_N);
+        k80_q(&mut q, kappa);
+        Ok(K80 {
+            freqs: frequencies!(&EQUAL_FREQS),
+            q,
+            kappa: vec![kappa],
+        })
+    }
+}
+
 impl QMatrix for K80 {
-    fn q(&self) -> &SubstMatrix {
+    fn q(&self) -> &RateMatrix {
         &self.q
     }
     fn rate(&self, i: u8, j: u8) -> f64 {
         self.q[(NUCLEOTIDE_INDEX[i as usize], NUCLEOTIDE_INDEX[j as usize])]
+    }
+    fn param_count() -> usize {
+        K80_PARAM_N
     }
     fn params(&self) -> &[f64] {
         &self.kappa
@@ -135,7 +198,13 @@ impl QMatrix for K80 {
     fn freqs(&self) -> &FreqVector {
         &self.freqs
     }
-    fn set_freqs(&mut self, _: FreqVector) {}
+    fn set_freqs(&mut self, freqs: FreqVector) -> Result<()> {
+        validate_dna_frequencies(&freqs)?;
+        if freqs != frequencies!(&EQUAL_FREQS) {
+            bail!(SubstitutionModel, UnequalFrequencies, "K80");
+        }
+        Ok(())
+    }
     fn n(&self) -> usize {
         DNA_N
     }
@@ -150,7 +219,7 @@ impl Display for K80 {
     }
 }
 
-fn k80_q(q: &mut SubstMatrix, k: f64) {
+fn k80_q(q: &mut RateMatrix, k: f64) {
     let scaler = 1.0 / (k * 0.25 + 0.5);
     q[(0, 0)] = -(k * 0.25 + 0.5);
     q[(0, 1)] = k * 0.25;
@@ -178,43 +247,60 @@ fn k80_q(q: &mut SubstMatrix, k: f64) {
 #[allow(clippy::upper_case_acronyms)]
 pub struct HKY {
     freqs: FreqVector,
-    q: SubstMatrix,
+    q: RateMatrix,
     kappa: Vec<f64>,
 }
 
-impl QMatrixMaker for HKY {
-    fn create(freqs: &[f64], params: &[f64]) -> HKY {
-        let freqs = set_dna_freqs(frequencies!(freqs));
-
-        let kappa = match params.len().cmp(&1) {
-            Ordering::Less => {
-                warn!("Too few values provided for HKY, required one value for kappa");
-                warn!("Falling back to default value");
-                2.0
-            }
-            Ordering::Greater => {
-                warn!("Too many values provided for HKY, required one value for kappa");
-                warn!("Will only use the first value provided");
-                params[0]
-            }
-            Ordering::Equal => params[0],
-        };
-        let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
+impl Default for HKY {
+    fn default() -> Self {
+        let kappa = DEFAULT_TS_TV_RATIO;
+        let freqs = frequencies!(&EQUAL_FREQS);
+        let mut q = RateMatrix::zeros(DNA_N, DNA_N);
         hky_q(&mut q, &freqs, kappa);
         HKY {
             freqs,
             q,
-            kappa: vec![kappa],
+            kappa: vec![kappa; Self::param_count()],
         }
     }
 }
 
+impl QMatrixMaker for HKY {
+    fn create(freqs: &[f64], params: &[f64]) -> Result<HKY> {
+        let freqs = frequencies!(freqs);
+        validate_dna_frequencies(&freqs)?;
+
+        let kappa = if params.len() != HKY::param_count() {
+            bail!(
+                SubstitutionModel,
+                ParameterCount,
+                "HKY",
+                HKY::param_count(),
+                params.len()
+            );
+        } else {
+            params[0]
+        };
+
+        let mut q = RateMatrix::zeros(DNA_N, DNA_N);
+        hky_q(&mut q, &freqs, kappa);
+        Ok(HKY {
+            freqs,
+            q,
+            kappa: vec![kappa; Self::param_count()],
+        })
+    }
+}
+
 impl QMatrix for HKY {
-    fn q(&self) -> &SubstMatrix {
+    fn q(&self) -> &RateMatrix {
         &self.q
     }
     fn rate(&self, i: u8, j: u8) -> f64 {
         self.q[(NUCLEOTIDE_INDEX[i as usize], NUCLEOTIDE_INDEX[j as usize])]
+    }
+    fn param_count() -> usize {
+        HKY_PARAM_N
     }
     fn params(&self) -> &[f64] {
         &self.kappa
@@ -229,9 +315,11 @@ impl QMatrix for HKY {
     fn freqs(&self) -> &FreqVector {
         &self.freqs
     }
-    fn set_freqs(&mut self, freqs: FreqVector) {
-        self.freqs = set_dna_freqs(freqs);
-        hky_q(&mut self.q, &self.freqs, self.kappa[0])
+    fn set_freqs(&mut self, freqs: FreqVector) -> Result<()> {
+        validate_dna_frequencies(&freqs)?;
+        self.freqs = freqs;
+        hky_q(&mut self.q, &self.freqs, self.kappa[0]);
+        Ok(())
     }
     fn n(&self) -> usize {
         DNA_N
@@ -241,7 +329,7 @@ impl QMatrix for HKY {
     }
 }
 
-fn hky_q(q: &mut SubstMatrix, pi: &FreqVector, k: f64) {
+fn hky_q(q: &mut RateMatrix, pi: &FreqVector, k: f64) {
     let ft = pi[0];
     let fc = pi[1];
     let fa = pi[2];
@@ -283,44 +371,63 @@ impl Display for HKY {
     }
 }
 
+/// Tamura-Nei 1993 (TN93) DNA substitution model.
+///
+/// This model allows for different rates of two different types of transitions (A <-> G and C <-> T).
+/// Transversion rates are assumed to be equal and fixed to 1.0 to simplify parameter estimation as
+/// the substitution matrix is normalised so that the average substitution rate is 1.0.
 #[derive(Clone, Debug, PartialEq)]
 #[allow(clippy::upper_case_acronyms)]
 pub struct TN93 {
     freqs: FreqVector,
-    pub(crate) q: SubstMatrix,
+    pub(crate) q: RateMatrix,
     params: Vec<f64>,
 }
 
-impl QMatrixMaker for TN93 {
-    fn create(freqs: &[f64], params: &[f64]) -> TN93 {
-        let freqs = set_dna_freqs(frequencies!(freqs));
-        let mut params = params.to_vec();
-        match params.len().cmp(&3) {
-            Ordering::Less => {
-                warn!("Too few values provided for TN93, required 3 values");
-                warn!("Falling back to default values");
-                params.extend(iter::repeat_n(1.0, 3 - params.len()));
-            }
-            Ordering::Greater => {
-                warn!("Too many values provided for TN93, required three values");
-                warn!("Will only use the first values provided");
-                params.truncate(3);
-            }
-            Ordering::Equal => {}
-        }
-
-        let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
+impl Default for TN93 {
+    fn default() -> Self {
+        let params = DEFAULT_TN93_RATES.to_vec();
+        let freqs = frequencies!(&EQUAL_FREQS);
+        let mut q = RateMatrix::zeros(DNA_N, DNA_N);
         tn93_q(&mut q, &freqs, &params);
         TN93 { freqs, q, params }
     }
 }
 
+impl QMatrixMaker for TN93 {
+    fn create(freqs: &[f64], params: &[f64]) -> Result<TN93> {
+        let freqs = frequencies!(freqs);
+        validate_dna_frequencies(&freqs)?;
+
+        if params.len() != Self::param_count() {
+            bail!(
+                SubstitutionModel,
+                ParameterCount,
+                "TN93",
+                Self::param_count(),
+                params.len()
+            );
+        }
+
+        let mut q = RateMatrix::zeros(DNA_N, DNA_N);
+        tn93_q(&mut q, &freqs, params);
+        Ok(TN93 {
+            freqs,
+            q,
+            params: params.to_vec(),
+        })
+    }
+}
+
 impl QMatrix for TN93 {
-    fn q(&self) -> &SubstMatrix {
+    fn q(&self) -> &RateMatrix {
         &self.q
     }
     fn rate(&self, i: u8, j: u8) -> f64 {
         self.q[(NUCLEOTIDE_INDEX[i as usize], NUCLEOTIDE_INDEX[j as usize])]
+    }
+    fn param_count() -> usize {
+        TN93_PARAM_N
     }
     fn params(&self) -> &[f64] {
         &self.params
@@ -335,9 +442,11 @@ impl QMatrix for TN93 {
     fn freqs(&self) -> &FreqVector {
         &self.freqs
     }
-    fn set_freqs(&mut self, freqs: FreqVector) {
-        self.freqs = set_dna_freqs(freqs);
-        tn93_q(&mut self.q, &self.freqs, &self.params)
+    fn set_freqs(&mut self, freqs: FreqVector) -> Result<()> {
+        validate_dna_frequencies(&freqs)?;
+        self.freqs = freqs;
+        tn93_q(&mut self.q, &self.freqs, &self.params);
+        Ok(())
     }
     fn n(&self) -> usize {
         DNA_N
@@ -347,40 +456,40 @@ impl QMatrix for TN93 {
     }
 }
 
-fn tn93_q(q: &mut SubstMatrix, pi: &FreqVector, params: &[f64]) {
+fn tn93_q(q: &mut RateMatrix, pi: &FreqVector, params: &[f64]) {
+    // beta (transversion rate) is fixed to 1.0
     let ft = pi[0];
     let fc = pi[1];
     let fa = pi[2];
     let fg = pi[3];
     let a1 = params[0];
     let a2 = params[1];
-    let b = params[2];
 
     let scaler = 1.0
-        / ((a1 * fc + b * fa + b * fg) * ft
-            + (a1 * ft + b * fa + b * fg) * fc
-            + (b * ft + b * fc + a2 * fg) * fa
-            + (b * ft + b * fc + a2 * fa) * fg);
+        / ((a1 * fc + fa + fg) * ft
+            + (a1 * ft + fa + fg) * fc
+            + (ft + fc + a2 * fg) * fa
+            + (ft + fc + a2 * fa) * fg);
 
-    q[(0, 0)] = -(a1 * fc + b * fa + b * fg);
+    q[(0, 0)] = -(a1 * fc + fa + fg);
     q[(0, 1)] = a1 * fc;
-    q[(0, 2)] = b * fa;
-    q[(0, 3)] = b * fg;
+    q[(0, 2)] = fa;
+    q[(0, 3)] = fg;
 
     q[(1, 0)] = a1 * ft;
-    q[(1, 1)] = -(a1 * ft + b * fa + b * fg);
-    q[(1, 2)] = b * fa;
-    q[(1, 3)] = b * fg;
+    q[(1, 1)] = -(a1 * ft + fa + fg);
+    q[(1, 2)] = fa;
+    q[(1, 3)] = fg;
 
-    q[(2, 0)] = b * ft;
-    q[(2, 1)] = b * fc;
-    q[(2, 2)] = -(b * ft + b * fc + a2 * fg);
+    q[(2, 0)] = ft;
+    q[(2, 1)] = fc;
+    q[(2, 2)] = -(ft + fc + a2 * fg);
     q[(2, 3)] = a2 * fg;
 
-    q[(3, 0)] = b * ft;
-    q[(3, 1)] = b * fc;
+    q[(3, 0)] = ft;
+    q[(3, 1)] = fc;
     q[(3, 2)] = a2 * fa;
-    q[(3, 3)] = -(b * ft + b * fc + a2 * fa);
+    q[(3, 3)] = -(ft + fc + a2 * fa);
 
     q.scale_mut(scaler);
 }
@@ -389,47 +498,69 @@ impl Display for TN93 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "TN93 with [alpha1 = {:.5}, alpha2 = {:.5}, beta = {:.5}, freqs = {}]",
-            self.params[0], self.params[1], self.params[2], self.freqs
+            "TN93 with [kappa1 = {:.5}, kappa2 = {:.5}, freqs = {}]",
+            self.params[0], self.params[1], self.freqs
         )
     }
 }
 
+/// GTR (General Time Reversible) DNA substitution model.
+///
+/// This model allows for different rates of all possible nucleotide substitutions.
+/// The rate of A <-> G transition is fixed to 1.0 to simplify parameter estimation as
+/// the substitution matrix is normalised so that the average substitution rate is 1.0.
 #[derive(Clone, Debug, PartialEq)]
 #[allow(clippy::upper_case_acronyms)]
 pub struct GTR {
     freqs: FreqVector,
-    q: SubstMatrix,
+    q: RateMatrix,
     params: Vec<f64>,
 }
 
-impl QMatrixMaker for GTR {
-    fn create(freqs: &[f64], params: &[f64]) -> GTR {
-        let freqs = set_dna_freqs(frequencies!(freqs));
-        let mut params = params.to_vec();
-        if params.len() < 5 {
-            warn!("Too few values provided for GTR, required five values");
-            warn!("Falling back to default values");
-            params.extend(iter::repeat_n(1.0, 5 - params.len()));
-        } else if params.len() > 6 {
-            warn!("Too many values provided for GTR, required five values");
-            warn!("Will only use the first values provided");
-            params.truncate(5);
-        } else if params.len() == 6 {
-            warn!("Allowing all rates to vary for GTR");
-        }
-        let mut q = SubstMatrix::zeros(DNA_N, DNA_N);
+impl Default for GTR {
+    fn default() -> Self {
+        let params = DEFAULT_GTR_RATES.to_vec();
+        let freqs = frequencies!(&EQUAL_FREQS);
+        let mut q = RateMatrix::zeros(DNA_N, DNA_N);
         gtr_q(&mut q, &freqs, &params);
         GTR { freqs, q, params }
     }
 }
 
+impl QMatrixMaker for GTR {
+    fn create(freqs: &[f64], params: &[f64]) -> Result<GTR> {
+        let freqs = frequencies!(freqs);
+        validate_dna_frequencies(&freqs)?;
+
+        if params.len() != Self::param_count() {
+            bail!(
+                SubstitutionModel,
+                ParameterCount,
+                "GTR",
+                Self::param_count(),
+                params.len()
+            );
+        }
+
+        let mut q = RateMatrix::zeros(DNA_N, DNA_N);
+        gtr_q(&mut q, &freqs, params);
+        Ok(GTR {
+            freqs,
+            q,
+            params: params.to_vec(),
+        })
+    }
+}
+
 impl QMatrix for GTR {
-    fn q(&self) -> &SubstMatrix {
+    fn q(&self) -> &RateMatrix {
         &self.q
     }
     fn rate(&self, i: u8, j: u8) -> f64 {
         self.q[(NUCLEOTIDE_INDEX[i as usize], NUCLEOTIDE_INDEX[j as usize])]
+    }
+    fn param_count() -> usize {
+        GTR_PARAM_N
     }
     fn params(&self) -> &[f64] {
         &self.params
@@ -444,9 +575,11 @@ impl QMatrix for GTR {
     fn freqs(&self) -> &FreqVector {
         &self.freqs
     }
-    fn set_freqs(&mut self, freqs: FreqVector) {
-        self.freqs = set_dna_freqs(freqs);
-        gtr_q(&mut self.q, &self.freqs, &self.params)
+    fn set_freqs(&mut self, freqs: FreqVector) -> Result<()> {
+        validate_dna_frequencies(&freqs)?;
+        self.freqs = freqs;
+        gtr_q(&mut self.q, &self.freqs, &self.params);
+        Ok(())
     }
     fn n(&self) -> usize {
         DNA_N
@@ -456,7 +589,9 @@ impl QMatrix for GTR {
     }
 }
 
-fn gtr_q(q: &mut SubstMatrix, pi: &FreqVector, params: &[f64]) {
+fn gtr_q(q: &mut RateMatrix, pi: &FreqVector, params: &[f64]) {
+    // A <-> G transition rate is fixed to 1.0 to simplify parameter estimation
+    // Left in the code for clarity, even though it is fixed to 1.0.
     let ft = pi[0];
     let fc = pi[1];
     let fa = pi[2];
@@ -466,7 +601,7 @@ fn gtr_q(q: &mut SubstMatrix, pi: &FreqVector, params: &[f64]) {
     let rtg = params[2];
     let rca = params[3];
     let rcg = params[4];
-    let rag = if params.len() == 6 { params[5] } else { 1.0 };
+    let rag = 1.0;
 
     let scaler = 1.0
         / ((rtc * fc + rta * fa + rtg * fg) * ft
@@ -501,8 +636,128 @@ impl Display for GTR {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "GTR with [rtc = {:.5}, rta = {:.5}, rtg = {:.5}, rca = {:.5}, rcg = {:.5}, rag = {:.5}, freqs = {}]",
-            self.params[0], self.params[1], self.params[2],self.params[3],self.params[4], if self.params.len() == 6 { self.params[5] } else { 1.0 }, self.freqs
+            "GTR with [rtc = {:.5}, rta = {:.5}, rtg = {:.5}, rca = {:.5}, rcg = {:.5}, rag = 1.0, freqs = {}]",
+            self.params[0], self.params[1], self.params[2],self.params[3],self.params[4], self.freqs
         )
+    }
+}
+
+#[cfg(test)]
+#[cfg_attr(coverage, coverage(off))]
+mod tests {
+    use assert_matches::assert_matches;
+    use rstest::rstest;
+
+    use crate::error::SubstitutionModelError;
+    use crate::Error;
+
+    use super::*;
+
+    #[rstest]
+    #[case::negative_sum_1(&[-1.0, 1.5, -0.3, 0.8])]
+    #[case::all_negative(&[-0.1, -0.2, -0.3, -0.4])]
+    #[case::one_negative_sum_1(&[-0.1, 0.5, 0.6, 0.0])]
+    fn negative_frequencies(#[case] freqs: &[f64]) {
+        assert_matches!(
+            validate_dna_frequencies(&frequencies!(freqs)),
+            Err(Error::SubstitutionModel(
+                SubstitutionModelError::NegativeFrequency { .. }
+            ))
+        );
+    }
+
+    #[rstest]
+    #[case::too_few_but_sum_1(&[0.5, 0.4, 0.1])]
+    #[case::too_few(&[0.5, 0.4, 0.0])]
+    #[case::empty(&[])]
+    #[case::one_too_many_but_sum_1(&[0.4, 0.3, 0.1, 0.1, 0.1])]
+    #[case::too_many(&[0.1, 0.1, 0.1, 0.1, 0.1, 0.1])]
+    #[case::valid_protein(&[1.0 / 20.0; 20])]
+    fn wrong_number_of_frequencies(#[case] freqs: &[f64]) {
+        match validate_dna_frequencies(&frequencies!(freqs)) {
+            Err(Error::SubstitutionModel(SubstitutionModelError::FrequencyCount {
+                name,
+                actual,
+                expected,
+            })) => {
+                assert_eq!(name, "DNA");
+                assert_eq!(actual, freqs.len());
+                assert_eq!(expected, DNA_N);
+            }
+            _ => panic!(
+                "Expected FrequencyCount error for DNA with actual = {} and expected = {}",
+                freqs.len(),
+                DNA_N
+            ),
+        }
+    }
+
+    #[rstest]
+    #[case::sum_below_1(&[0.1, 0.2, 0.3, 0.1])]
+    #[case::sum_above_1(&[0.4, 0.3, 0.2, 0.2])]
+    #[case::sum_above_1_large(&[0.4, 1.3, 0.2, 0.2])]
+    fn frequencies_dont_sum_to_1(#[case] freqs: &[f64]) {
+        assert_matches!(
+            validate_dna_frequencies(&frequencies!(freqs)),
+            Err(Error::SubstitutionModel(
+                SubstitutionModelError::FrequencySum { .. }
+            ))
+        );
+    }
+
+    #[test]
+    fn degenerate_frequencies() {
+        for i in 0..DNA_N {
+            let mut degenerate_freqs = vec![0.0; DNA_N];
+            degenerate_freqs[i] = 1.0;
+
+            match validate_dna_frequencies(&frequencies!(&degenerate_freqs)) {
+                Err(Error::SubstitutionModel(SubstitutionModelError::DegenerateFrequencies {
+                    name,
+                })) => {
+                    assert_eq!(name, "DNA");
+                }
+                _ => panic!("Expected DegenerateFrequencies error for DNA"),
+            }
+        }
+    }
+
+    #[test]
+    fn jc69_default_params() {
+        let model = JC69::default();
+        assert_eq!(model.freqs().as_slice(), &EQUAL_FREQS);
+        assert_eq!(model.params().len(), JC69::param_count());
+    }
+
+    #[test]
+    fn k80_default_params() {
+        let model = K80::default();
+        assert_eq!(model.freqs().as_slice(), &EQUAL_FREQS);
+        assert_eq!(model.params().len(), K80::param_count());
+        assert_eq!(model.params(), &[DEFAULT_TS_TV_RATIO]);
+    }
+
+    #[test]
+    fn hky_default_params() {
+        let model = HKY::default();
+        assert_eq!(model.freqs().as_slice(), &EQUAL_FREQS);
+        assert_eq!(model.params().len(), HKY::param_count());
+        assert_eq!(model.params(), &[DEFAULT_TS_TV_RATIO]);
+    }
+
+    #[test]
+    fn tn93_default_params() {
+        let model = TN93::default();
+        assert_eq!(model.freqs().as_slice(), &EQUAL_FREQS);
+        assert_eq!(model.params().len(), TN93::param_count());
+        assert_eq!(model.params(), &DEFAULT_TN93_RATES);
+    }
+
+    #[test]
+    fn gtr_default_params() {
+        let model = GTR::default();
+        assert_eq!(model.freqs().as_slice(), &EQUAL_FREQS);
+        assert_eq!(model.params().len(), GTR::param_count());
+        assert_eq!(model.params(), &DEFAULT_GTR_RATES);
     }
 }

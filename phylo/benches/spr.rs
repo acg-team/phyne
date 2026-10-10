@@ -9,7 +9,7 @@ use phylo::likelihood::TreeSearchCost;
 use phylo::optimisers::{Compatible, MoveOptimiser, SprOptimiser, TopologyOptimiser};
 use phylo::pip_model::PIPCost;
 use phylo::random::FakeRng;
-use phylo::substitution_models::{QMatrix, QMatrixMaker, JC69, WAG};
+use phylo::substitution_models::{QMatrix, HKY, WAG};
 use phylo::tree::NodeIdx;
 
 mod helpers;
@@ -41,7 +41,7 @@ fn find_best_regraft_for_single_spr_move<C: TreeSearchCost + Clone + Display + S
     Ok(best_regraft.cost)
 }
 
-fn run_single_spr_cycle_for_sizes<Q: QMatrix + QMatrixMaker + Send>(
+fn run_single_spr_cycle_for_sizes<Q: QMatrix + Default + Send>(
     paths: &SequencePaths,
     group_name: &'static str,
     criterion: &mut Criterion,
@@ -73,7 +73,7 @@ fn run_single_spr_cycle_for_sizes<Q: QMatrix + QMatrixMaker + Send>(
     bench_group.finish();
 }
 
-fn run_find_best_regraft_for_single_spr_move<Q: QMatrix + QMatrixMaker + Send>(
+fn run_find_best_regraft_for_single_spr_move<Q: QMatrix + Default + Send>(
     paths: &SequencePaths,
     group_name: &'static str,
     criterion: &mut Criterion,
@@ -111,10 +111,11 @@ fn run_find_best_regraft_for_single_spr_move<Q: QMatrix + QMatrixMaker + Send>(
 
 fn spr_dna(criterion: &mut Criterion) {
     let paths = SequencePaths::from([("5X1000", DNA_EASY_5X1000), ("8X1252", DNA_EASY_8X1252)]);
-    let long_running_paths = SequencePaths::from([("17X2292", DNA_EASY_17X2292)]);
-    run_single_spr_cycle_for_sizes::<JC69>(&paths, "spr DNA", criterion);
-    run_find_best_regraft_for_single_spr_move::<JC69>(&paths, "spr DNA", criterion);
-    run_find_best_regraft_for_single_spr_move::<JC69>(&long_running_paths, "spr AA", criterion);
+    let long_running_paths: std::collections::HashMap<&str, &str> =
+        SequencePaths::from([("17X2292", DNA_EASY_17X2292)]);
+    run_single_spr_cycle_for_sizes::<HKY>(&paths, "spr DNA", criterion);
+    run_find_best_regraft_for_single_spr_move::<HKY>(&paths, "spr DNA", criterion);
+    run_find_best_regraft_for_single_spr_move::<HKY>(&long_running_paths, "spr DNA", criterion);
 }
 
 fn spr_aa(criterion: &mut Criterion) {
