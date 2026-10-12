@@ -1,9 +1,9 @@
 use std::path::Path;
 
-use phylo::likelihood::ModelSearchCost;
-use phylo::phylo_info::PhyloInfoBuilder;
-use phylo::pip_model::{PIPCostBuilder, PIPModel};
-use phylo::substitution_models::GTR;
+use phyne::likelihood::ModelSearchCost;
+use phyne::phylo_info::PhyloInfoBuilder;
+use phyne::pip_model::{PIPCostBuilder, PIPModel};
+use phyne::substitution_models::GTR;
 
 #[test]
 

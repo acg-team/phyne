@@ -2,12 +2,12 @@
 // accordingly!
 #[test]
 fn example_main_from_readme() {
-    use phylo::likelihood::TreeSearchCost;
-    use phylo::optimisers::{SprOptimiser, TopologyOptimiser};
-    use phylo::phylo_info::PhyloInfoBuilder;
-    use phylo::random::FakeGenerator;
-    use phylo::substitution_models::{SubstModel, SubstitutionCostBuilder, K80};
-    use phylo::Result;
+    use phyne::likelihood::TreeSearchCost;
+    use phyne::optimisers::{SprOptimiser, TopologyOptimiser};
+    use phyne::phylo_info::PhyloInfoBuilder;
+    use phyne::random::FakeGenerator;
+    use phyne::substitution_models::{SubstModel, SubstitutionCostBuilder, K80};
+    use phyne::Result;
 
     fn main() -> Result<()> {
         // Note: This example uses test data from the repository

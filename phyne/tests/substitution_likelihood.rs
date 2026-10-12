@@ -1,8 +1,8 @@
 use std::path::Path;
 
-use phylo::likelihood::ModelSearchCost;
-use phylo::phylo_info::PhyloInfoBuilder;
-use phylo::substitution_models::{SubstModel, SubstitutionCostBuilder, GTR};
+use phyne::likelihood::ModelSearchCost;
+use phyne::phylo_info::PhyloInfoBuilder;
+use phyne::substitution_models::{SubstModel, SubstitutionCostBuilder, GTR};
 
 #[test]
 fn hiv_subset_valid_subst_likelihood() {
