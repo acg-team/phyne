@@ -118,7 +118,7 @@ impl<Q: QMatrix + QMatrixMaker> PIPModel<Q> {
         Self: Sized,
     {
         if params.len() != Self::param_count() {
-            warn!("PIP model expects at least 2 parameters plus the parameters for the substitution model");
+            warn!("PIP model expects 2 parameters (lambda and mu) plus {} parameters for the substitution model", Q::param_count());
             bail!(
                 EvolutionaryModel,
                 ParameterCount,
