@@ -37,29 +37,30 @@ MSRV detected using [`cargo-msrv`]( https://github.com/foresterre/cargo-msrv ).
 
 ### Example
 
-<!-- WARNING: If you change the code below, please also update the test "phylo/src/optimisers/topo_optimiser_tests.rs:example_main_from_readme" accordingly!) -->
+<!-- WARNING: If you change the code below, please also update the test "phylo/tests/topology_optimiser.rs:example_main_from_readme" accordingly!) -->
 
 ```rust
 use phylo::likelihood::TreeSearchCost;
-use phylo::optimisers::TopologyOptimiser;
+use phylo::optimisers::{SprOptimiser, TopologyOptimiser};
 use phylo::phylo_info::PhyloInfoBuilder;
-use phylo::substitution_models::{K80, SubstModel, SubstitutionCostBuilder};
+use phylo::random::FakeGenerator;
+use phylo::substitution_models::{SubstModel, SubstitutionCostBuilder, K80};
 use phylo::Result;
 
 fn main() -> Result<()> {
     // Note: This example uses test data from the repository
     let info = PhyloInfoBuilder::new("./examples/data/K80.fasta").build()?;
-    let k80 = SubstModel::<K80>::new(&[], &[4.0, 1.0]);
+    let k80 = SubstModel::<K80>::default();
     let c = SubstitutionCostBuilder::new(k80, info).build()?;
     let unopt_cost = c.cost();
-    let rng = FakeGenerator::default();
-    let optimiser = TopologyOptimiser::new(c, SprOptimiser {}, &rng);
+    let mut rng = FakeGenerator::default();
+    let optimiser = TopologyOptimiser::new(c, SprOptimiser {}, &mut rng);
     let result = optimiser.run()?;
     assert_eq!(unopt_cost, result.initial_cost);
     assert!(result.final_cost > result.initial_cost);
     assert!(result.iterations <= 100);
     assert_eq!(result.cost.tree().len(), 9); // The initial tree has 9 nodes, 5 leaves and 4 internal nodes, and so should the resulting tree.
-    Ok(()) 
+    Ok(())
 }
 ```
 
@@ -84,12 +85,12 @@ Enable features in your Cargo.toml:
 phylo = { git = "https://github.com/acg-team/rust-phylo", package = "phylo", features = ["par-regraft"] }
 ```
 
-<!-- 
+<!--
 ## Documentation
 Full documentation is available at docs.rs/phylo.
 -->
 
-<!-- 
+<!--
 ## Performance benchmarks
 Will add Luca's benchmarks when possible.
 -->
