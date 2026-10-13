@@ -50,9 +50,11 @@ use crate::{align, aligned_seq, bail, record, Result};
 
 #[doc(hidden)]
 pub mod sequences;
+#[doc(inline)]
 pub use sequences::*;
 #[doc(hidden)]
 pub mod aligner;
+#[doc(inline)]
 pub use aligner::*;
 
 /// Represents an aligned position in a sequence. Used in [`Mapping`].
