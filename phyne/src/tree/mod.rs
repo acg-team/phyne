@@ -236,6 +236,7 @@ impl Tree {
         }
     }
 
+    /// Returns the ID of the node with the given index.
     pub fn node_id(&self, node_idx: &NodeIdx) -> &str {
         &self.nodes[usize::from(node_idx)].id
     }
@@ -331,6 +332,7 @@ impl Tree {
         bail!(Tree, "no node with id {id} found in the tree");
     }
 
+    /// Returns the index of the node with the given ID. Panics if no such node exists.
     #[cfg(test)]
     pub(crate) fn idx(&self, id: &str) -> NodeIdx {
         self.nodes.iter().find(|node| node.id == id).unwrap().idx

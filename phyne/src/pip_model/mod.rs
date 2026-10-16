@@ -388,10 +388,10 @@ impl<Q: QMatrix, M: Alignment> PIPCost<Q, M> {
 
         // In certain scenarios (e.g. a completely unrelated sequence, see data/p105.msa.fa)
         // individual column probabilities become too close to 0.0 (become subnormal)
-        // and the log likelihood becomes -Inf. This is mathematically reasonable, but during branch
+        // and the ln likelihood becomes -Inf. This is mathematically reasonable, but during branch
         // length optimisation BrentOpt cannot handle it and proposes NaN branch lengths.
         // This is a workaround that sets the probability to the smallest possible positive float,
-        // which is equivalent to restricting the log likelihood to f64::MIN.
+        // which is equivalent to restricting the ln likelihood to f64::MIN.
         tmp.pnu[root_idx]
             .map(|x| {
                 if x == 0.0 || x.is_subnormal() {

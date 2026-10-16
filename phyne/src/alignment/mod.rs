@@ -1,7 +1,10 @@
 use std::fmt::{Debug, Display};
 
+use fixedbitset::FixedBitSet;
 use hashbrown::HashMap;
 use itertools::Itertools;
+use log::warn;
+use rand::{Rng, SeedableRng};
 
 use crate::alphabets::{Alphabet, AMB_CHAR};
 use crate::asr::AncestralSequenceReconstruction;
@@ -9,8 +12,9 @@ use crate::parsimony_presence_absence::ParsimonyPresenceAbsence;
 use crate::phylo_info::{
     set_missing_tree_node_ids, validate_ids_with_ancestors, validate_taxa_ids, PhyloInfo,
 };
-use crate::tree::{NodeIdx, NodeIdx::Internal as Int, NodeIdx::Leaf, Tree};
-use crate::{align, aligned_seq, bail, record, Result};
+use crate::random::RandomGenerator;
+use crate::tree::{NodeIdx, NodeIdx::Internal, NodeIdx::Leaf, Tree};
+use crate::{align, aligned_seq, bail, bug, record, Result};
 
 pub mod sequences;
 pub use sequences::*;
@@ -108,8 +112,6 @@ pub trait Alignment: Display + Clone + Debug {
 /// prerequisites to build an alignment, not an ancestral alignment. Please overwrite this default
 /// implementation and make sure to call [`Tree::node_ids_are_unique`] in addition to checks
 /// your implementation requires.
-// TODO: instead of having this tip here, we could change the default implementation of
-// Alignment::from_aligned to ensure prerequisites for alignment as well as ancestral alignment.
 pub trait AncestralAlignment: Alignment {
     fn ancestral_seqs(&self) -> &Sequences;
     fn ancestral_map(&self, node_idx: &NodeIdx) -> &Mapping;
@@ -133,7 +135,16 @@ pub trait AncestralAlignment: Alignment {
         }
         validate_ids_with_ancestors(&tree, &all_seqs)?;
         all_seqs.remove_gap_cols();
-        Ok(Self::from_aligned_with_ancestral_unchecked(all_seqs, tree))
+        let ancestral_alignment = Self::from_aligned_with_ancestral_unchecked(all_seqs, tree);
+        let surviving = surviving_columns_mask(&ancestral_alignment.msa);
+        if surviving.is_clear() {
+            warn!(
+                "Columns {} go extinct in all leaf sequences. \
+                Consider calling `remove_extinct_columns` on the alignment.",
+                surviving.ones().format(", ")
+            );
+        }
+        Ok(ancestral_alignment)
     }
     /// Constructs a [`PhyloInfo`] with ancestral sequences from aligned sequences and a
     /// phylogenetic tree. Is called by the default implementation of
@@ -142,6 +153,48 @@ pub trait AncestralAlignment: Alignment {
     /// Tree is consumed and stored together with the alignment, because the alignment is only
     /// meaningful in the context of the tree that it was built from.
     fn from_aligned_with_ancestral_unchecked(all_seqs: Sequences, tree: Tree) -> PhyloInfo<Self>;
+    /// Removes columns from the alignment where the ancestral character goes extinct, i.e. columns
+    /// where all leaf sequences have a gap, updating all sequence mappings accordingly.
+    /// Use [`surviving_columns_mask`] to inspect which columns survive before removal.
+    fn remove_extinct_columns(&mut self);
+}
+
+/// Returns a [`FixedBitSet`] mask over alignment columns indicating which do not go extinct.
+///
+/// See also [`AncestralAlignment::remove_extinct_columns`].
+///
+/// # Example
+/// ```
+/// use phyne::alignment::{surviving_columns_mask, Alignment, AncestralAlignment, MASA, Sequences};
+/// use phyne::{record, tree};
+/// # use phyne::Result;
+///
+/// # fn main() -> Result<()> {
+/// let tree = tree!("(((A0:1.0,B1:1.0)I1:1.0,C2:1.0)I2:1.0);");
+/// let seqs = Sequences::new(vec![
+///     record!("A0", Some("A0 sequence"), b"--T"),
+///     record!("B1", Some("B1 sequence"), b"--T"),
+///     record!("C2", Some("C2 sequence"), b"-C-"),
+///     record!("I1", Some("I1 sequence"), b"A-T"),
+///     record!("I2", Some("I2 sequence"), b"A-T"),
+/// ])?;
+/// let phylo = MASA::from_aligned_with_ancestral(seqs, tree)?;
+///
+/// // column 0 only has characters in the ancestral sequences and thus goes extinct
+/// // columns 1 and 2 survive, so the mask has set bits at indices 1 and 2
+/// assert_eq!(surviving_columns_mask(&phylo.msa).ones().collect::<Vec<_>>(), vec![1, 2]);
+/// # Ok(()) }
+/// ```
+pub fn surviving_columns_mask(ancestral_alignment: &impl AncestralAlignment) -> FixedBitSet {
+    let mut surviving = FixedBitSet::with_capacity(ancestral_alignment.len());
+    for map in ancestral_alignment.leaf_maps().values() {
+        for (col_idx, site) in map.iter().enumerate() {
+            if site.is_some() {
+                surviving.insert(col_idx);
+            }
+        }
+    }
+    surviving
 }
 
 #[derive(Debug, Clone)]
@@ -317,7 +370,7 @@ impl Alignment for MSA {
         let mut idx_to_id = vec![String::new(); tree.len()];
         for node_idx in tree.postorder() {
             match node_idx {
-                Int(_) => {
+                Internal(_) => {
                     let childs = tree.children(node_idx);
                     let map_x = stack[&childs[0]].clone();
                     let map_y = stack[&childs[1]].clone();
@@ -375,7 +428,7 @@ impl Display for MASA {
         for (node_idx, seq_map) in both_maps {
             let id = &self.idx_to_id[usize::from(node_idx)];
             let record = match node_idx {
-                Int(_) => self.ancestral_seqs.record_by_id(id),
+                Internal(_) => self.ancestral_seqs.record_by_id(id),
                 Leaf(_) => self.leaf_seqs.record_by_id(id),
             };
             let aligned_seq = aligned_seq!(seq_map, record.seq());
@@ -394,6 +447,7 @@ impl Alignment for MASA {
         &self.leaf_seqs
     }
 
+    /// Returns the length of the MSA, i.e. the number of sites/columns.
     #[allow(clippy::len_without_is_empty)]
     fn len(&self) -> usize {
         self.leaf_maps
@@ -512,7 +566,7 @@ impl AncestralAlignment for MASA {
             Ok(())
         } else {
             match node_idx {
-                Int(_) => bail!(
+                Internal(_) => bail!(
                     AncestralAlignment,
                     "{node_idx} is not a valid internal node in the tree"
                 ),
@@ -555,7 +609,7 @@ impl AncestralAlignment for MASA {
             let record = all_seqs.record_by_id(tree.node_id(node_idx));
             let mapping = align!(record.seq());
             match node_idx {
-                Int(_) => {
+                Internal(_) => {
                     ancestral_maps.insert(*node_idx, mapping);
                     ancestral_records.push(record.clone());
                 }
@@ -594,6 +648,86 @@ impl AncestralAlignment for MASA {
             tree,
         }
     }
+
+    /// Removes alignment columns where the ancestral character has gone extinct, i.e. columns
+    /// where every leaf sequence has a gap.
+    ///
+    /// # Example
+    /// ```
+    /// use phyne::alignment::{Alignment, AncestralAlignment, MASA, Sequences};
+    /// use phyne::{aligned_seq, record_wo_desc, tree};
+    /// # use phyne::Result;
+    ///
+    /// # fn main() -> Result<()> {
+    /// let tree = tree!("((A:1.0,B:1.0)I:1.0,C:1.0)R:1.0;");
+    /// let records = vec![
+    ///     record_wo_desc!("A", b"A--T--"),
+    ///     record_wo_desc!("B", b"C-CT--"),
+    ///     record_wo_desc!("C", b"G-CT-G"),
+    ///     record_wo_desc!("I", b"T-CTAG"),
+    ///     record_wo_desc!("R", b"AAATGG"),
+    /// ];
+    /// let mut phylo = MASA::from_aligned_with_ancestral(Sequences::new(records)?, tree)?;
+    ///
+    /// assert_eq!(phylo.msa.len(), 6);
+    ///
+    /// // remove the two columns (indices 1 and 4) that go extinct in all leaves
+    /// phylo.msa.remove_extinct_columns();
+    /// assert_eq!(phylo.msa.len(), 4);
+    ///
+    /// let seqA = phylo.msa.seqs().record_by_id("A").seq();
+    /// let mappingA = phylo.msa.leaf_map(&phylo.tree.by_id("A").idx);
+    /// assert_eq!(aligned_seq!(mappingA, seqA), b"A-T-");
+    /// # Ok(()) }
+    /// ```
+    fn remove_extinct_columns(&mut self) {
+        // Determine columns where the ancestral character did not go extinct
+        let keep_cols = surviving_columns_mask(self);
+        // If no character goes extinct, we don't have to update the alignment
+        if keep_cols.is_full() {
+            return;
+        }
+        if keep_cols.is_clear() {
+            warn!(
+                "All columns go extinct in all leaf sequences. \
+                The resulting alignment after this call to remove_extinct_columns() will be empty."
+            );
+        }
+
+        // Remove the columns that go extinct from all mappings and all sequences
+        for (node_idx, map) in self
+            .leaf_maps
+            .iter_mut()
+            .chain(self.ancestral_maps.iter_mut())
+        {
+            let node_id = &self.idx_to_id[usize::from(*node_idx)];
+            let original_record = match node_idx {
+                Internal(_) => self.ancestral_seqs.record_by_id(node_id),
+                Leaf(_) => self.leaf_seqs.record_by_id(node_id),
+            };
+            let original_seq = original_record.seq();
+
+            let mut new_seq = Vec::with_capacity(original_seq.len());
+            let mut new_map_vec = Vec::with_capacity(keep_cols.count_ones(..));
+
+            for col_idx in keep_cols.ones() {
+                if let Some(pos) = map[col_idx] {
+                    new_map_vec.push(Some(new_seq.len()));
+                    new_seq.push(original_seq[pos]);
+                } else {
+                    new_map_vec.push(None);
+                }
+            }
+
+            *map = new_map_vec;
+            let new_record = record!(node_id, original_record.desc(), &new_seq);
+            match node_idx {
+                Internal(_) => self.ancestral_seqs.update_record(node_id, new_record),
+                Leaf(_) => self.leaf_seqs.update_record(node_id, new_record),
+            }
+            .unwrap_or_else(|e| bug!("Updating record failed", e));
+        }
+    }
 }
 
 impl MASA {
@@ -626,10 +760,40 @@ impl MASA {
         new_seq.shrink_to_fit();
         // TODO: avoid creating a new record here, see issue #143 https://github.com/acg-team/phyne/issues/143
         let new_record = record!(id, old_record.desc(), &new_seq);
+        // Since we got the 'id' from the internal 'idx_to_id' vector, we can be sure that the
+        // record exists in the ancestral_seqs, unless we have a bug in our code
         self.ancestral_seqs
             .update_record(id, new_record)
-            .expect("updating ancestral record failed. Please report this at https://github.com/acg-team/phyne/issues");
+            .unwrap_or_else(|e| bug!("Updating ancestral record failed", e));
     }
+}
+
+/// Simulates sequences along a tree producing an alignment.
+///
+/// Implementors simulate sequences down a [`Tree`] according to some evolutionary model
+/// (e.g. substitutions only, or a TKF indel + substitution process) and can produce
+/// either an ancestral alignment or an alignment of only the leaf sequences.
+pub trait AlignmentSimulation<R: Rng + SeedableRng> {
+    /// Simulates an ancestral alignment, i.e. an alignment that also contains sequences for
+    /// the ancestral nodes of the tree. By pure chance, some columns may go extinct, i.e.,
+    /// the homology path in that column reaches no leaf, consider calling
+    /// [`AncestralAlignment::remove_extinct_columns`] on the resulting alignment.
+    fn simulate_ancestral_alignment<AA: AncestralAlignment>(
+        &self,
+        rng: &mut RandomGenerator<R>,
+    ) -> PhyloInfo<AA>;
+    /// Simulates an alignment, i.e., returns only the leaf sequences (without ancestral sequences).
+    /// Its default implementation calls [`Self::simulate_ancestral_alignment`] and discards the
+    /// ancestral sequences.
+    fn simulate_alignment<A: Alignment>(&self, rng: &mut RandomGenerator<R>) -> PhyloInfo<A> {
+        // Since we are calling A::from_aligned_unchecked in discard_ancestral_seqs on the sequences
+        // that are simulated we return type A. It does not really matter which AA type was simulated first
+        // and then transformed to A, since the user never sees the MASA/AA.
+        self.simulate_ancestral_alignment::<MASA>(rng)
+            .discard_ancestral_seqs()
+    }
+    /// Returns the tree the simulation is performed on.
+    fn tree(&self) -> &Tree;
 }
 
 #[cfg(test)]

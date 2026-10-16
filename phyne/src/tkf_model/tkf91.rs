@@ -3,11 +3,14 @@ use std::fmt::Display;
 
 use log::warn;
 use num_enum::{FromPrimitive, IntoPrimitive};
+use rand::{Rng, SeedableRng};
 
 use crate::alignment::AncestralAlignment;
 use crate::likelihood::ParamRange;
 use crate::phylo_info::PhyloInfo;
+use crate::random::RandomGenerator;
 use crate::substitution_models::{QMatrix, SubstModel, SubstitutionCostBuilder as SCB};
+use crate::tkf_model::simulate_msa::{ExpectedRootLength, FragmentSampler};
 use crate::tkf_model::{
     TKFCost, TKFIndelCost, TKFIndelModelInfo, TKFModel, DEFAULT_LAMBDA, DEFAULT_LAMBDA_MU_RATIO,
     DEFAULT_MU,
@@ -26,6 +29,14 @@ pub(crate) enum TKF91Parameters {
 #[derive(Clone, Debug, PartialEq)]
 pub struct TKF91IndelModel {
     params: Vec<f64>,
+}
+
+impl TKF91IndelModel {
+    pub fn new(lambda: f64, mu: f64) -> Self {
+        let mut params = vec![lambda, mu];
+        validate_lambda_mu(&mut params);
+        Self { params }
+    }
 }
 
 impl Default for TKF91IndelModel {
@@ -89,6 +100,23 @@ impl Display for TKF91IndelModel {
             self.lambda(),
             self.mu(),
         )
+    }
+}
+
+impl FragmentSampler for TKF91IndelModel {
+    /// In TKF91 every residue is its own independent link, so the fragment
+    /// length is always 1 and its log-probability is ln(1) = 0.0.
+    fn sample_fragment_length<R: Rng + SeedableRng>(
+        &self,
+        _rng: &mut RandomGenerator<R>,
+    ) -> (usize, f64) {
+        (1, 0.0)
+    }
+}
+
+impl ExpectedRootLength for TKF91IndelModel {
+    fn expected_root_length(&self) -> f64 {
+        (self.lambda() / self.mu()) / (1.0 - (self.lambda() / self.mu()))
     }
 }
 
@@ -191,6 +219,8 @@ impl<Q: QMatrix, AA: AncestralAlignment> TKF91CostBuilder<Q, AA> {
 
 #[cfg(test)]
 mod private_tests {
+    use approx::assert_relative_eq;
+
     use super::*;
 
     #[test]
@@ -225,5 +255,12 @@ mod private_tests {
         let new_mu = 2.1;
         model.set_param(usize::from(TKF91Parameters::Mu), new_mu);
         assert_eq!(model.mu(), new_mu);
+    }
+
+    #[test]
+    fn tkf91_expected_root_length() {
+        let model = TKF91IndelModel::new(1.1, 2.0);
+        let ratio = model.lambda() / model.mu();
+        assert_relative_eq!(model.expected_root_length(), ratio / (1.0 - ratio));
     }
 }

@@ -22,6 +22,8 @@ pub mod dna_models;
 pub use dna_models::*;
 pub mod protein_models;
 pub use protein_models::*;
+pub mod simulate_msa;
+pub use simulate_msa::*;
 
 pub trait QMatrixMaker {
     fn create(frequencies: &[f64], params: &[f64]) -> Result<Self>

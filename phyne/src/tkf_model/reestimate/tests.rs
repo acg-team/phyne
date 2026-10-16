@@ -32,7 +32,6 @@ fn tkf_reestimate_without_choice() {
         .build()
         .unwrap();
     let logl = cost.clone().logl();
-    println!("Initial logl: {}", logl);
     let rng = &mut FakeGenerator::default();
     let v2_idx = cost.phylo.tree.by_id("I4").idx;
     let mut reestimator = EdgeSeqsReestimator::new(&mut cost, rng);

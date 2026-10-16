@@ -3,11 +3,14 @@ use rand::rng;
 use rand::seq::IteratorRandom;
 
 use crate::alignment::{
-    Alignment, AncestralAlignment, InternalAlignments, PairwiseAlignment as PA, SeqMaps, Sequences,
-    MASA, MSA,
+    Alignment, AlignmentSimulation, AncestralAlignment, InternalAlignments,
+    PairwiseAlignment as PA, SeqMaps, Sequences, MASA, MSA,
 };
 use crate::alphabets::{Alphabet, AMINOACIDS, NUCLEOTIDES};
 use crate::io::read_sequences;
+use crate::phylo_info::PhyloInfo;
+use crate::random::DefaultGenerator;
+use crate::substitution_models::{dna_models::GTR, SubstModel, SubstitutionSimulator};
 use crate::tree::{
     NodeIdx::{Internal as I, Leaf as L},
     Tree,
@@ -567,4 +570,202 @@ fn update_ancestral_map_leaf() {
         err,
         Err(Error::AncestralAlignment(msg)) if msg.contains("ancestral map cannot be set for a leaf node")
     );
+}
+
+#[test]
+fn remove_extinct_columns_masa() {
+    let tree = tree!("((A:1.0,B:1.0)I:1.0,C:1.0)R:1.0;");
+
+    let records = vec![
+        record_wo_desc!("A", b"A---T--"),
+        record_wo_desc!("B", b"C--CT--"),
+        record_wo_desc!("C", b"G--CT-G"),
+        record_wo_desc!("I", b"T--CTAG"),
+        record_wo_desc!("R", b"A-AATGG"),
+    ];
+
+    let seqs = Sequences::new(records).unwrap();
+
+    for rec in &seqs.s {
+        assert_eq!(rec.seq().len(), 7, "sequence length mismatch");
+    }
+
+    let mut phylo = MASA::from_aligned_with_ancestral(seqs, tree).unwrap();
+
+    // sanity checks before removal (the second column is removed when the MASA is created)
+    assert_eq!(phylo.msa.len(), 6, "lens differ for initial length");
+    // after removing the two extinct columns the length should be 4
+    phylo.msa.remove_extinct_columns();
+    assert_eq!(phylo.msa.len(), 4, "lens differ after removal");
+
+    let PhyloInfo { msa: masa, tree } = phylo;
+
+    let a = &tree.idx("A");
+    assert_eq!(masa.leaf_maps().get(a).unwrap(), &align!(b"N-N-"), "A");
+    let b = &tree.idx("B");
+    assert_eq!(masa.leaf_maps().get(b).unwrap(), &align!(b"NNN-"), "B");
+    let c = &tree.idx("C");
+    assert_eq!(masa.leaf_maps().get(c).unwrap(), &align!(b"NNNN"), "C");
+    let i = &tree.idx("I");
+    assert_eq!(masa.ancestral_maps().get(i).unwrap(), &align!(b"NNNN"), "I");
+    let r = &tree.idx("R");
+    assert_eq!(masa.ancestral_maps().get(r).unwrap(), &align!(b"NNNN"), "R");
+
+    assert_eq!(masa.seqs().record_by_id("A").seq(), b"AT");
+    assert_eq!(masa.seqs().record_by_id("B").seq(), b"CCT");
+    assert_eq!(masa.seqs().record_by_id("C").seq(), b"GCTG");
+    assert_eq!(masa.ancestral_seqs().record_by_id("I").seq(), b"TCTG");
+    assert_eq!(masa.ancestral_seqs().record_by_id("R").seq(), b"AATG");
+}
+
+#[test]
+fn remove_extinct_columns_masa_no_extinction() {
+    let tree = tree!("((A:1.0,B:1.0)I:1.0,C:1.0)R:1.0;");
+
+    // every column has at least one character in a leaf, so nothing goes extinct
+    let records = vec![
+        record_wo_desc!("A", b"A--T"),
+        record_wo_desc!("B", b"AC-T"),
+        record_wo_desc!("C", b"ACGT"),
+        record_wo_desc!("I", b"ACGT"),
+        record_wo_desc!("R", b"ACGT"),
+    ];
+
+    let mut phylo =
+        MASA::from_aligned_with_ancestral(Sequences::new(records).unwrap(), tree).unwrap();
+
+    // no column is all-gap in the leaves, so the lengths must be unchanged
+    assert_eq!(phylo.msa.len(), 4, "lens differ for initial length");
+    phylo.msa.remove_extinct_columns();
+    assert_eq!(phylo.msa.len(), 4, "lens differ after removal");
+
+    let PhyloInfo { msa, tree } = phylo;
+
+    // mappings are untouched, only the gap/non-gap pattern matters
+    let a = &tree.idx("A");
+    assert_eq!(msa.leaf_maps().get(a).unwrap(), &align!(b"A--T"), "A");
+    let b = &tree.idx("B");
+    assert_eq!(msa.leaf_maps().get(b).unwrap(), &align!(b"AC-T"), "B");
+    let c = &tree.idx("C");
+    assert_eq!(msa.leaf_maps().get(c).unwrap(), &align!(b"ACGT"), "C");
+    let i = &tree.idx("I");
+    assert_eq!(msa.ancestral_maps().get(i).unwrap(), &align!(b"ACGT"), "I");
+    let r = &tree.idx("R");
+    assert_eq!(msa.ancestral_maps().get(r).unwrap(), &align!(b"ACGT"), "R");
+
+    assert_eq!(msa.seqs().record_by_id("A").seq(), b"AT");
+    assert_eq!(msa.seqs().record_by_id("B").seq(), b"ACT");
+    assert_eq!(msa.seqs().record_by_id("C").seq(), b"ACGT");
+    assert_eq!(msa.ancestral_seqs().record_by_id("I").seq(), b"ACGT");
+    assert_eq!(msa.ancestral_seqs().record_by_id("R").seq(), b"ACGT");
+}
+
+#[test]
+fn remove_extinct_columns_masa_everything_dies() {
+    let tree = tree!("((A:1.0,B:1.0)I:1.0,C:1.0)R:1.0;");
+
+    // every column has a character in the ancestral nodes but only gaps in the leaves,
+    // so all columns are extinct in the leaves
+    let records = vec![
+        record_wo_desc!("A", b"----"),
+        record_wo_desc!("B", b"----"),
+        record_wo_desc!("C", b"----"),
+        record_wo_desc!("I", b"A-GT"),
+        record_wo_desc!("R", b"ACGT"),
+    ];
+
+    let mut phylo =
+        MASA::from_aligned_with_ancestral(Sequences::new(records).unwrap(), tree).unwrap();
+
+    // the columns survive creation because the ancestral nodes have characters
+    assert_eq!(phylo.msa.len(), 4, "lens differ for initial length");
+    // all columns go extinct in the leaves, so the alignment becomes empty
+    phylo.msa.remove_extinct_columns();
+    assert_eq!(phylo.msa.len(), 0, "lens differ after removal");
+
+    let PhyloInfo { msa, tree } = phylo;
+
+    for id in ["A", "B", "C"] {
+        assert!(
+            msa.leaf_maps().get(&tree.idx(id)).unwrap().is_empty(),
+            "{id}"
+        );
+        assert!(
+            msa.seqs().record_by_id(id).seq().is_empty(),
+            "{id} sequence should be empty"
+        );
+    }
+    for id in ["I", "R"] {
+        assert!(
+            msa.ancestral_maps().get(&tree.idx(id)).unwrap().is_empty(),
+            "{id}"
+        );
+        assert!(
+            msa.ancestral_seqs().record_by_id(id).seq().is_empty(),
+            "{id} sequence should be empty"
+        );
+    }
+}
+
+#[test]
+fn into_alignment_masa_to_msa() {
+    let tree = tree!("((A:1.0,B:1.0)I:1.0,C:1.0)R:1.0;");
+    let records = vec![
+        record_wo_desc!("A", b"A---C-T"),
+        record_wo_desc!("B", b"---CG-T"),
+        record_wo_desc!("C", b"A-----T"),
+        record_wo_desc!("I", b"A-ACG-T"),
+        record_wo_desc!("R", b"A-ACG-T"),
+    ];
+    let seqs = Sequences::new(records).unwrap();
+    let phylo = MASA::from_aligned_with_ancestral(seqs, tree).unwrap();
+
+    // columns 2 and 5 are only gaps, so they are removed during the creation
+    assert_eq!(phylo.msa.len(), 5);
+
+    let phylo: PhyloInfo<MSA> = phylo.discard_ancestral_seqs();
+
+    assert_eq!(phylo.msa.seq_count(), 3);
+    // column 3 is only gaps in the leaf sequences, so it is removed during the transformation
+    assert_eq!(phylo.msa.len(), 4);
+
+    assert_eq!(phylo.msa.seqs().record_by_id("A").seq(), b"ACT");
+    assert_eq!(phylo.msa.seqs().record_by_id("B").seq(), b"CGT");
+    assert_eq!(phylo.msa.seqs().record_by_id("C").seq(), b"AT");
+
+    let a_idx = phylo.tree.idx("A");
+    let b_idx = phylo.tree.idx("B");
+    let c_idx = phylo.tree.idx("C");
+
+    assert_eq!(phylo.msa.leaf_map(&a_idx), &align!(b"A-CT"));
+    assert_eq!(phylo.msa.leaf_map(&b_idx), &align!(b"-CGT"));
+    assert_eq!(phylo.msa.leaf_map(&c_idx), &align!(b"A--T"));
+}
+
+#[test]
+fn simulate_alignment_matches_discarded_ancestral_alignment() {
+    let tree = tree!("((A:2.0,B:2.0)I:1.0,C:1.0)R:1.0;");
+    let model = SubstModel::<GTR>::default();
+    let msa_len = 20;
+    let simulator = SubstitutionSimulator::new(model, tree, msa_len).unwrap();
+
+    // the default `simulate_alignment` must equal simulating a MASA and discarding ancestors
+    let seed = 123;
+    let mut rng1 = DefaultGenerator::new(seed);
+    let leaf_only: PhyloInfo<MSA> = simulator.simulate_alignment(&mut rng1);
+
+    let mut rng2 = DefaultGenerator::new(seed);
+    let from_ancestral: PhyloInfo<MSA> = simulator
+        .simulate_ancestral_alignment::<MASA>(&mut rng2)
+        .discard_ancestral_seqs();
+
+    assert_eq!(leaf_only.msa.len(), from_ancestral.msa.len());
+    assert_eq!(leaf_only.msa.seq_count(), from_ancestral.msa.seq_count());
+    for id in ["A", "B", "C"] {
+        assert_eq!(
+            leaf_only.msa.seqs().record_by_id(id).seq(),
+            from_ancestral.msa.seqs().record_by_id(id).seq(),
+            "{id}"
+        );
+    }
 }

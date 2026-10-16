@@ -24,6 +24,7 @@ pub mod tkf_model;
 pub mod tree;
 
 pub(crate) mod macros;
+pub(crate) use macros::bug;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -31,4 +32,5 @@ pub(crate) const MAX_BLEN: f64 = 1e5f64;
 
 pub(crate) const DEFAULT_EPSILON: f64 = 1e-3;
 
+/// Used in [`crate::bug`].
 pub(crate) const REPORT_ISSUES_URL: &str = "https://github.com/acg-team/phyne/issues";

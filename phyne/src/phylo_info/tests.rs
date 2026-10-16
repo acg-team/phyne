@@ -6,7 +6,8 @@ use assert_matches::assert_matches;
 use crate::alignment::{Alignment, AncestralAlignment, Sequences, MASA, MSA};
 use crate::alphabets::{Alphabet, NUCLEOTIDES};
 use crate::io::read_sequences;
-use crate::phylo_info::PhyloInfoBuilder as PIB;
+use crate::phylo_info::{PhyloInfo, PhyloInfoBuilder as PIB};
+use crate::tree::Tree;
 use crate::{frequencies, record_wo_desc as record, tree, Error};
 
 #[test]
@@ -511,4 +512,177 @@ fn masa_is_not_dollo() {
     let err_msg = phylo.check_dollos_constraint().unwrap_err().to_string();
     assert!(err_msg.contains("Column 6: 2 insertions"));
     assert!(err_msg.contains("Column 7: 2 insertions"));
+}
+
+#[cfg(test)]
+fn phylo_from_records(tree: Tree, records: Vec<(&str, &[u8])>) -> PhyloInfo<MASA> {
+    let seqs = Sequences::new(
+        records
+            .into_iter()
+            .map(|(id, seq)| crate::record!(id, None, seq))
+            .collect(),
+    )
+    .unwrap();
+    MASA::from_aligned_with_ancestral(seqs, tree).unwrap()
+}
+
+#[test]
+fn prune_empty_leaves_leaf_only() {
+    // C4 consists only of gaps -> prune C4 and its parent R5, the root collapses to I3.
+    let tree = tree!("(((A1:1.0,B2:2.0)I3:3.0,C4:4.0)R5:5.0);");
+    let phylo = phylo_from_records(
+        tree,
+        vec![
+            ("A1", b"--GTGGA---"),
+            ("B2", b"-------NNA"),
+            ("I3", b"--T-------"),
+            ("C4", b"----------"),
+            ("R5", b"--A-------"),
+        ],
+    );
+    let phylo = phylo.prune_empty_leaves().unwrap();
+
+    let PhyloInfo { msa, tree } = phylo;
+
+    // desctudt the phylo_info into msa and tree
+    assert_eq!(msa.seq_count(), 2); // A1, B2
+    assert_eq!(msa.ancestral_seqs().len(), 1); // I3
+    assert_eq!(msa.len(), 8);
+    assert_eq!(msa.leaf_map(&tree.by_id("A1").idx).len(), 8);
+
+    assert_eq!(tree.leaves().len(), 2);
+    assert_eq!(tree.node_id(&tree.root), "I3");
+    assert_eq!(tree.node(&tree.root).blen, 8.0);
+    assert_eq!(tree.by_id("A1").blen, 1.0);
+    assert_eq!(tree.by_id("B2").blen, 2.0);
+    assert!(tree.try_idx("C4").is_err());
+    assert!(tree.try_idx("R5").is_err());
+}
+
+#[test]
+fn prune_empty_leaves_parent_removed() {
+    // A1 consists only of gaps -> prune A1 and its parent I3; B2 takes over I3's branch.
+    let tree = tree!("(((A1:1.0,B2:2.0)I3:3.0,C4:4.0)R5:5.0);");
+    let phylo = phylo_from_records(
+        tree,
+        vec![
+            ("A1", b"----------"),
+            ("B2", b"-------NNA"),
+            ("I3", b"--T-------"),
+            ("C4", b"------A---"),
+            ("R5", b"--A-------"),
+        ],
+    );
+    let phylo = phylo.prune_empty_leaves().unwrap();
+    let PhyloInfo { msa, tree } = phylo;
+
+    assert_eq!(msa.seq_count(), 2); // B2, C4
+    assert_eq!(msa.ancestral_seqs().len(), 1); // R5
+    assert_eq!(tree.leaves().len(), 2);
+    assert_eq!(tree.node_id(&tree.root), "R5");
+    assert_eq!(tree.by_id("R5").blen, 5.0);
+    assert_eq!(tree.by_id("B2").blen, 5.0);
+    assert_eq!(tree.by_id("C4").blen, 4.0);
+    assert!(tree.try_idx("A1").is_err());
+    assert!(tree.try_idx("I3").is_err());
+}
+
+#[test]
+fn prune_empty_leaves_single_leaf_bails() {
+    // A1 and B2 both consist only of gaps -> pruning would leave a single sequence (C4)
+    // with characters, which is not a meaningful tree.
+    let tree = tree!("(((A1:1.0,B2:2.0)I3:3.0,C4:4.0)R5:5.0);");
+    let phylo = phylo_from_records(
+        tree,
+        vec![
+            ("A1", b"----------"),
+            ("B2", b"----------"),
+            ("I3", b"--T-------"),
+            ("C4", b"------A---"),
+            ("R5", b"--A-------"),
+        ],
+    );
+    assert_matches!(
+        phylo.prune_empty_leaves(),
+        Err(crate::Error::Alignment(msg)) if msg.contains("fewer than two sequences")
+    );
+}
+
+#[test]
+fn prune_empty_leaves_all_gap_bails() {
+    // All sequences consist only of gaps -> pruning would leave no sequences with
+    // characters at all.
+    let tree = tree!("(((A1:1.0,B2:2.0)I3:3.0,C4:4.0)R5:5.0);");
+    let phylo = phylo_from_records(
+        tree,
+        vec![
+            ("A1", b"----------"),
+            ("B2", b"----------"),
+            ("I3", b"----------"),
+            ("C4", b"----------"),
+            ("R5", b"----------"),
+        ],
+    );
+    assert_matches!(
+        phylo.prune_empty_leaves(),
+        Err(crate::Error::Alignment(msg)) if msg.contains("fewer than two sequences")
+    );
+}
+
+#[test]
+fn prune_empty_leaves_nothing_to_prune() {
+    // No gap-only leaves -> the result is unchanged.
+    let tree = tree!("(((A1:1.0,B2:2.0)I3:3.0,C4:4.0)R5:5.0);");
+    let phylo = phylo_from_records(
+        tree.clone(),
+        vec![
+            ("A1", b"--GTGGA---"),
+            ("B2", b"-------NNA"),
+            ("I3", b"--T-------"),
+            ("C4", b"------A---"),
+            ("R5", b"--A-------"),
+        ],
+    );
+    let phylo = phylo.prune_empty_leaves().unwrap();
+    let PhyloInfo {
+        msa,
+        tree: new_tree,
+    } = phylo;
+
+    assert_eq!(tree.to_newick(), new_tree.to_newick());
+    assert_eq!(msa.seq_count(), 3);
+    assert_eq!(msa.ancestral_seqs().len(), 2);
+}
+
+#[test]
+fn prune_empty_leaves_comb() {
+    // G and N1 consist only of gaps -> removing G collapses I1 (N1 takes over I1's
+    // branch), removing N1 collapses I2 (N2 takes over I2's branch).
+    let tree = tree!("((((G:1.0,N1:1.0)I1:1.0,N2:1.0)I2:1.0,N3:1.0)I3:1.0,N4:1.0)R:1.0;");
+    let phylo = phylo_from_records(
+        tree,
+        vec![
+            ("G", b"----"),
+            ("N1", b"----"),
+            ("I1", b"A---"),
+            ("N2", b"A---"),
+            ("I2", b"A---"),
+            ("N3", b"-A--"),
+            ("I3", b"A---"),
+            ("N4", b"--A-"),
+            ("R", b"---A"),
+        ],
+    );
+    let phylo = phylo.prune_empty_leaves().unwrap();
+    let PhyloInfo { msa, tree } = phylo;
+
+    assert_eq!(msa.seq_count(), 3); // N2, N3, N4
+    assert_eq!(tree.leaves().len(), 3);
+    assert_eq!(tree.by_id("N2").blen, 2.0);
+    assert_eq!(tree.by_id("N3").blen, 1.0);
+    assert_eq!(tree.by_id("N4").blen, 1.0);
+    assert!(tree.try_idx("G").is_err());
+    assert!(tree.try_idx("N1").is_err());
+    assert!(tree.try_idx("I1").is_err());
+    assert!(tree.try_idx("I2").is_err());
 }

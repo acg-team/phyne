@@ -15,7 +15,7 @@ use crate::random::FakeGenerator;
 use crate::tkf_model::reestimate::EdgeSeqsReestimator;
 use crate::tree::NodeIdx::{self, Internal, Leaf};
 use crate::tree::Tree;
-use crate::{bail, Result, REPORT_ISSUES_URL};
+use crate::{bail, bug, Result};
 
 lazy_static! {
     pub(super) static ref DUMMY_FREQS: DVector<f64> = DVector::<f64>::zeros(0);
@@ -164,7 +164,7 @@ impl TKFIndelModelInfo {
 }
 
 /// Computes the ln likelihood of an [ancestral alignment](`AncestralAlignment`)
-/// and tree under a [TKF](`TKFModel`) indel model, i.e., without substitutions.
+/// given a tree under a [TKF](`TKFModel`) indel model, i.e., without substitutions.
 #[derive(Debug)]
 pub struct TKFIndelCost<T: TKFModel, AA: AncestralAlignment> {
     pub(super) model: T,
@@ -492,11 +492,9 @@ impl<T: TKFModel, AA: AncestralAlignment> TreeSearchCost for TKFIndelCost<T, AA>
 /// # Arguments
 /// * `x` - must be non-positive (`x <= 0.0`). Usually a ln-probability value.
 pub(crate) fn ln1mexp(x: f64) -> f64 {
-    assert!(
-        x <= 0.0,
-        "ln1mexp is only defined for x <= 0 but x is {x}. \
-        Please report this at {REPORT_ISSUES_URL}."
-    );
+    if x > 0.0 {
+        bug!(format!("ln1mexp is only defined for x <= 0 but x is {x}"));
+    }
     if x < -std::f64::consts::LN_2 {
         // x is small, therefore exp(x) is close to 0, so we use the stable formula for ln
         (-x.exp()).ln_1p()
@@ -541,13 +539,12 @@ pub(super) fn ln_h1(lambda: f64, mu: f64, ln_beta: f64, time: f64) -> f64 {
 pub(super) fn ln_n0(mu: f64, ln_beta: f64) -> f64 {
     let x = mu.ln() + ln_beta;
     if x > 0.0 {
-        assert!(
-            x < NUMERICAL_ISSUE_N0_THRESHOLD,
-            "ln_n0 ({}) is much larger than 0 but should be \
-            at most slightly larger than 0 which may happen due to numerical issues. \
-            Please report this at {REPORT_ISSUES_URL}.",
-            x
-        );
+        if x >= NUMERICAL_ISSUE_N0_THRESHOLD {
+            bug!(format!(
+                "ln_n0 ({x}) is much larger than 0 but should be at most slightly larger than 0 \
+                 which may happen due to numerical issues"
+            ));
+        }
         0.0
     } else {
         x

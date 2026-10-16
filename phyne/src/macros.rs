@@ -250,6 +250,33 @@ macro_rules! bail {
     };
 }
 
+/// Panic with a bug-report notice when an internal invariant is violated.
+///
+/// Formats `$msg`, appends a standard "This should never happen" notice together with the
+/// issue tracker URL and, if provided, the source error `$err`, then panics. Use it for
+/// states that should be unreachable due to the program's own logic, so that users know to
+/// report the problem.
+///
+/// This macro is crate-internal.
+macro_rules! bug {
+    ($msg:expr, $err:expr) => {
+        panic!(
+            "{}. This should never happen. Please report this at {}. Error: {}",
+            $msg,
+            $crate::REPORT_ISSUES_URL,
+            $err
+        )
+    };
+    ($msg:expr) => {
+        panic!(
+            "{}. This should never happen. Please report this at {}.",
+            $msg,
+            $crate::REPORT_ISSUES_URL
+        )
+    };
+}
+pub(crate) use bug;
+
 #[cfg(test)]
 #[cfg_attr(coverage, coverage(off))]
 mod tests {
@@ -765,5 +792,21 @@ mod tests {
         let err = fail_other().unwrap_err();
         assert_matches!(err, Other(ref e) if e.to_string() == "external error");
         assert_eq!(err.to_string(), "external error");
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "custom failure. This should never happen. Please report this at https://github.com/acg-team/phyne/issues. Error: boom"
+    )]
+    fn bug_macro_formats_message() {
+        bug!("custom failure", "boom");
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "custom failure. This should never happen. Please report this at https://github.com/acg-team/phyne/issues."
+    )]
+    fn bug_macro_without_error() {
+        bug!("custom failure");
     }
 }

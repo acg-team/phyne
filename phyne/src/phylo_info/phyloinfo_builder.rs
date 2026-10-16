@@ -294,7 +294,33 @@ impl<A: Alignment, AA: AncestralAlignment> PhyloInfoBuilder<A, AA> {
 }
 
 /// Sets missing ids and bails if there are duplicates among the node ids that were already set.
-pub(crate) fn set_missing_tree_node_ids(tree: &mut Tree) -> Result<()> {
+///
+/// Nodes without a name in the Newick string get an auto-generated id of the form `I<count>`.
+///
+/// # Example
+/// ```
+/// use phyne::phylo_info::set_missing_tree_node_ids;
+/// use phyne::tree;
+/// # use phyne::Result;
+///
+/// # fn main() -> Result<()> {
+/// // the internal node ids are not set
+/// let mut tree = tree!("((A1:1.0,B1:1.0):1.0,C2:1.0):1.0;");
+/// let root = &tree.root.clone();
+/// let internal_node = &tree.by_id("A1").parent.unwrap().clone();
+/// assert_eq!(tree.node_id(root), "");
+/// assert_eq!(tree.node_id(internal_node), "");
+///
+/// set_missing_tree_node_ids(&mut tree)?;
+///
+/// assert_eq!(tree.node_id(root), "I1");
+/// assert_eq!(tree.node_id(internal_node), "I0");
+/// # Ok(()) }
+/// ```
+///
+/// # Errors
+/// * If a node id occurs more than once in the tree.
+pub fn set_missing_tree_node_ids(tree: &mut Tree) -> Result<()> {
     // We want to take a &mut Tree and not take ownership, since in asr we take a PhyloInfo<A> where
     // its tree might be missing internal nodes and we don't want to take the tree out of the
     // PhyloInfo
