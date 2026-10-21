@@ -3,7 +3,7 @@ use std::path::Path;
 use approx::assert_relative_eq;
 use nalgebra::{DMatrix, DVector};
 
-use crate::alignment::{Alignment, Sequences, MSA};
+use crate::alignment::{Alignment, AncestralAlignment, Sequences, MASA, MSA};
 use crate::alphabets::{Alphabet, AMINOACIDS as aas, GAP, NUCLEOTIDES as nucls};
 use crate::error::{Error, EvolutionaryModelError};
 use crate::evolutionary_models::{EvoModel, RateMatrix};
@@ -1260,4 +1260,24 @@ fn pip_correct_parameter_number_protein() {
     correct_parameter_number(PIPModel::<WAG>::new(&[0.05; 20], &[0.5; PIP_PARAM_N]).unwrap());
     correct_parameter_number(PIPModel::<HIVB>::new(&[0.05; 20], &[0.5; PIP_PARAM_N]).unwrap());
     correct_parameter_number(PIPModel::<BLOSUM>::new(&[0.05; 20], &[0.5; PIP_PARAM_N]).unwrap());
+}
+
+#[test]
+fn reconstruct_ancestral_seqs_arpip() {
+    use crate::asr::AncestralSequenceReconstruction;
+
+    let tree = tree!("((A:1.0, B:1.0)I1:1.0,C:1.0)I0:0.0;");
+    let seqs = Sequences::new_unchecked(vec![
+        record!("A", b"AA--AAA"),
+        record!("B", b"AA-AAAG"),
+        record!("C", b"AAAAA-A"),
+    ]);
+    let phylo = MSA::from_aligned(seqs, tree).unwrap();
+    let asr = PIPModel::<JC69>::default();
+
+    let phylo: PhyloInfo<MASA> = asr.reconstruct_ancestral_seqs(phylo).unwrap();
+
+    assert_eq!(phylo.msa.len(), 7);
+    assert_eq!(phylo.msa.seq_count(), 3);
+    assert_eq!(phylo.msa.ancestral_seqs().len(), 2);
 }

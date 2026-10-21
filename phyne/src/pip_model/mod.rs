@@ -21,6 +21,8 @@ use crate::tree::{
 };
 use crate::{bail, Result};
 
+pub mod asr;
+
 /// (2.0 * PI).ln() / 2.0 = 0.9189385332046727;
 pub static SHIFT: f64 = 0.9189385332046727;
 
