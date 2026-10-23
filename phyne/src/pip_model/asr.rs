@@ -195,6 +195,7 @@ mod tests {
             tree!("(((A:1.0,B:1.0)I2:0.1,C:1.0)I1:1.0,D:1.0)I0:0.0;");
         static ref TREE_DIFF_BLENS: Tree =
             tree!("(((A:0.5,B:2.5)I2:1.2,C:1.4)I1:0.6,D:5.0)I0:0.0;");
+        static ref TREE_BALANCED: Tree = tree!("((A:1.0,B:1.0)I2:1.0,(C:1.0,D:1.0)I1:1.0)I0:0.0;");
     }
 
     fn pip(mu: f64) -> PIPModel<JC69> {
@@ -320,9 +321,118 @@ mod tests {
         let tree = tree!("A:0.0;");
         let sequences = Sequences::new_unchecked(vec![record!("A", b"A")]);
         let phylo = MSA::from_aligned(sequences, tree.clone()).unwrap();
-        let ancestral: MASA = pip(1.0).reconstruct_ancestral_seqs(phylo).unwrap().msa;
+        let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
+        let ancestral: MASA = asr.reconstruct_ancestral_seqs(phylo).unwrap().msa;
 
         assert!(ancestral.leaf_map(&tree.root)[0].is_some());
         assert!(matches!(tree.root, Leaf(_)));
+    }
+
+    /// Presence bitsets (non-gap sites) of every record, keyed by record id.
+    fn bitsets_by_id(sequences: &Sequences, ancestors: &Sequences) -> HashMap<String, FixedBitSet> {
+        sequences
+            .into_iter()
+            .chain(ancestors)
+            .map(|rec| {
+                let present_sites = rec
+                    .seq()
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(site, &c)| (c != crate::alphabets::GAP).then_some(site));
+                (rec.id().to_string(), FixedBitSet::from_iter(present_sites))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn char_presence_deletion_at_i2() {
+        let tree = TREE_DELETION_AT_I2.clone();
+        let sequences = Sequences::new_unchecked(vec![
+            record!("A", b"-"),
+            record!("B", b"-"),
+            record!("C", b"A"),
+            record!("D", b"A"),
+        ]);
+        let ancestors = Sequences::new_unchecked(vec![
+            record!("I2", b"-"),
+            record!("I1", b"X"),
+            record!("I0", b"X"),
+        ]);
+
+        let expected_bitsets = bitsets_by_id(&sequences, &ancestors);
+
+        let phylo = MSA::from_aligned(sequences, tree.clone()).unwrap();
+        let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
+        let maps = asr.potential_character_presence(&phylo);
+
+        for node_idx in tree.postorder() {
+            assert_eq!(
+                maps[usize::from(node_idx)]
+                    .difference_count(&expected_bitsets[tree.node_id(node_idx)]),
+                0
+            );
+        }
+    }
+
+    #[test]
+    fn char_presence_deletion_at_ab() {
+        let tree = TREE_DELETION_AT_AB.clone();
+        let sequences = Sequences::new_unchecked(vec![
+            record!("A", b"-"),
+            record!("B", b"-"),
+            record!("C", b"A"),
+            record!("D", b"A"),
+        ]);
+        let ancestors = Sequences::new_unchecked(vec![
+            record!("I2", b"X"),
+            record!("I1", b"X"),
+            record!("I0", b"X"),
+        ]);
+
+        let expected_bitsets = bitsets_by_id(&sequences, &ancestors);
+
+        let phylo = MSA::from_aligned(sequences, tree.clone()).unwrap();
+        let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
+        let maps = asr.potential_character_presence(&phylo);
+
+        for node_idx in tree.postorder() {
+            assert_eq!(
+                maps[usize::from(node_idx)]
+                    .difference_count(&expected_bitsets[tree.node_id(node_idx)]),
+                0
+            );
+        }
+    }
+
+    #[test]
+    fn char_presence_multiple_sites() {
+        let sequences = Sequences::new_unchecked(vec![
+            record!("A", b"AC-A---AAA-"),
+            record!("B", b"AA--A--AA-A"),
+            record!("C", b"-CC--A-A-AA"),
+            record!("D", b"-CA---A-AAA"),
+        ]);
+
+        let ancestors = Sequences::new_unchecked(vec![
+            record!("I2", b"XX-XX--XXXX"),
+            record!("I1", b"-XX--XXXXXX"),
+            record!("I0", b"XXXXXXXXXXX"),
+        ]);
+        let tree = TREE_BALANCED.clone();
+
+        let expected_bitsets = bitsets_by_id(&sequences, &ancestors);
+
+        let phylo = MSA::from_aligned(sequences, tree.clone()).unwrap();
+        let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
+        let maps = asr.potential_character_presence(&phylo);
+
+        for node_idx in tree.postorder() {
+            let node_name = tree.node_id(node_idx);
+            assert_eq!(
+                maps[usize::from(node_idx)].difference_count(&expected_bitsets[node_name]),
+                0,
+                "Mismatch at node index {node_idx}"
+            );
+        }
     }
 }
