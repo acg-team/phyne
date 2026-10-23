@@ -255,9 +255,9 @@ mod tests {
         let tree = TREE_DELETION_AT_I2.clone();
         let ancestral = reconstruct_on_single_site(tree.clone(), 1.0).msa;
 
-        assert!(ancestral.ancestral_map(&tree.by_id("I1").idx)[0].is_none());
-        assert!(ancestral.ancestral_map(&tree.by_id("I2").idx)[0].is_some());
-        assert!(ancestral.ancestral_map(&tree.by_id("I3").idx)[0].is_some());
+        assert!(ancestral.ancestral_map(&tree.by_id("I2").idx)[0].is_none());
+        assert!(ancestral.ancestral_map(&tree.by_id("I1").idx)[0].is_some());
+        assert!(ancestral.ancestral_map(&tree.by_id("I0").idx)[0].is_some());
         for id in ["A", "B"] {
             let leaf = tree.by_id(id);
             assert!(ancestral.leaf_map(&leaf.idx)[0].is_none());
@@ -271,9 +271,9 @@ mod tests {
         let ancestral = phylo.msa;
         let tree = &phylo.tree;
 
-        assert!(ancestral.ancestral_map(&tree.by_id("I1").idx)[0].is_some());
         assert!(ancestral.ancestral_map(&tree.by_id("I2").idx)[0].is_some());
-        assert!(ancestral.ancestral_map(&tree.by_id("I3").idx)[0].is_some());
+        assert!(ancestral.ancestral_map(&tree.by_id("I1").idx)[0].is_some());
+        assert!(ancestral.ancestral_map(&tree.by_id("I0").idx)[0].is_some());
         for id in ["A", "B"] {
             let leaf = tree.by_id(id);
             assert!(ancestral.leaf_map(&leaf.idx)[0].is_none());
