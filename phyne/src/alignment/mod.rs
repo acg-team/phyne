@@ -38,6 +38,15 @@ pub struct PairwiseAlignment {
     pub(crate) map_y: Mapping,
 }
 
+pub(crate) fn mapping_to_bits(mapping: &Mapping) -> FixedBitSet {
+    FixedBitSet::from_iter(
+        mapping
+            .iter()
+            .enumerate()
+            .filter_map(|(i, pos)| pos.map(|_| i)),
+    )
+}
+
 impl PairwiseAlignment {
     pub fn new(map_x: Mapping, map_y: Mapping) -> PairwiseAlignment {
         assert_eq!(
