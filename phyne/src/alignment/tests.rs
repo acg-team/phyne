@@ -1,10 +1,13 @@
+use rstest::rstest;
+
 use assert_matches::assert_matches;
+use fixedbitset::FixedBitSet;
 use rand::rng;
 use rand::seq::IteratorRandom;
 
 use crate::alignment::{
-    Alignment, AlignmentSimulation, AncestralAlignment, InternalAlignments,
-    PairwiseAlignment as PA, SeqMaps, Sequences, MASA, MSA,
+    mapping_to_bits, Alignment, AlignmentSimulation, AncestralAlignment, InternalAlignments,
+    Mapping, PairwiseAlignment as PA, SeqMaps, Sequences, MASA, MSA,
 };
 use crate::alphabets::{Alphabet, AMINOACIDS, NUCLEOTIDES};
 use crate::io::read_sequences;
@@ -768,4 +771,21 @@ fn simulate_alignment_matches_discarded_ancestral_alignment() {
             "{id}"
         );
     }
+}
+
+#[rstest]
+#[case(align!(b"-0-1--2-"), &[1, 3, 6])]
+#[case(align!(b"-----------"), &[])]
+#[case(align!(b"01"), &[0, 1])]
+#[case(align!(b"0123456789"), &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9])]
+#[case(align!(b"----------01234"), &[10, 11, 12, 13, 14])]
+#[case(align!(b"0---------1"), &[0, 10])]
+fn test_mapping_to_bits(#[case] mapping: Mapping, #[case] expected: &[usize]) {
+    let bits = mapping_to_bits(&mapping);
+
+    let expected = FixedBitSet::from_iter(expected.iter().copied());
+    assert_eq!(
+        bits, expected,
+        "Mapping did not match expected bits: expected: {expected} got: {bits}"
+    );
 }
