@@ -26,6 +26,41 @@ where
     phantom: PhantomData<(A, AA)>,
 }
 
+impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> AncestralSequenceReconstruction<A, AA>
+    for PIPIndels<Q, A, AA>
+{
+    fn reconstruct_ancestral_seqs_unchecked(&self, phylo: PhyloInfo<A>) -> PhyloInfo<AA> {
+        let mut aligned_leaf_records = Vec::new();
+        let tree = &phylo.tree;
+        let alignment = &phylo.msa;
+        for leaf in tree.leaves() {
+            let unaligned_record: &Record = alignment.seqs().record_by_id(&leaf.id);
+            aligned_leaf_records.push(record!(
+                &leaf.id,
+                unaligned_record.desc(),
+                &aligned_seq!(alignment.leaf_map(&leaf.idx), unaligned_record.seq())
+            ));
+        }
+
+        let present = self.reconstruct_presence(&phylo);
+
+        let mut ancestral_records = Vec::<Record>::with_capacity(tree.len() - tree.n);
+        for node_idx in tree.postorder() {
+            if let Internal(_) = node_idx {
+                let row = &present[usize::from(node_idx)];
+                let seq: Vec<u8> = (0..row.len())
+                    .map(|site| if row[site] { b'X' } else { GAP })
+                    .collect();
+                ancestral_records.push(record!(tree.node_id(node_idx), None, &seq));
+            }
+        }
+        aligned_leaf_records.append(&mut ancestral_records);
+        let all_seqs =
+            Sequences::with_alphabet_unchecked(aligned_leaf_records, alignment.seqs().alphabet());
+        AA::from_aligned_with_ancestral_unchecked(all_seqs, phylo.tree)
+    }
+}
+
 impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
     pub fn new(model: PIPModel<Q>) -> Self {
         Self {
@@ -133,41 +168,6 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
             }
         }
         has_data
-    }
-}
-
-impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> AncestralSequenceReconstruction<A, AA>
-    for PIPIndels<Q, A, AA>
-{
-    fn reconstruct_ancestral_seqs_unchecked(&self, phylo: PhyloInfo<A>) -> PhyloInfo<AA> {
-        let mut aligned_leaf_records = Vec::new();
-        let tree = &phylo.tree;
-        let alignment = &phylo.msa;
-        for leaf in tree.leaves() {
-            let unaligned_record: &Record = alignment.seqs().record_by_id(&leaf.id);
-            aligned_leaf_records.push(record!(
-                &leaf.id,
-                unaligned_record.desc(),
-                &aligned_seq!(alignment.leaf_map(&leaf.idx), unaligned_record.seq())
-            ));
-        }
-
-        let present = self.reconstruct_presence(&phylo);
-
-        let mut ancestral_records = Vec::<Record>::with_capacity(tree.len() - tree.n);
-        for node_idx in tree.postorder() {
-            if let Internal(_) = node_idx {
-                let row = &present[usize::from(node_idx)];
-                let seq: Vec<u8> = (0..row.len())
-                    .map(|site| if row[site] { b'X' } else { GAP })
-                    .collect();
-                ancestral_records.push(record!(tree.node_id(node_idx), None, &seq));
-            }
-        }
-        aligned_leaf_records.append(&mut ancestral_records);
-        let all_seqs =
-            Sequences::with_alphabet_unchecked(aligned_leaf_records, alignment.seqs().alphabet());
-        AA::from_aligned_with_ancestral_unchecked(all_seqs, phylo.tree)
     }
 }
 
