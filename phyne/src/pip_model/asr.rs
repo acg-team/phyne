@@ -177,12 +177,13 @@ mod tests {
 
     use approx::assert_relative_eq;
     use fixedbitset::FixedBitSet;
+    use hashbrown::HashMap;
     use lazy_static::lazy_static;
 
     use crate::alignment::{Alignment, AncestralAlignment, Sequences, MASA, MSA};
     use crate::asr::AncestralSequenceReconstruction;
     use crate::phylo_info::PhyloInfo;
-    use crate::pip_model::PIPModel;
+    use crate::pip_model::{PIPIndels, PIPModel};
     use crate::substitution_models::JC69;
     use crate::tree::{NodeIdx::Leaf, Tree};
     use crate::{record_wo_desc as record, tree};
@@ -208,7 +209,9 @@ mod tests {
             record!("D", b"A"),
         ]);
         let phylo = MSA::from_aligned(sequences, tree).unwrap();
-        pip(mu).reconstruct_ancestral_seqs(phylo).unwrap()
+        let asr = PIPIndels::<_, MSA, MASA>::new(pip(mu));
+
+        asr.reconstruct_ancestral_seqs(phylo).unwrap()
     }
 
     #[rstest]
@@ -216,8 +219,8 @@ mod tests {
     #[case(TREE_DELETION_AT_AB.clone(), 1.0, &[0.0, 0.6321205588285577, 0.09516258196404048, 0.6321205588285577, 0.6321205588285577, 0.6321205588285577, 0.6321205588285577])]
     #[case(TREE_DIFF_BLENS.clone(), 1.5, &[0.0, 0.5934303402594008, 0.8347011117784134, 0.5276334472589853, 0.9764822541439909, 0.877543571747018, 0.9994469156298522])]
     fn deletion_probability_correct(#[case] tree: Tree, #[case] mu: f64, #[case] expected: &[f64]) {
-        let pip = pip(mu);
-        let deletion_at_node = pip.deletion_probabilities_at_nodes(&tree);
+        let asr = PIPIndels::<_, MSA, MASA>::new(pip(mu));
+        let deletion_at_node = asr.deletion_probabilities_at_nodes(&tree);
 
         for node_idx in tree.preorder() {
             assert_relative_eq!(
@@ -236,8 +239,8 @@ mod tests {
         #[case] mu: f64,
         #[case] expected: &[f64],
     ) {
-        let pip = pip(mu);
-        let deletion_at_node = pip.deletion_probabilities_at_children(&tree);
+        let asr = PIPIndels::<_, MSA, MASA>::new(pip(mu));
+        let deletion_at_node = asr.deletion_probabilities_at_children(&tree);
 
         for node_idx in tree.preorder() {
             assert_relative_eq!(
@@ -259,10 +262,10 @@ mod tests {
         #[case] mu: f64,
         #[case] expected: FixedBitSet,
     ) {
-        let pip = pip(mu);
-        let delete_at_node_or_children = pip.delete_at_node_or_children(&tree);
+        let asr = PIPIndels::<_, MSA, MASA>::new(pip(mu));
+        let delete_at_node_or_children = asr.delete_at_node_or_children(&tree);
 
-        assert!(delete_at_node_or_children.ones().eq(expected.ones()));
+        assert_eq!(delete_at_node_or_children.difference(&expected).count(), 0);
     }
 
     #[test]
@@ -304,7 +307,8 @@ mod tests {
             record!("C", b"-"),
         ]);
         let phylo = MSA::from_aligned(sequences, tree.clone()).unwrap();
-        let ancestral: MASA = pip(1.0).reconstruct_ancestral_seqs(phylo).unwrap().msa;
+        let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
+        let ancestral: MASA = asr.reconstruct_ancestral_seqs(phylo).unwrap().msa;
 
         assert!(ancestral.leaf_map(&tree.by_id("A").idx)[0].is_some());
         assert!(ancestral.ancestral_map(&tree.by_id("I").idx)[0].is_none());

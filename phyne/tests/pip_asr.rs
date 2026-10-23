@@ -3,7 +3,7 @@ use std::path::Path;
 use phyne::alignment::{AncestralAlignment, MASA, MSA};
 use phyne::asr::AncestralSequenceReconstruction;
 use phyne::phylo_info::{PhyloInfo, PhyloInfoBuilder};
-use phyne::pip_model::PIPModel;
+use phyne::pip_model::{PIPIndels, PIPModel};
 use phyne::substitution_models::JC69;
 use phyne::Result;
 
@@ -22,9 +22,11 @@ fn homology_against_arpip() {
         .build()
         .unwrap();
 
-    let pip_model = PIPModel::<JC69>::with_default_substitution(&[1.0, 0.1]).unwrap();
+    let asr = PIPIndels::<_, MSA, MASA>::new(
+        PIPModel::<JC69>::with_default_substitution(&[1.0, 0.1]).unwrap(),
+    );
 
-    let result: Result<PhyloInfo<MASA>> = pip_model.reconstruct_ancestral_seqs(info);
+    let result: Result<PhyloInfo<MASA>> = asr.reconstruct_ancestral_seqs(info);
     assert!(result.is_ok());
     let reconstruction = result.unwrap();
 

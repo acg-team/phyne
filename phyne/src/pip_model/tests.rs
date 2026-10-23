@@ -5,12 +5,15 @@ use nalgebra::{DMatrix, DVector};
 
 use crate::alignment::{Alignment, AncestralAlignment, Sequences, MASA, MSA};
 use crate::alphabets::{Alphabet, AMINOACIDS as aas, GAP, NUCLEOTIDES as nucls};
+use crate::asr::AncestralSequenceReconstruction;
 use crate::error::{Error, EvolutionaryModelError};
 use crate::evolutionary_models::{EvoModel, RateMatrix};
 use crate::io::read_sequences;
 use crate::likelihood::ModelSearchCost;
 use crate::phylo_info::{PhyloInfo, PhyloInfoBuilder as PIB};
-use crate::pip_model::{PIPCost, PIPCostBuilder as PIPB, PIPModel, PIPModelInfo, PIP_PARAM_N};
+use crate::pip_model::{
+    PIPCost, PIPCostBuilder as PIPB, PIPIndels, PIPModel, PIPModelInfo, PIP_PARAM_N,
+};
 use crate::substitution_models::{
     dna_models::*, protein_models::*, QMatrix, QMatrixMaker, SubstModel,
 };
@@ -1264,8 +1267,6 @@ fn pip_correct_parameter_number_protein() {
 
 #[test]
 fn reconstruct_ancestral_seqs_arpip() {
-    use crate::asr::AncestralSequenceReconstruction;
-
     let tree = tree!("((A:1.0, B:1.0)I1:1.0,C:1.0)I0:0.0;");
     let seqs = Sequences::new_unchecked(vec![
         record!("A", b"AA--AAA"),
@@ -1273,7 +1274,7 @@ fn reconstruct_ancestral_seqs_arpip() {
         record!("C", b"AAAAA-A"),
     ]);
     let phylo = MSA::from_aligned(seqs, tree).unwrap();
-    let asr = PIPModel::<JC69>::default();
+    let asr = PIPIndels::<JC69, MSA, MASA>::new(PIPModel::<JC69>::default());
 
     let phylo: PhyloInfo<MASA> = asr.reconstruct_ancestral_seqs(phylo).unwrap();
 
