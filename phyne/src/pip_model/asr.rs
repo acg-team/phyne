@@ -1,8 +1,10 @@
+use std::marker::PhantomData;
+
 use bio::io::fasta::Record;
 use fixedbitset::FixedBitSet;
 use itertools::Itertools;
 
-use crate::alignment::{Alignment, AncestralAlignment, Sequences};
+use crate::alignment::{mapping_to_bits, Alignment, AncestralAlignment, Sequences};
 use crate::alphabets::GAP;
 use crate::asr::AncestralSequenceReconstruction;
 use crate::phylo_info::PhyloInfo;
@@ -14,13 +16,27 @@ use crate::tree::{
 };
 use crate::{aligned_seq, record};
 
-// Homology reconstruction under PIP: the model's deletion rate `mu` is used to compare a
-// deletion on the incoming branch of a wholly deleted clade with deletions on both child branches.
-impl<Q: QMatrix> PIPModel<Q> {
+pub struct PIPIndels<Q, A, AA>
+where
+    Q: QMatrix,
+    A: Alignment,
+    AA: AncestralAlignment,
+{
+    model: PIPModel<Q>,
+    phantom: PhantomData<(A, AA)>,
+}
+
+impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
+    pub fn new(model: PIPModel<Q>) -> Self {
+        Self {
+            model,
+            phantom: PhantomData,
+        }
+    }
     /// Probability of a deletion on the branch above each node, indexed by node index.
     fn deletion_probabilities_at_nodes(&self, tree: &Tree) -> Vec<f64> {
         tree.iter()
-            .map(|node| -(-self.mu() * node.blen).exp_m1())
+            .map(|node| -(-self.model.mu() * node.blen).exp_m1())
             .collect()
     }
 
@@ -52,15 +68,16 @@ impl<Q: QMatrix> PIPModel<Q> {
     /// Returns for every node (indexed by node index) a bitset over alignment columns that marks
     /// where the character is present at the node. Traverses the tree once in each direction for
     /// all sites.
-    fn reconstruct_presence(&self, alignment: &impl Alignment, tree: &Tree) -> Vec<FixedBitSet> {
-        let len = alignment.len();
+    fn reconstruct_presence(&self, phylo: &PhyloInfo<A>) -> Vec<FixedBitSet> {
+        let alignment = &phylo.msa;
+        let tree = &phylo.tree;
 
-        let delete_at_node = self.delete_at_node_or_children(tree);
+        let delete_at_node = self.delete_at_node_or_children(&phylo.tree);
 
         // has_data[node]: columns where some leaf below the node has a character
-        let has_data = character_maps(alignment, tree, len);
+        let has_data = self.potential_character_presence(phylo);
 
-        let mut present = vec![FixedBitSet::with_capacity(len); tree.len()];
+        let mut present = vec![FixedBitSet::with_capacity(alignment.len()); tree.len()];
         for node_idx in tree.preorder() {
             let idx = usize::from(node_idx);
             // A present leaf without an ancestral homolog is an insertion on its terminal
@@ -76,17 +93,13 @@ impl<Q: QMatrix> PIPModel<Q> {
 
             let inherited = match tree.node(node_idx).parent {
                 Some(parent) => present[usize::from(parent)].clone(),
-                None => FixedBitSet::with_capacity(len),
+                None => FixedBitSet::with_capacity(alignment.len()),
             };
-
-            // Independent of the site: is a deletion at this node more probable than
-            // deletions at both children?
-            let delete_here = delete_at_node[idx];
 
             // Inherited columns with data below always survive, those without data survive
             // unless the deletion is placed at this node. Other columns are inserted here
             // iff both children have data.
-            let mut row = if delete_here {
+            let mut row = if delete_at_node[idx] {
                 let mut surviving = inherited;
                 surviving.intersect_with(&has_data[idx]);
                 surviving
@@ -98,31 +111,33 @@ impl<Q: QMatrix> PIPModel<Q> {
         }
         present
     }
-}
 
-fn character_maps(alignment: &impl Alignment, tree: &Tree, len: usize) -> Vec<FixedBitSet> {
-    let mut has_data = vec![FixedBitSet::with_capacity(len); tree.len()];
-    for node_idx in tree.postorder() {
-        let idx = usize::from(node_idx);
-        match node_idx {
-            Leaf(_) => {
-                for (site, c) in alignment.leaf_map(node_idx).iter().enumerate() {
-                    has_data[idx].set(site, c.is_some());
+    fn potential_character_presence(&self, phylo: &PhyloInfo<A>) -> Vec<FixedBitSet> {
+        let alignment = &phylo.msa;
+        let tree = &phylo.tree;
+        let len = alignment.len();
+
+        let mut has_data = vec![FixedBitSet::with_capacity(len); tree.len()];
+        for node_idx in tree.postorder() {
+            let idx = usize::from(node_idx);
+            match node_idx {
+                Leaf(_) => {
+                    has_data[idx] = mapping_to_bits(alignment.leaf_map(node_idx));
                 }
-            }
-            Internal(_) => {
-                for child in tree.children(node_idx) {
-                    let child_data = has_data[usize::from(child)].clone();
-                    has_data[idx].union_with(&child_data);
+                Internal(_) => {
+                    for child in tree.children(node_idx) {
+                        let child_data = has_data[usize::from(child)].clone();
+                        has_data[idx].union_with(&child_data);
+                    }
                 }
             }
         }
+        has_data
     }
-    has_data
 }
 
 impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> AncestralSequenceReconstruction<A, AA>
-    for PIPModel<Q>
+    for PIPIndels<Q, A, AA>
 {
     fn reconstruct_ancestral_seqs_unchecked(&self, phylo: PhyloInfo<A>) -> PhyloInfo<AA> {
         let mut aligned_leaf_records = Vec::new();
@@ -130,7 +145,6 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> AncestralSequenceReconstr
         let alignment = &phylo.msa;
         for leaf in tree.leaves() {
             let unaligned_record: &Record = alignment.seqs().record_by_id(&leaf.id);
-            debug_assert_eq!(unaligned_record.id(), leaf.id);
             aligned_leaf_records.push(record!(
                 &leaf.id,
                 unaligned_record.desc(),
@@ -138,7 +152,8 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> AncestralSequenceReconstr
             ));
         }
 
-        let present = self.reconstruct_presence(alignment, tree);
+        let present = self.reconstruct_presence(&phylo);
+
         let mut ancestral_records = Vec::<Record>::with_capacity(tree.len() - tree.n);
         for node_idx in tree.postorder() {
             if let Internal(_) = node_idx {
