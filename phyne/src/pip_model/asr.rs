@@ -85,14 +85,14 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
     }
 
     /// Probability of a deletion on the branch above each node, indexed by node index.
-    fn deletion_probabilities_at_nodes(&self, tree: &Tree) -> Vec<f64> {
+    fn deletion_probabilities(&self, tree: &Tree) -> Vec<f64> {
         tree.iter()
             .map(|node| -(-self.model.mu() * node.blen).exp_m1())
             .collect()
     }
 
     fn deletion_probabilities_at_children(&self, tree: &Tree) -> Vec<f64> {
-        let deletion_probs = self.deletion_probabilities_at_nodes(tree);
+        let deletion_probs = self.deletion_probabilities(tree);
         tree.iter()
             .map(|node| {
                 node.children
@@ -106,7 +106,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
     }
 
     fn delete_at_node_or_children(&self, tree: &Tree) -> FixedBitSet {
-        let deletion_at_node: Vec<f64> = self.deletion_probabilities_at_nodes(tree);
+        let deletion_at_node: Vec<f64> = self.deletion_probabilities(tree);
         let deletion_at_children = self.deletion_probabilities_at_children(tree);
         let mut delete_at_node_or_children = FixedBitSet::with_capacity(tree.len());
         for node in tree.iter() {
@@ -238,7 +238,7 @@ mod tests {
     #[case(TREE_DIFF_BLENS.clone(), 1.5, &[0.0, 0.5934303402594008, 0.8347011117784134, 0.5276334472589853, 0.9764822541439909, 0.877543571747018, 0.9994469156298522])]
     fn deletion_probability_correct(#[case] tree: Tree, #[case] mu: f64, #[case] expected: &[f64]) {
         let asr = PIPIndels::<_, MSA, MASA>::new(pip(mu));
-        let deletion_at_node = asr.deletion_probabilities_at_nodes(&tree);
+        let deletion_at_node = asr.deletion_probabilities(&tree);
 
         for node_idx in tree.preorder() {
             assert_relative_eq!(
