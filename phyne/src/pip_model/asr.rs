@@ -68,6 +68,22 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
             phantom: PhantomData,
         }
     }
+
+    /// Combined probability of insertion and survival on the branch above each node, indexed by node index.
+    /// \iota(v) times \beta(v)
+    fn insert_and_survive_probabilities(&self, tree: &Tree) -> Vec<f64> {
+        let common_factor = 1.0 / (tree.length + 1.0 / self.model.mu());
+        tree.iter()
+            .map(|node| {
+                (if node.idx == tree.root {
+                    1.0 / self.model.mu()
+                } else {
+                    -(-self.model.mu() * node.blen).exp_m1() / self.model.mu()
+                }) * common_factor
+            })
+            .collect::<Vec<f64>>()
+    }
+
     /// Probability of a deletion on the branch above each node, indexed by node index.
     fn deletion_probabilities_at_nodes(&self, tree: &Tree) -> Vec<f64> {
         tree.iter()
@@ -108,6 +124,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
         let tree = &phylo.tree;
 
         let delete_at_node = self.delete_at_node_or_children(&phylo.tree);
+        let insert_and_survive_probs = self.insert_and_survive_probabilities(tree);
 
         // has_data[node]: columns where some leaf below the node has a character
         let has_data = self.potential_character_presence(phylo);
@@ -297,6 +314,27 @@ mod tests {
             let leaf = tree.by_id(id);
             assert!(ancestral.leaf_map(&leaf.idx)[0].is_none());
         }
+    }
+
+    #[rstest]
+    #[case(TREE_DELETION_AT_I2.clone(), 1.0, &[0.125, 0.07901506985356971, 0.10808308959542341, 0.07901506985356971,
+                                               0.07901506985356971, 0.07901506985356971, 0.07901506985356971])]
+    #[case(TREE_DELETION_AT_AB.clone(), 1.0, &[0.1639344262295082, 0.10362632111943569, 0.015600423272793523, 0.10362632111943569,
+                                               0.10362632111943569, 0.10362632111943569, 0.10362632111943569])]
+    #[case(TREE_DIFF_BLENS.clone(), 1.5, &[0.05617977528089888, 0.0333387831606405, 0.04689332088642773, 0.029642328497695807,
+                                           0.05485855360359499, 0.049300200659944844, 0.056148703125272606])]
+    fn insert_and_survive_probabilities(
+        #[case] tree: Tree,
+        #[case] mu: f64,
+        #[case] expected: &[f64],
+    ) {
+        let asr = PIPIndels::<_, MSA, MASA>::new(pip(mu));
+        let insert_and_survive_probabilities = asr.insert_and_survive_probabilities(&tree);
+        assert_relative_eq!(
+            insert_and_survive_probabilities.as_slice(),
+            expected,
+            epsilon = 1e-10
+        );
     }
 
     #[test]
