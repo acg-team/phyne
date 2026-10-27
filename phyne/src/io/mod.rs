@@ -9,7 +9,7 @@ use log::info;
 
 use crate::alphabets::{Alphabet, GAP, POSSIBLE_GAPS};
 use crate::tree::{tree_parser, Tree};
-use crate::{bail, record, Result};
+use crate::{bail, record, Error, Result};
 
 /// Reads sequences from a fasta file, returning a vector of fasta records.
 /// All sequences are converted to uppercase.
@@ -33,7 +33,12 @@ use crate::{bail, record, Result};
 /// ```
 pub fn read_sequences(path: impl AsRef<Path> + Debug) -> Result<Vec<Record>> {
     info!("Reading sequences from file {}", path.as_ref().display());
-    let reader = Reader::from_file(&path)?;
+    let reader = Reader::from_file(&path).map_err(|err| {
+        Error::Io(format!(
+            "failed to open fasta file {}: {err}",
+            path.as_ref().display()
+        ))
+    })?;
     let mut sequences = Vec::new();
 
     for record in reader.records() {
@@ -114,9 +119,19 @@ pub fn write_sequences_to_file(sequences: &[Record], path: impl AsRef<Path>) -> 
     if path.as_ref().exists() {
         bail!(Io, "file already exists")
     }
-    let mut writer = Writer::to_file(path)?;
+    let mut writer = Writer::to_file(&path).map_err(|err| {
+        Error::Io(format!(
+            "failed to create fasta file {}: {err}",
+            path.as_ref().display()
+        ))
+    })?;
     for rec in sequences {
-        writer.write_record(rec)?;
+        writer.write_record(rec).map_err(|err| {
+            Error::Io(format!(
+                "failed to write fasta file {}: {err}",
+                path.as_ref().display()
+            ))
+        })?;
     }
     info!("Finished writing successfully");
     Ok(())
@@ -145,7 +160,12 @@ pub fn write_sequences_to_file(sequences: &[Record], path: impl AsRef<Path>) -> 
 /// ```
 pub fn read_newick_from_file(path: impl AsRef<Path>) -> Result<Vec<Tree>> {
     info!("Reading newick trees from file {}", path.as_ref().display());
-    let newick = fs::read_to_string(path)?;
+    let newick = fs::read_to_string(&path).map_err(|err| {
+        Error::Io(format!(
+            "failed to read newick file {}: {err}",
+            path.as_ref().display()
+        ))
+    })?;
     info!("Read file successfully");
     tree_parser::from_newick(&newick)
 }
@@ -180,10 +200,25 @@ pub fn write_newick_to_file(trees: &[Tree], path: impl AsRef<Path>) -> Result<()
     if path.as_ref().exists() {
         bail!(Io, "file already exists")
     }
-    let mut writer = File::create(path)?;
+    let mut writer = File::create(&path).map_err(|err| {
+        Error::Io(format!(
+            "failed to create newick file {}: {err}",
+            path.as_ref().display()
+        ))
+    })?;
     for tree in trees {
-        writer.write_all(tree.to_newick().as_bytes())?;
-        writer.write_all(b"\n")?;
+        writer.write_all(tree.to_newick().as_bytes()).map_err(|err| {
+            Error::Io(format!(
+                "failed to write newick file {}: {err}",
+                path.as_ref().display()
+            ))
+        })?;
+        writer.write_all(b"\n").map_err(|err| {
+            Error::Io(format!(
+                "failed to write newick file {}: {err}",
+                path.as_ref().display()
+            ))
+        })?;
     }
     info!("Finished writing successfully");
     Ok(())
