@@ -44,7 +44,11 @@ fn reading_incorrect_fasta(#[case] input: &str, #[case] exp_error: &str) {
 #[test]
 fn reading_nonexistent_fasta() {
     let missing_path = "./data/sequences_nonexistent.fasta";
-    assert_matches!(read_sequences(missing_path), Err(Error::Io(msg)) if msg.contains(missing_path));
+    assert_matches!(
+        read_sequences(missing_path),
+        Err(Error::Io(msg))
+            if msg.contains(missing_path) && msg.matches(missing_path).count() == 1
+    );
 }
 
 #[test]

@@ -33,12 +33,7 @@ use crate::{bail, record, Error, Result};
 /// ```
 pub fn read_sequences(path: impl AsRef<Path> + Debug) -> Result<Vec<Record>> {
     info!("Reading sequences from file {}", path.as_ref().display());
-    let reader = Reader::from_file(&path).map_err(|err| {
-        Error::Io(format!(
-            "failed to open fasta file {}: {err}",
-            path.as_ref().display()
-        ))
-    })?;
+    let reader = Reader::from_file(&path).map_err(|err| Error::Io(err.to_string()))?;
     let mut sequences = Vec::new();
 
     for record in reader.records() {
