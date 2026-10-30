@@ -39,12 +39,13 @@ pub struct PairwiseAlignment {
 }
 
 pub(crate) fn mapping_to_bits(mapping: &Mapping) -> FixedBitSet {
-    FixedBitSet::from_iter(
-        mapping
-            .iter()
-            .enumerate()
-            .filter_map(|(i, pos)| pos.map(|_| i)),
-    )
+    let mut bits = FixedBitSet::with_capacity(mapping.len());
+    for (i, pos) in mapping.iter().enumerate() {
+        if pos.is_some() {
+            bits.set(i, true);
+        }
+    }
+    bits
 }
 
 impl PairwiseAlignment {
