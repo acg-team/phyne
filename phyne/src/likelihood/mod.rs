@@ -31,19 +31,29 @@ pub trait TreeSearchCost {
     }
 }
 
+/// Provides functionality needed by the
+/// [ModelOptimiser](crate::optimisers::model_optimiser::ModelOptimiser) to optimise the model
+/// parameters under a fixed tree and alignment.
+///
+/// Throughout this trait, `parameters` are the axes the search moves along. They may be
+/// the model parameters themselves or combinations of them (e.g. ratios), which can
+/// speed up optimisation if there are constraints between parameters.
 pub trait ModelSearchCost {
-    // The cost function definition for model search, e.g. the likelihood of the alignment given the model and the tree.
-    // The optimisers will maximise the cost, so if the cost should be minimised instead, it should be negated.
-    // The likelihood or the log-likelihood are maximised, the parsimony score is minimised.
+    /// The cost function definition for model search, e.g. the likelihood of the alignment given the model and the tree.
+    /// The optimisers will maximise the cost, so if the cost should be minimised instead, it should be negated.
+    /// The likelihood or the log-likelihood are maximised, the parsimony score is minimised.
     fn cost(&self) -> f64;
+    /// Returns the number of parameters/axes the model is optimised over.
     fn param_count(&self) -> usize;
-    fn param(&self, param: usize) -> f64;
-    fn set_param(&mut self, param: usize, value: f64);
+    /// Returns a parameter value or a combination of parameters value (e.g. ratio or sum).
+    fn param(&self, param_idx: usize) -> f64;
+    fn set_param(&mut self, param_idx: usize, value: f64);
     /// Returns the valid range for a model parameter [min, max], inclusive.
-    fn param_range(&self, param: usize) -> ParamRange;
-    fn set_freqs(&mut self, freqs: FreqVector) -> Result<()>;
-    fn empirical_freqs(&self) -> FreqVector;
+    fn param_range(&self, param_idx: usize) -> ParamRange;
     fn freqs(&self) -> &FreqVector;
+    fn set_freqs(&mut self, freqs: FreqVector) -> Result<()>;
+    /// Returns the empirical frequencies of the characters of the alignment that is associated with the cost.
+    fn empirical_freqs(&self) -> FreqVector;
 }
 
 #[cfg(test)]

@@ -285,7 +285,9 @@ mod tests {
         result.phylo.check_dollos_constraint().unwrap();
         let logl = tkf92_logl(&result.model, &result.phylo);
         assert!(logl.is_finite());
-        assert_eq!(result.model.params(), model.params());
+        for i in 0..model.param_count() {
+            assert_eq!(result.model.param(i), model.param(i));
+        }
     }
 
     #[test]
@@ -305,7 +307,9 @@ mod tests {
         result.phylo.check_dollos_constraint().unwrap();
         let logl = tkf92_logl(&result.model, &result.phylo);
         assert!(logl.is_finite());
-        assert_ne!(result.model.params(), model.params());
+        for i in 0..model.param_count() {
+            assert_ne!(result.model.param(i), model.param(i));
+        }
     }
 
     #[test]
@@ -339,7 +343,9 @@ mod tests {
 
         assert!(logl_no_opt.is_finite());
         assert!(logl_opt.is_finite());
-        assert_ne!(result_opt.model.params(), result_no_opt.model.params());
+        for i in 0..result_opt.model.param_count() {
+            assert_ne!(result_opt.model.param(i), result_no_opt.model.param(i));
+        }
         assert!(logl_opt > logl_no_opt);
     }
 

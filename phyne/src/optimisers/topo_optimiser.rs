@@ -129,7 +129,7 @@ where
             curr_cost = self.single_optimisation_iteration()?;
             delta = curr_cost - prev_cost;
             costs.push(curr_cost);
-            debug_assert_eq!(curr_cost, self.c.cost());
+            debug_assert_eq!(curr_cost, self.c.clone().cost());
         }
 
         info!("Done optimising tree topology");

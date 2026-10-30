@@ -4,12 +4,15 @@ use nalgebra::DVector;
 
 use crate::alignment::{Alignment, AncestralAlignment, Mapping, Sequences, MASA};
 use crate::alphabets::Alphabet;
+use crate::evolutionary_models::EvoModel;
 use crate::likelihood::{
     ModelSearchCost, PARAM_RANGE_POSITIVE, PARAM_RANGE_UNIT_INTERVAL_EXCLUSIVE,
 };
 use crate::optimisers::rooted_nni;
 use crate::phylo_info::PhyloInfo;
-use crate::substitution_models::{QMatrixMaker, SubstModel, SubstitutionCostBuilder as SCB};
+use crate::substitution_models::{
+    QMatrix, QMatrixMaker, SubstModel, SubstitutionCostBuilder as SCB,
+};
 use crate::substitution_models::{BLOSUM, GTR, HIVB, HKY, JC69, K80, TN93, WAG};
 use crate::tkf_model::tkf92::TKF92IndelModel;
 use crate::tkf_model::tkf92_fixed_fragmentation::TKF92FixedIndelModel;
@@ -114,7 +117,7 @@ fn tkf92_indel_logl_without_aggregation<AA: AncestralAlignment>(
     let tree = &phylo.tree;
     let lambda = model.lambda();
     let mu = model.mu();
-    let r = model.params()[2];
+    let r = model.r();
 
     // for the root
     let mut prob: f64 = (1.0 - lambda / mu).ln();
@@ -381,69 +384,80 @@ pub(super) fn setup_test_phylo(alphabet: &'static Alphabet) -> PhyloInfo<MASA> {
 
 #[test]
 fn tkf_indel_get_and_set_params_and_freqs() {
-    let tkf_indel_model = TKF92IndelModel::new(&[1.0, 2.0, 0.3]).unwrap();
+    let mut model = TKF92IndelModel::new(&[1.0, 2.0, 0.3]).unwrap();
 
-    let mut tkf_indel_cost =
-        TKFIndelCostBuilder::new(tkf_indel_model, setup_test_phylo(Alphabet::dna())).build();
+    let mut cost =
+        TKFIndelCostBuilder::new(model.clone(), setup_test_phylo(Alphabet::dna())).build();
     // params
-    assert_eq!(tkf_indel_cost.param_count(), 3);
-    assert_eq!(tkf_indel_cost.param(0), 1.0);
-    assert_eq!(tkf_indel_cost.param(1), 2.0);
-    assert_eq!(tkf_indel_cost.param(2), 0.3);
-    assert_eq!(tkf_indel_cost.model.lambda(), 1.0);
-    assert_eq!(tkf_indel_cost.model.mu(), 2.0);
-    assert_eq!(tkf_indel_cost.model.r(), 0.3);
-    tkf_indel_cost.set_param(2, 0.33);
-    assert_eq!(tkf_indel_cost.param_count(), 3);
-    assert_eq!(tkf_indel_cost.model.lambda(), 1.0);
-    assert_eq!(tkf_indel_cost.model.mu(), 2.0);
-    assert_eq!(tkf_indel_cost.model.r(), 0.33);
+    assert_eq!(cost.param_count(), model.param_count());
+    for param_idx in 0..cost.param_count() {
+        assert_eq!(cost.param(param_idx), model.param(param_idx));
+    }
+    cost.set_param(0, 0.33);
+    model.set_param(0, 0.33);
+    for param_idx in 0..cost.param_count() {
+        if param_idx == 0 {
+            assert_eq!(cost.param(param_idx), 0.33);
+        }
+        assert_eq!(cost.param(param_idx), model.param(param_idx));
+    }
     // freqs
-    assert_eq!(tkf_indel_cost.freqs(), &*DUMMY_FREQS);
+    assert_eq!(cost.freqs(), &*DUMMY_FREQS);
     assert_eq!(
-        tkf_indel_cost.empirical_freqs(),
+        cost.empirical_freqs(),
         setup_test_phylo(Alphabet::dna()).freqs()
     );
 }
 
 #[test]
 fn tkf_get_and_set_params() {
-    let subst_model =
+    let mut subst_model =
         SubstModel::<GTR>::new(&[0.1, 0.2, 0.3, 0.4], &[0.5, 0.6, 0.7, 0.8, 0.9]).unwrap();
-    let tkf_indel_model = TKF92IndelModel::new(&[1.0, 2.0, 0.3]).unwrap();
-    let mut tkf_cost = TKFCostBuilder::new(
-        subst_model,
-        tkf_indel_model,
+    let mut indel_model = TKF92IndelModel::new(&[1.0, 2.0, 0.3]).unwrap();
+    let mut cost = TKFCostBuilder::new(
+        subst_model.clone(),
+        indel_model.clone(),
         setup_test_phylo(Alphabet::dna()),
     )
     .build()
     .unwrap();
-    assert_eq!(tkf_cost.param_count(), 8);
-    assert_eq!(tkf_cost.param(0), 1.0);
-    assert_eq!(tkf_cost.param(1), 2.0);
-    assert_eq!(tkf_cost.param(2), 0.3);
-    assert_eq!(tkf_cost.param(3), 0.5);
-    assert_eq!(tkf_cost.param(4), 0.6);
-    assert_eq!(tkf_cost.param(5), 0.7);
-    assert_eq!(tkf_cost.param(6), 0.8);
-    assert_eq!(tkf_cost.param(7), 0.9);
-    assert_eq!(tkf_cost.indel_cost.model.lambda(), 1.0);
-    assert_eq!(tkf_cost.indel_cost.model.mu(), 2.0);
-    assert_eq!(tkf_cost.indel_cost.model.r(), 0.3);
-    tkf_cost.set_param(2, 0.33);
-    tkf_cost.set_param(5, 0.77);
-    assert_eq!(tkf_cost.param_count(), 8);
-    assert_eq!(tkf_cost.param(0), 1.0);
-    assert_eq!(tkf_cost.param(1), 2.0);
-    assert_eq!(tkf_cost.param(2), 0.33);
-    assert_eq!(tkf_cost.param(3), 0.5);
-    assert_eq!(tkf_cost.param(4), 0.6);
-    assert_eq!(tkf_cost.param(5), 0.77);
-    assert_eq!(tkf_cost.param(6), 0.8);
-    assert_eq!(tkf_cost.param(7), 0.9);
+    //params
+    assert_eq!(
+        cost.param_count(),
+        GTR::param_count() + indel_model.param_count()
+    );
+    for param_idx in 0..cost.param_count() {
+        if param_idx < indel_model.param_count() {
+            assert_eq!(cost.param(param_idx), indel_model.param(param_idx));
+        } else {
+            assert_eq!(
+                cost.param(param_idx),
+                subst_model
+                    .qmatrix
+                    .param(param_idx - indel_model.param_count())
+            );
+        }
+    }
+    cost.set_param(0, 0.33);
+    cost.set_param(indel_model.param_count() + 1, 0.77);
+    indel_model.set_param(0, 0.33);
+    subst_model.qmatrix.set_param(1, 0.77);
+
+    for param_idx in 0..cost.param_count() {
+        if param_idx < indel_model.param_count() {
+            assert_eq!(cost.param(param_idx), indel_model.param(param_idx));
+        } else {
+            assert_eq!(
+                cost.param(param_idx),
+                subst_model
+                    .qmatrix
+                    .param(param_idx - indel_model.param_count())
+            );
+        }
+    }
 
     assert_eq!(
-        tkf_cost.empirical_freqs(),
+        cost.empirical_freqs(),
         setup_test_phylo(Alphabet::dna()).freqs()
     );
 }
@@ -528,61 +542,48 @@ fn tkf91_param_range() {
     let tkf_indel_model = TKF91IndelModel::new(&[1.0, 2.0]).unwrap();
     let tkf_cost = TKFCostBuilder::new(
         subst_model,
-        tkf_indel_model,
+        tkf_indel_model.clone(),
         setup_test_phylo(Alphabet::dna()),
     )
     .build()
     .unwrap();
-    let lambda_range = tkf_cost.param_range(usize::from(TKF91Parameters::Lambda));
-    let true_lambda_range = (f64::EPSILON, 2.0 - f64::EPSILON);
-    assert_eq!(lambda_range, true_lambda_range);
-    let mu_range = tkf_cost.param_range(usize::from(TKF91Parameters::Mu));
-    let true_mu_range = (1.0 + f64::EPSILON, f64::MAX);
-    assert_eq!(mu_range, true_mu_range);
 
-    for subst_param_idx in 2..tkf_cost.param_count() {
+    for indel_param_idx in 0..tkf_cost.indel_cost.param_count() {
+        assert_eq!(
+            tkf_cost.param_range(indel_param_idx),
+            tkf_indel_model.param_range(indel_param_idx)
+        );
+    }
+    for subst_param_idx in tkf_cost.indel_cost.param_count()..tkf_cost.param_count() {
         let subst_range = tkf_cost.param_range(subst_param_idx);
         let true_subst_range = PARAM_RANGE_POSITIVE;
         assert_eq!(subst_range, true_subst_range);
     }
 }
 
-#[cfg(test)]
-fn tkf92_subst_param_range<Q: QMatrix, T: TKFModel, AA: AncestralAlignment>(
-    cost: &TKFCost<Q, T, AA>,
-) {
-    for subst_param_idx in 3..cost.param_count() {
-        let subst_range = cost.param_range(subst_param_idx);
-        let true_subst_range = PARAM_RANGE_POSITIVE;
-        assert_eq!(subst_range, true_subst_range);
-    }
-}
-
-#[cfg(test)]
-fn tkf92_indel_param_range<T: TKFModel, AA: AncestralAlignment>(cost: &TKFIndelCost<T, AA>) {
-    let lambda_range = cost.param_range(usize::from(TKF92Parameters::Lambda));
-    let true_lambda_range = (f64::EPSILON, 2.0 - f64::EPSILON);
-    assert_eq!(lambda_range, true_lambda_range);
-    let mu_range = cost.param_range(usize::from(TKF92Parameters::Mu));
-    let true_mu_range = (1.0 + f64::EPSILON, f64::MAX);
-    assert_eq!(mu_range, true_mu_range);
-    let r_range = cost.param_range(usize::from(TKF92Parameters::R));
-    let true_r_range = PARAM_RANGE_UNIT_INTERVAL_EXCLUSIVE;
-    assert_eq!(r_range, true_r_range);
-}
 #[test]
 fn tkf92_param_range() {
     let subst_model = SubstModel::<GTR>::default();
     let tkf_indel_model = TKF92IndelModel::new(&[1.0, 2.0, 0.3]).unwrap();
     let tkf_cost = TKFCostBuilder::new(
         subst_model,
-        tkf_indel_model,
+        tkf_indel_model.clone(),
         setup_test_phylo(Alphabet::dna()),
     )
     .build()
     .unwrap();
-    tkf92_subst_param_range(&tkf_cost);
-    tkf92_indel_param_range(&tkf_cost.indel_cost);
+
+    for indel_param_idx in 0..tkf_cost.indel_cost.param_count() {
+        assert_eq!(
+            tkf_cost.param_range(indel_param_idx),
+            tkf_indel_model.param_range(indel_param_idx)
+        );
+    }
+    for subst_param_idx in tkf_cost.indel_cost.param_count()..tkf_cost.param_count() {
+        let subst_range = tkf_cost.param_range(subst_param_idx);
+        let true_subst_range = PARAM_RANGE_POSITIVE;
+        assert_eq!(subst_range, true_subst_range);
+    }
 }
 
 #[test]
@@ -592,7 +593,15 @@ fn tkf92_fixed_param_range() {
         TKF92FixedIndelCostBuilder::new(fixed_frag_model, setup_test_phylo(Alphabet::dna()))
             .build()
             .unwrap();
-    tkf92_indel_param_range(&tkf_cost);
+    let lambda_range = tkf_cost.param_range(usize::from(TKF92Parameters::Lambda));
+    let true_lambda_range = (f64::EPSILON, 2.0 - f64::EPSILON);
+    assert_eq!(lambda_range, true_lambda_range);
+    let mu_range = tkf_cost.param_range(usize::from(TKF92Parameters::Mu));
+    let true_mu_range = (1.0 + f64::EPSILON, f64::MAX);
+    assert_eq!(mu_range, true_mu_range);
+    let r_range = tkf_cost.param_range(usize::from(TKF92Parameters::R));
+    let true_r_range = PARAM_RANGE_UNIT_INTERVAL_EXCLUSIVE;
+    assert_eq!(r_range, true_r_range);
 }
 
 #[test]
@@ -883,22 +892,21 @@ fn tkf_indel_history_doesnt_change_felsenstein() {
 
 #[cfg(test)]
 fn modify_tkf92_subst_params_costs_match_template<Q: QMatrix + QMatrixMaker + Default>() {
-    use crate::evolutionary_models::EvoModel;
-
     let phylo = setup_test_phylo(Q::alphabet());
     let subst_changed_param = 0.5;
     let subst_model = SubstModel::<Q>::default();
     let tkf_indel_model = TKF92IndelModel::new(&[0.1, 0.2, 0.3]).unwrap();
-    let mut tkf_cost = TKFCostBuilder::new(subst_model.clone(), tkf_indel_model, phylo.clone())
-        .build()
-        .unwrap();
+    let mut tkf_cost =
+        TKFCostBuilder::new(subst_model.clone(), tkf_indel_model.clone(), phylo.clone())
+            .build()
+            .unwrap();
 
     // sanity check
     let logl = ModelSearchCost::cost(&tkf_cost);
     assert_eq!(logl, ModelSearchCost::cost(&tkf_cost));
 
     // The likelihood should change if we change model parameters
-    tkf_cost.set_param(3, subst_changed_param);
+    tkf_cost.set_param(tkf_indel_model.param_count(), subst_changed_param);
     let logl2 = ModelSearchCost::cost(&tkf_cost);
     assert_eq!(logl2, ModelSearchCost::cost(&tkf_cost));
     assert_ne!(logl, logl2);
@@ -921,9 +929,8 @@ fn modify_tkf92_subst_params_costs_match_template<Q: QMatrix + QMatrixMaker + De
 fn modify_tkf92_indel_params_costs_match_template<Q: QMatrix + Default>() {
     let phylo = setup_test_phylo(Q::alphabet());
     let subst_model = SubstModel::<Q>::default();
-    let tkf_original_mu = 0.2;
-    let tkf_changed_mu = 0.25;
-    let tkf_indel_model = TKF92IndelModel::new(&[0.1, tkf_original_mu, 0.3]).unwrap();
+    let tkf_changed_rate = 0.15;
+    let tkf_indel_model = TKF92IndelModel::new(&[0.1, 0.2, 0.3]).unwrap();
     let mut tkf_cost = TKFCostBuilder::new(subst_model.clone(), tkf_indel_model, phylo.clone())
         .build()
         .unwrap();
@@ -932,13 +939,20 @@ fn modify_tkf92_indel_params_costs_match_template<Q: QMatrix + Default>() {
     assert_eq!(logl, ModelSearchCost::cost(&tkf_cost));
 
     // The likelihood should change if we change model parameters
-    tkf_cost.set_param(1, tkf_changed_mu);
+    let param_idx = 0;
+    tkf_cost.set_param(param_idx, tkf_changed_rate);
     let logl2 = ModelSearchCost::cost(&tkf_cost);
     assert_eq!(logl2, ModelSearchCost::cost(&tkf_cost));
     assert_ne!(logl, logl2);
 
     // The likelihood should be the same if we rebuild from scratch with the same modification
-    let tkf_indel_model = TKF92IndelModel::new(&[0.1, tkf_changed_mu, 0.3]).unwrap();
+    let modified_model = &tkf_cost.indel_cost.model;
+    let tkf_indel_model = TKF92IndelModel::new(&[
+        modified_model.lambda(),
+        modified_model.mu(),
+        modified_model.r(),
+    ])
+    .unwrap();
     let tkf_cost = TKFCostBuilder::new(subst_model, tkf_indel_model, phylo)
         .build()
         .unwrap();

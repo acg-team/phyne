@@ -96,19 +96,8 @@ pub(super) enum Event {
 /// [TKF92IndelModel](`crate::tkf_model::TKF92IndelModel`)).
 #[allow(clippy::upper_case_acronyms)]
 pub trait TKFModel: Clone + Display {
-    // TODO: it might be better for model optimisation to have parameter lambda and scale s = mu/lambda,
-    // because of the constraint that mu > lambda.
-    // See issue #152 https://github.com/acg-team/phyne/issues/152
     fn lambda(&self) -> f64;
     fn mu(&self) -> f64;
-    /// [TKF91](crate::tkf_model::tkf91) has 2 parameters: `lambda` and `mu`, [TKF92](crate::tkf_model::tkf92)
-    /// has 3 parameters: `lambda`, `mu` and `r`.
-    /// The parameter `r` in [TKF92](crate::tkf_model::tkf92) is used to model the length distribution of inserted segments,
-    /// i.e., in [`super::TKF92IndelModel::ln_insertion_factor_at_non_root`] and
-    /// [`super::TKF92IndelModel::ln_insertion_factor_at_root`].
-    fn params(&self) -> &[f64];
-    fn set_param(&mut self, idx: usize, value: f64);
-    fn param_range(&self, idx: usize) -> ParamRange;
     /// Returns the factor corresponding to an insertion event at the root.
     fn ln_insertion_factor_at_root(&self) -> f64;
     /// Returns the factor corresponding to an insertion event at a non-root node.
@@ -120,6 +109,14 @@ pub trait TKFModel: Clone + Display {
     /// corresponding to the evolutionary events in this block [`TKFModel::block_prob`] computes
     /// the ln probability of the block under the model.
     fn get_blocks<AA: AncestralAlignment>(&self, msa: &AA) -> Vec<usize>;
+    /// Used by [`TKFIndelCost`] which implements [`ModelSearchCost::param_count`].
+    fn param_count(&self) -> usize;
+    /// Used by [`TKFIndelCost`] which implements [`ModelSearchCost::param`].
+    fn param(&self, idx: usize) -> f64;
+    /// Used by [`TKFIndelCost`] which implements [`ModelSearchCost::set_param`].
+    fn set_param(&mut self, idx: usize, value: f64);
+    /// Used by [`TKFIndelCost`] which implements [`ModelSearchCost::param_range`].
+    fn param_range(&self, idx: usize) -> ParamRange;
 }
 
 // TODO: link our paper once it is published. For now see original TKF92 paper: https://doi.org/10.1007/bf00163848
@@ -501,11 +498,11 @@ impl<T: TKFModel, AA: AncestralAlignment> ModelSearchCost for TKFIndelCost<T, AA
     }
 
     fn param_count(&self) -> usize {
-        self.model.params().len()
+        self.model.param_count()
     }
 
     fn param(&self, idx: usize) -> f64 {
-        self.model.params()[idx]
+        self.model.param(idx)
     }
 
     fn set_param(&mut self, idx: usize, value: f64) {
@@ -520,6 +517,10 @@ impl<T: TKFModel, AA: AncestralAlignment> ModelSearchCost for TKFIndelCost<T, AA
         self.model.param_range(idx)
     }
 
+    fn freqs(&self) -> &FreqVector {
+        &DUMMY_FREQS
+    }
+
     fn set_freqs(&mut self, _: FreqVector) -> Result<()> {
         bail!(
             EvolutionaryModel,
@@ -531,10 +532,6 @@ impl<T: TKFModel, AA: AncestralAlignment> ModelSearchCost for TKFIndelCost<T, AA
         // At the time of writing this, this method is only used to set the frequencies of
         // the model, but the TKF92IndelCost does not have frequencies.
         self.phylo.freqs()
-    }
-
-    fn freqs(&self) -> &FreqVector {
-        &DUMMY_FREQS
     }
 }
 
