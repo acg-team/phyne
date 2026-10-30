@@ -54,7 +54,11 @@ fn reading_nonexistent_fasta() {
 #[test]
 fn reading_nonexistent_newick() {
     let missing_path = "./data/tree_nonexistent.newick";
-    assert_matches!(read_newick_from_file(missing_path), Err(Error::Io(msg)) if msg.contains(missing_path));
+    assert_matches!(
+        read_newick_from_file(missing_path),
+        Err(Error::Io(msg))
+            if msg.contains(missing_path) && msg.matches(missing_path).count() == 1
+    );
 }
 
 #[test]
@@ -80,12 +84,14 @@ fn write_sequences_to_bad_path() {
         .path()
         .join("nonexistent_folder")
         .join("output.fasta");
-    let res = write_sequences_to_file(&sequences, &output_path);
+    let output_path = output_path.to_str().unwrap();
+    let res = write_sequences_to_file(&sequences, output_path);
     assert_matches!(
         res,
         Err(Error::Io(msg))
             if msg.to_ascii_lowercase().contains("no such file or directory")
-                && msg.contains(output_path.to_str().unwrap())
+                && msg.contains(output_path)
+                && msg.matches(output_path).count() == 1
     );
 }
 
@@ -95,8 +101,15 @@ fn write_sequences_to_existing_file() {
     let temp_dir = tempdir().unwrap();
     let output_path = temp_dir.path().join("output.fasta");
     File::create(&output_path).unwrap();
-    let res = write_sequences_to_file(&sequences, &output_path);
-    assert_matches!(res, Err(Error::Io(msg)) if msg.contains("already exists"));
+    let output_path = output_path.to_str().unwrap();
+    let res = write_sequences_to_file(&sequences, output_path);
+    assert_matches!(
+        res,
+        Err(Error::Io(msg))
+            if msg.contains("already exists")
+                && msg.contains(output_path)
+                && msg.matches(output_path).count() == 1
+    );
 }
 
 #[test]
@@ -148,12 +161,14 @@ fn write_newick_to_bad_path() {
         .path()
         .join("nonexistent_folder")
         .join("output.newick");
-    let res = write_newick_to_file(&[tree], &output_path);
+    let output_path = output_path.to_str().unwrap();
+    let res = write_newick_to_file(&[tree], output_path);
     assert_matches!(
         res,
         Err(Error::Io(msg))
             if msg.to_ascii_lowercase().contains("no such file or directory")
-                && msg.contains(output_path.to_str().unwrap())
+                && msg.contains(output_path)
+                && msg.matches(output_path).count() == 1
     );
 }
 
@@ -163,8 +178,15 @@ fn write_newick_to_existing_file() {
     let temp_dir = tempdir().unwrap();
     let output_path = temp_dir.path().join("output.newick");
     File::create(&output_path).unwrap();
-    let res = write_newick_to_file(&[tree], &output_path);
-    assert_matches!(res, Err(Error::Io(msg)) if msg.contains("already exists"));
+    let output_path = output_path.to_str().unwrap();
+    let res = write_newick_to_file(&[tree], output_path);
+    assert_matches!(
+        res,
+        Err(Error::Io(msg))
+            if msg.contains("already exists")
+                && msg.contains(output_path)
+                && msg.matches(output_path).count() == 1
+    );
 }
 
 #[test]

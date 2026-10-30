@@ -32,15 +32,14 @@ use crate::{bail, record, Error, Result};
 /// # Ok(()) }
 /// ```
 pub fn read_sequences(path: impl AsRef<Path> + Debug) -> Result<Vec<Record>> {
-    info!("Reading sequences from file {}", path.as_ref().display());
+    let path_str = path.as_ref().display().to_string();
+    info!("Reading sequences from file {path_str}");
     let reader = Reader::from_file(&path).map_err(|err| Error::Io(err.to_string()))?;
+    // let reader = Reader::from_file(&path)?;
     let mut sequences = Vec::new();
 
     for record in reader.records() {
-        let rec = record.context(format!(
-            "Failed to read fasta record from file {}",
-            path.as_ref().display()
-        ))?;
+        let rec = record.context(format!("Failed to read fasta record from file {path_str}"))?;
         if let Err(e) = rec.check() {
             bail!(Io, e)
         }
@@ -65,10 +64,7 @@ pub fn read_sequences(path: impl AsRef<Path> + Debug) -> Result<Vec<Record>> {
         sequences.push(record!(rec.id(), rec.desc(), &seq));
     }
     if sequences.is_empty() {
-        bail!(
-            Io,
-            format!("no sequences found in file {}", path.as_ref().display())
-        );
+        bail!(Io, "no sequences found in file {path_str}");
     }
 
     info!("Read sequences successfully");
@@ -110,23 +106,17 @@ pub fn read_sequences(path: impl AsRef<Path> + Debug) -> Result<Vec<Record>> {
 /// # Ok(()) }
 /// ```
 pub fn write_sequences_to_file(sequences: &[Record], path: impl AsRef<Path>) -> Result<()> {
-    info!("Writing sequences/MSA to file {}", path.as_ref().display());
+    let path_str = path.as_ref().display().to_string();
+    info!("Writing sequences/MSA to file {path_str}");
     if path.as_ref().exists() {
-        bail!(Io, "file already exists")
+        bail!(Io, "file already exists: {path_str}")
     }
-    let mut writer = Writer::to_file(&path).map_err(|err| {
-        Error::Io(format!(
-            "failed to create fasta file {}: {err}",
-            path.as_ref().display()
-        ))
-    })?;
+    let mut writer = Writer::to_file(&path)
+        .map_err(|err| Error::Io(format!("failed to create fasta file {path_str}: {err}")))?;
     for rec in sequences {
-        writer.write_record(rec).map_err(|err| {
-            Error::Io(format!(
-                "failed to write fasta file {}: {err}",
-                path.as_ref().display()
-            ))
-        })?;
+        writer
+            .write_record(rec)
+            .map_err(|err| Error::Io(format!("failed to write fasta file {path_str}: {err}")))?;
     }
     info!("Finished writing successfully");
     Ok(())
@@ -154,13 +144,10 @@ pub fn write_sequences_to_file(sequences: &[Record], path: impl AsRef<Path>) -> 
 /// # Ok(()) }
 /// ```
 pub fn read_newick_from_file(path: impl AsRef<Path>) -> Result<Vec<Tree>> {
-    info!("Reading newick trees from file {}", path.as_ref().display());
-    let newick = fs::read_to_string(&path).map_err(|err| {
-        Error::Io(format!(
-            "failed to read newick file {}: {err}",
-            path.as_ref().display()
-        ))
-    })?;
+    let path_str = path.as_ref().display().to_string();
+    info!("Reading newick trees from file {path_str}");
+    let newick = fs::read_to_string(&path)
+        .map_err(|err| Error::Io(format!("failed to read newick file {path_str}: {err}")))?;
     info!("Read file successfully");
     tree_parser::from_newick(&newick)
 }
@@ -191,29 +178,20 @@ pub fn read_newick_from_file(path: impl AsRef<Path>) -> Result<Vec<Tree>> {
 /// # Ok(()) }
 /// ```
 pub fn write_newick_to_file(trees: &[Tree], path: impl AsRef<Path>) -> Result<()> {
-    info!("Writing newick trees to file {}", path.as_ref().display());
+    let path_str = path.as_ref().display().to_string();
+    info!("Writing newick trees to file {path_str}");
     if path.as_ref().exists() {
-        bail!(Io, "file already exists")
+        bail!(Io, "file already exists: {path_str}")
     }
-    let mut writer = File::create(&path).map_err(|err| {
-        Error::Io(format!(
-            "failed to create newick file {}: {err}",
-            path.as_ref().display()
-        ))
-    })?;
+    let mut writer = File::create(&path)
+        .map_err(|err| Error::Io(format!("failed to create newick file {path_str}: {err}")))?;
     for tree in trees {
-        writer.write_all(tree.to_newick().as_bytes()).map_err(|err| {
-            Error::Io(format!(
-                "failed to write newick file {}: {err}",
-                path.as_ref().display()
-            ))
-        })?;
-        writer.write_all(b"\n").map_err(|err| {
-            Error::Io(format!(
-                "failed to write newick file {}: {err}",
-                path.as_ref().display()
-            ))
-        })?;
+        writer
+            .write_all(tree.to_newick().as_bytes())
+            .map_err(|err| Error::Io(format!("failed to write newick file {path_str}: {err}")))?;
+        writer
+            .write_all(b"\n")
+            .map_err(|err| Error::Io(format!("failed to write newick file {path_str}: {err}")))?;
     }
     info!("Finished writing successfully");
     Ok(())
