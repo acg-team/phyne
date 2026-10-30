@@ -6,7 +6,7 @@ use argmin::solver::brent::BrentOpt;
 use log::{debug, info, warn};
 
 use crate::evolutionary_models::FrequencyOptimisation;
-use crate::likelihood::ModelSearchCost;
+use crate::likelihood::{ModelSearchCost, ParamRange};
 use crate::optimisers::{ModelOptimisationResult, SingleValOptResult, StopCondition};
 use crate::Result;
 
@@ -102,19 +102,64 @@ impl<C: ModelSearchCost + Display + Clone> ModelOptimiser<C> {
         Ok(cost)
     }
 
+    fn num_params(&self) -> usize {
+        self.c.param_count() + self.c.helper_param_count()
+    }
+
+    fn get_param_or_helper(&self, idx: usize) -> f64 {
+        if idx < self.c.param_count() {
+            self.c.param(idx)
+        } else {
+            self.c.helper_param(idx - self.c.param_count())
+        }
+    }
+
+    fn set_param_or_helper(&mut self, idx: usize, value: f64) {
+        if idx < self.c.param_count() {
+            self.c.set_param(idx, value);
+        } else {
+            self.c.set_helper_param(idx - self.c.param_count(), value);
+        }
+    }
+
+    fn param_range_or_helper(&self, idx: usize) -> ParamRange {
+        if idx < self.c.param_count() {
+            self.c.param_range(idx)
+        } else {
+            self.c.helper_param_range(idx - self.c.param_count())
+        }
+    }
+
     fn single_optimisation_iteration(&mut self) -> Result<f64> {
         let mut curr_cost = self.c.cost();
-        for param in 0..self.c.param_count() {
-            let start_value = self.c.param(param);
+        for param in 0..self.num_params() {
+            println!("Optimising parameter {param:?} with current cost {curr_cost}");
+            let start_value = self.get_param_or_helper(param);
             debug!("Optimising parameter {param:?} from value {start_value} with cost {curr_cost}");
             let param_opt = self.opt_parameter(param, start_value)?;
             if param_opt.final_cost < curr_cost {
                 // Parameter will have been reset by the optimiser, set it back to start value
-                self.c.set_param(param, start_value);
+                // self.c.set_param(param, start_value);
                 continue;
             }
-            self.c.set_param(param, param_opt.value);
+            self.set_param_or_helper(param, param_opt.value);
+
+            // The helper might set the lambda and mu correctly when setting a helper param,
+            // but not the before_helper_lambda and before_helper_mu.
+            // Alternatively we could have two trait methods one for setting helpers in the
+            // optimiser and one for setting helpers. Could be also called set_helper_repeatedly
+            // (for the optimiser that stays correct when calling the idx for the setter), and set
+            // helper that is not intended for repeated calls. Dont know what good names would be
+            for set_param_idx in 0..self.c.param_count() {
+                self.c.set_param(set_param_idx, self.c.param(set_param_idx));
+            }
             curr_cost = param_opt.final_cost;
+            debug_assert_eq!(
+                curr_cost,
+                self.c.cost(),
+                "Cost mismatch after optimisation of parameter {param:?}"
+            );
+
             debug!(
                 "Optimised parameter {param:?} to value {} with cost {curr_cost}",
                 param_opt.value
@@ -134,7 +179,8 @@ impl<C: ModelSearchCost + Display + Clone> ModelOptimiser<C> {
             cost: RefCell::new(self.c.clone()),
             param,
         };
-        let range = self.c.param_range(param);
+        //let range = self.c.param_range(param);
+        let range = self.param_range_or_helper(param);
         let min = range.0;
         let max = range.1.min(start_value * 100.0);
         debug_assert!(min <= start_value && start_value <= max);
@@ -155,6 +201,16 @@ pub(crate) struct ParamOptimiser<C: ModelSearchCost> {
     pub(crate) param: usize,
 }
 
+impl<C: ModelSearchCost> ParamOptimiser<C> {
+    fn set_param_or_helper(&self, cost: &mut C, param: usize, value: f64) {
+        if param < cost.param_count() {
+            cost.set_param(param, value);
+        } else {
+            cost.set_helper_param(param - cost.param_count(), value);
+        }
+    }
+}
+
 impl<C: ModelSearchCost> CostFunction for ParamOptimiser<C> {
     type Param = f64;
     type Output = f64;
@@ -165,7 +221,8 @@ impl<C: ModelSearchCost> CostFunction for ParamOptimiser<C> {
         } else {
             *value
         };
-        self.cost.borrow_mut().set_param(self.param, value);
+        // self.cost.borrow_mut().set_param(self.param, value);
+        self.set_param_or_helper(&mut self.cost.borrow_mut(), self.param, value);
         Ok(-self.cost.borrow().cost())
     }
 

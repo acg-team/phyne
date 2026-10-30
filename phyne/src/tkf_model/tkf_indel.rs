@@ -109,6 +109,28 @@ pub trait TKFModel: Clone + Display {
     fn params(&self) -> &[f64];
     fn set_param(&mut self, idx: usize, value: f64);
     fn param_range(&self, idx: usize) -> ParamRange;
+    fn helper_param_count(&self) -> usize {
+        0
+    }
+
+    fn helper_param(&self, _idx: usize) -> f64 {
+        panic!(
+            "helper_param not implemented for this model. \
+             Make sure to implement this method if helper_param_count() > 0"
+        );
+    }
+    fn set_helper_param(&mut self, _idx: usize, _value: f64) {
+        panic!(
+            "set_helper_param not implemented for this model. \
+             Make sure to implement this method if helper_param_count() > 0"
+        );
+    }
+    fn helper_param_range(&self, _idx: usize) -> ParamRange {
+        panic!(
+            "helper_param_range not implemented for this model. \
+             Make sure to implement this method if helper_param_count() > 0"
+        );
+    }
     /// Returns the factor corresponding to an insertion event at the root.
     fn ln_insertion_factor_at_root(&self) -> f64;
     /// Returns the factor corresponding to an insertion event at a non-root node.
@@ -535,6 +557,24 @@ impl<T: TKFModel, AA: AncestralAlignment> ModelSearchCost for TKFIndelCost<T, AA
 
     fn freqs(&self) -> &FreqVector {
         &DUMMY_FREQS
+    }
+
+    fn helper_param_count(&self) -> usize {
+        self.model.helper_param_count()
+    }
+
+    fn helper_param(&self, param: usize) -> f64 {
+        self.model.helper_param(param)
+    }
+
+    fn set_helper_param(&mut self, param: usize, value: f64) {
+        self.model.set_helper_param(param, value);
+        self.model_info.borrow_mut().valid.clear();
+        self.model_info.borrow_mut().valid_for_reestimation.clear();
+    }
+
+    fn helper_param_range(&self, param: usize) -> ParamRange {
+        self.model.helper_param_range(param)
     }
 }
 

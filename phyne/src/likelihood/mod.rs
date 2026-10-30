@@ -41,6 +41,32 @@ pub trait ModelSearchCost {
     fn set_param(&mut self, param: usize, value: f64);
     /// Returns the valid range for a model parameter [min, max], inclusive.
     fn param_range(&self, param: usize) -> ParamRange;
+
+    // These are not atomic parameters of the model but rather combinations of parameters like their
+    // product or ratio. They are useful during parameters optimisation for the case that the atomic
+    // parameters are not independent and the optimisation is more efficient in the space of the
+    // helper parameters.
+    fn helper_param_count(&self) -> usize {
+        0
+    }
+    fn helper_param(&self, _param: usize) -> f64 {
+        panic!(
+            "helper_param not implemented for this model. \
+             Make sure to implement this method if helper_param_count() > 0"
+        );
+    }
+    fn set_helper_param(&mut self, _param: usize, _value: f64) {
+        panic!(
+            "set_helper_param not implemented for this model. \
+             Make sure to implement this method if helper_param_count() > 0"
+        );
+    }
+    fn helper_param_range(&self, _param: usize) -> ParamRange {
+        panic!(
+            "helper_param_range not implemented for this model. \
+             Make sure to implement this method if helper_param_count() > 0"
+        );
+    }
     fn set_freqs(&mut self, freqs: FreqVector) -> Result<()>;
     fn empirical_freqs(&self) -> FreqVector;
     fn freqs(&self) -> &FreqVector;

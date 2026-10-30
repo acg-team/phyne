@@ -90,6 +90,22 @@ impl<Q: QMatrix, T: TKFModel, AA: AncestralAlignment> ModelSearchCost for TKFCos
     fn freqs(&self) -> &FreqVector {
         self.subst_cost.freqs()
     }
+
+    fn helper_param_count(&self) -> usize {
+        self.indel_cost.helper_param_count()
+    }
+
+    fn helper_param(&self, param: usize) -> f64 {
+        self.indel_cost.helper_param(param)
+    }
+
+    fn set_helper_param(&mut self, param: usize, value: f64) {
+        self.indel_cost.set_helper_param(param, value);
+    }
+
+    fn helper_param_range(&self, param: usize) -> ParamRange {
+        self.indel_cost.helper_param_range(param)
+    }
 }
 
 impl<Q: QMatrix, T: TKFModel, AA: AncestralAlignment> TreeSearchCost for TKFCost<Q, T, AA> {

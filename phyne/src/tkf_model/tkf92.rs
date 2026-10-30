@@ -26,6 +26,17 @@ pub(crate) enum TKF92Parameters {
     Invalid(usize),
 }
 
+pub(crate) const TKF92_HELPER_PARAM_COUNT: usize = 2;
+
+#[derive(Debug, Eq, PartialEq, FromPrimitive, IntoPrimitive)]
+#[repr(usize)]
+pub(crate) enum TKF92HelperParameters {
+    Rate = 0,
+    Ratio = 1,
+    #[num_enum(catch_all)]
+    Invalid(usize),
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct TKF92IndelModel {
     params: Vec<f64>,
@@ -33,6 +44,10 @@ pub struct TKF92IndelModel {
     ln_r: f64,
     /// precomputed ((1 - r)/r).ln()
     ln_one_minus_r_over_r: f64,
+    /// original lambda before ratio or rate was set
+    before_helper_lambda: f64,
+    /// original mu before ratio or rate was set
+    before_helper_mu: f64,
 }
 
 impl TKF92IndelModel {
@@ -41,16 +56,17 @@ impl TKF92IndelModel {
     /// 0 < lambda < mu < infinity, 0 < r < 1.
     pub fn new(params: &[f64]) -> Result<Self> {
         valid_number_tkf_params("TKF92", "lambda, mu, r", params, TKF92_PARAM_COUNT)?;
-        valid_lambda_mu(
-            params[usize::from(TKF92Parameters::Lambda)],
-            params[usize::from(TKF92Parameters::Mu)],
-        )?;
-        valid_r(params[usize::from(TKF92Parameters::R)])?;
+        let lambda = params[usize::from(TKF92Parameters::Lambda)];
+        let mu = params[usize::from(TKF92Parameters::Mu)];
+        valid_lambda_mu(lambda, mu)?;
         let r = params[usize::from(TKF92Parameters::R)];
+        valid_r(r)?;
         Ok(Self {
             params: params.to_vec(),
             ln_r: r.ln(),
             ln_one_minus_r_over_r: ((1.0 - r) / r).ln(),
+            before_helper_lambda: lambda,
+            before_helper_mu: mu,
         })
     }
 
@@ -66,6 +82,8 @@ impl Default for TKF92IndelModel {
             params: vec![DEFAULT_LAMBDA, DEFAULT_MU, r],
             ln_r: r.ln(),
             ln_one_minus_r_over_r: (-r).ln_1p() - r.ln(),
+            before_helper_lambda: DEFAULT_LAMBDA,
+            before_helper_mu: DEFAULT_MU,
         }
     }
 }
@@ -91,10 +109,17 @@ impl TKFModel for TKF92IndelModel {
                 self.ln_r = value.ln();
                 self.ln_one_minus_r_over_r = (-value).ln_1p() - value.ln();
             }
-            _ => {
+            TKF92Parameters::Lambda => {
                 self.params[idx] = value;
+                self.before_helper_lambda = value;
             }
+            TKF92Parameters::Mu => {
+                self.params[idx] = value;
+                self.before_helper_mu = value;
+            }
+            _ => panic!("Invalid parameter index for TKF model: {param:?}"),
         };
+        println!("set param: lambda = {}, mu = {}", self.lambda(), self.mu(),);
     }
 
     fn param_range(&self, idx: usize) -> ParamRange {
@@ -132,6 +157,53 @@ impl TKFModel for TKF92IndelModel {
 
     fn get_blocks<AA: AncestralAlignment>(&self, msa: &AA) -> Vec<usize> {
         blocks_of_ancestral_alignment(msa)
+    }
+
+    fn helper_param_count(&self) -> usize {
+        // with that instead of zero the optimisation converges much faster and achieves better logl
+        TKF92_HELPER_PARAM_COUNT
+        // 0
+    }
+
+    fn helper_param(&self, idx: usize) -> f64 {
+        let helper_param = TKF92HelperParameters::from_primitive(idx);
+        match helper_param {
+            TKF92HelperParameters::Rate => (self.lambda() + self.mu()) / 2.0,
+            TKF92HelperParameters::Ratio => self.lambda() / self.mu(),
+            _ => panic!("Invalid helper parameter index for TKF model: {helper_param:?}"),
+        }
+    }
+
+    fn set_helper_param(&mut self, idx: usize, value: f64) {
+        let param = TKF92HelperParameters::from_primitive(idx);
+        match param {
+            TKF92HelperParameters::Rate => {
+                let lambda = self.before_helper_lambda;
+                let mu = self.before_helper_mu;
+                self.params[usize::from(TKF92Parameters::Lambda)] =
+                    2.0 * value / (mu / lambda + 1.0);
+                self.params[usize::from(TKF92Parameters::Mu)] = 2.0 * value / (lambda / mu + 1.0);
+            }
+            TKF92HelperParameters::Ratio => {
+                let lambda = self.before_helper_lambda;
+                let mu = self.before_helper_mu;
+                let x = (lambda + mu) / 2.0;
+                let y = (x * (1.0 - value)) / (1.0 + value);
+                self.params[usize::from(TKF92Parameters::Lambda)] = x - y;
+                self.params[usize::from(TKF92Parameters::Mu)] = x + y;
+            }
+            _ => panic!("Invalid helper parameter index for TKF model: {param:?}"),
+        }
+        println!("set helper: lambda = {}, mu = {}", self.lambda(), self.mu());
+    }
+
+    fn helper_param_range(&self, _idx: usize) -> ParamRange {
+        let param = TKF92HelperParameters::from_primitive(_idx);
+        match param {
+            TKF92HelperParameters::Rate => (f64::EPSILON, f64::MAX),
+            TKF92HelperParameters::Ratio => (f64::EPSILON, 1.0 - f64::EPSILON),
+            _ => panic!("Invalid helper parameter index for TKF model: {param:?}"),
+        }
     }
 }
 
@@ -267,6 +339,8 @@ mod private_tests {
             params: vec![0.5, 1.0, 0.3],
             ln_r: 0.0, // cache filled with dummy, since it is not needed here
             ln_one_minus_r_over_r: 0.0, // cache filled with dummy since it is not needed here
+            before_helper_lambda: 0.0, // cache filled with dummy since it is not needed here
+            before_helper_mu: 0.0, // cache filled with dummy since it is not
         };
         // Use an invalid index
         model.param_range(3);
@@ -278,6 +352,8 @@ mod private_tests {
             params: vec![1.1, 2.0, 0.3],
             ln_r: 0.0,                  // cache filled with dummy since it is not printed
             ln_one_minus_r_over_r: 0.0, // cache filled with dummy since it is not printed
+            before_helper_lambda: 0.0,  // cache filled with dummy since it is not needed here
+            before_helper_mu: 0.0,      // cache filled with dummy since it is not
         };
 
         let fmt = format!("{}", tkf_indel_model);
@@ -291,6 +367,8 @@ mod private_tests {
             params: vec![1.0, 2.0, 0.3],
             ln_r: 0.0,                  // dummy
             ln_one_minus_r_over_r: 0.0, // dummy
+            before_helper_lambda: 0.0,  // cache filled with dummy since it is not needed here
+            before_helper_mu: 0.0,      // cache filled with dummy since it is not
         };
         let new_lambda = 1.1;
         model.set_param(usize::from(TKF92Parameters::Lambda), new_lambda);
