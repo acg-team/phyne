@@ -291,15 +291,18 @@ mod tests {
 
     use approx::assert_relative_eq;
     use fixedbitset::FixedBitSet;
-    use hashbrown::HashMap;
     use lazy_static::lazy_static;
+    use nalgebra::dvector;
 
     use crate::alignment::{Alignment, AncestralAlignment, Sequences, MASA, MSA};
     use crate::asr::AncestralSequenceReconstruction;
     use crate::phylo_info::PhyloInfo;
-    use crate::pip_model::{PIPIndels, PIPModel};
+    use crate::pip_model::{
+        asr::{deletion_probabilities, insert_and_survive_probabilities, PIPAsrInfo},
+        PIPIndels, PIPModel,
+    };
     use crate::substitution_models::JC69;
-    use crate::tree::{NodeIdx::Leaf, Tree};
+    use crate::tree::{NodeIdx::*, Tree};
     use crate::{record_wo_desc as record, tree};
 
     lazy_static! {
@@ -316,14 +319,18 @@ mod tests {
         PIPModel::<JC69>::with_default_substitution(&[0.5, mu]).unwrap()
     }
 
-    fn reconstruct_on_single_site(tree: Tree, mu: f64) -> PhyloInfo<MASA> {
+    fn setup_test_info(tree: Tree) -> PhyloInfo<MSA> {
         let sequences = Sequences::new_unchecked(vec![
             record!("A", b"-"),
             record!("B", b"-"),
             record!("C", b"A"),
             record!("D", b"A"),
         ]);
-        let phylo = MSA::from_aligned(sequences, tree).unwrap();
+        MSA::from_aligned(sequences, tree).unwrap()
+    }
+
+    fn reconstruct_on_single_site(tree: Tree, mu: f64) -> PhyloInfo<MASA> {
+        let phylo = setup_test_info(tree);
         let asr = PIPIndels::<_, MSA, MASA>::new(pip(mu));
 
         asr.reconstruct_ancestral_seqs(phylo).unwrap()
@@ -334,53 +341,16 @@ mod tests {
     #[case(TREE_DELETION_AT_AB.clone(), 1.0, &[0.0, 0.6321205588285577, 0.09516258196404048, 0.6321205588285577, 0.6321205588285577, 0.6321205588285577, 0.6321205588285577])]
     #[case(TREE_DIFF_BLENS.clone(), 1.5, &[0.0, 0.5934303402594008, 0.8347011117784134, 0.5276334472589853, 0.9764822541439909, 0.877543571747018, 0.9994469156298522])]
     fn deletion_probability_correct(#[case] tree: Tree, #[case] mu: f64, #[case] expected: &[f64]) {
-        let asr = PIPIndels::<_, MSA, MASA>::new(pip(mu));
-        let deletion_at_node = asr.deletion_probabilities(&tree);
+        let pip = pip(mu);
+        let phylo = setup_test_info(tree);
+        let deletion_at_node = deletion_probabilities(&pip, &phylo);
 
-        for node_idx in tree.preorder() {
+        for node_idx in phylo.tree.preorder() {
             assert_relative_eq!(
                 deletion_at_node[usize::from(node_idx)],
                 expected[usize::from(node_idx)],
             );
         }
-    }
-
-    #[rstest]
-    #[case(TREE_DELETION_AT_I2.clone(), 1.0, &[0.39957640089372803, 0.20107272845569987, 0.054076785389618985, 0.0, 0.0, 0.0, 0.0])]
-    #[case(TREE_DELETION_AT_AB.clone(), 1.0, &[0.39957640089372803, 0.022129502489732, 0.36155167889278234, 0.0, 0.0, 0.0, 0.0])]
-    #[case(TREE_DIFF_BLENS.clone(), 1.5, &[0.5931021232134318, 0.2978068256820055, 0.08516606975398619, 0.0, 0.0, 0.0, 0.0])]
-    fn deletion_probability_at_children_correct(
-        #[case] tree: Tree,
-        #[case] mu: f64,
-        #[case] expected: &[f64],
-    ) {
-        let asr = PIPIndels::<_, MSA, MASA>::new(pip(mu));
-        let deletion_at_node = asr.deletion_probabilities_at_children(&tree);
-
-        for node_idx in tree.preorder() {
-            assert_relative_eq!(
-                deletion_at_node[usize::from(node_idx)],
-                expected[usize::from(node_idx)],
-            );
-        }
-    }
-
-    #[rstest]
-    // It is better to delete at the node than at its children for all nodes except the root
-    #[case(TREE_DELETION_AT_I2.clone(), 1.0, FixedBitSet::from_iter([1, 2, 3, 4, 5, 6]))]
-    // It is better to delete at the node than at its children for all nodes except I2 and the root
-    #[case(TREE_DELETION_AT_AB.clone(), 1.0, FixedBitSet::from_iter([1, 3, 4, 5, 6]))]
-    // It is better to delete at the node than at its children for all nodes except the root
-    #[case(TREE_DIFF_BLENS.clone(), 1.5, FixedBitSet::from_iter([1, 2, 3, 4, 5, 6]))]
-    fn delete_at_node_or_children(
-        #[case] tree: Tree,
-        #[case] mu: f64,
-        #[case] expected: FixedBitSet,
-    ) {
-        let asr = PIPIndels::<_, MSA, MASA>::new(pip(mu));
-        let delete_at_node_or_children = asr.delete_at_node_or_children(&tree);
-
-        assert_eq!(delete_at_node_or_children.difference(&expected).count(), 0);
     }
 
     #[test]
@@ -395,6 +365,31 @@ mod tests {
             let leaf = tree.by_id(id);
             assert!(ancestral.leaf_map(&leaf.idx)[0].is_none());
         }
+    }
+
+    #[rstest]
+    #[case(TREE_DELETION_AT_I2.clone())]
+    #[case(TREE_DELETION_AT_AB.clone())]
+    #[case(TREE_DIFF_BLENS.clone())]
+    fn insertion_location_at_root_single_site(#[case] tree: Tree) {
+        let sequences = Sequences::new_unchecked(vec![
+            record!("A", b"-"),
+            record!("B", b"-"),
+            record!("C", b"A"),
+            record!("D", b"A"),
+        ]);
+        let phylo = MSA::from_aligned(sequences, tree.clone()).unwrap();
+
+        let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
+        let mut tmp = PIPAsrInfo::new(&asr.model, &phylo);
+
+        for node_idx in tree.postorder() {
+            match node_idx {
+                Internal(_) => asr.set_internal(&phylo, node_idx, &mut tmp),
+                Leaf(_) => asr.set_leaf(&phylo, node_idx, &mut tmp),
+            }
+        }
+        assert_eq!(tmp.insertion_location, vec![0]);
     }
 
     #[test]
@@ -420,13 +415,10 @@ mod tests {
                                                0.10362632111943569, 0.10362632111943569, 0.10362632111943569])]
     #[case(TREE_DIFF_BLENS.clone(), 1.5, &[0.05617977528089888, 0.0333387831606405, 0.04689332088642773, 0.029642328497695807,
                                            0.05485855360359499, 0.049300200659944844, 0.056148703125272606])]
-    fn insert_and_survive_probabilities(
-        #[case] tree: Tree,
-        #[case] mu: f64,
-        #[case] expected: &[f64],
-    ) {
-        let asr = PIPIndels::<_, MSA, MASA>::new(pip(mu));
-        let insert_and_survive_probabilities = asr.insert_and_survive_probabilities(&tree);
+    fn insert_and_survive_probs(#[case] tree: Tree, #[case] mu: f64, #[case] expected: &[f64]) {
+        let pip = pip(mu);
+        let phylo = setup_test_info(tree);
+        let insert_and_survive_probabilities = insert_and_survive_probabilities(&pip, &phylo);
         assert_relative_eq!(
             insert_and_survive_probabilities.as_slice(),
             expected,
@@ -463,111 +455,270 @@ mod tests {
         assert!(matches!(tree.root, Leaf(_)));
     }
 
-    /// Presence bitsets (non-gap sites) of every record, keyed by record id.
-    fn bitsets_by_id(sequences: &Sequences, ancestors: &Sequences) -> HashMap<String, FixedBitSet> {
-        sequences
-            .into_iter()
-            .chain(ancestors)
-            .map(|rec| {
-                let present_sites = rec
-                    .seq()
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(site, &c)| (c != crate::alphabets::GAP).then_some(site));
-                (rec.id().to_string(), FixedBitSet::from_iter(present_sites))
-            })
-            .collect()
+    #[test]
+    fn tmp_start_values() {
+        let tree = tree!("((A2:1,B3:1)I2:1,(C5:1,D6:1)I1:1)I0:0;");
+        let sequences = Sequences::new_unchecked(vec![
+            record!("A2", b"XXX-"),
+            record!("B3", b"X-X-"),
+            record!("C5", b"X---"),
+            record!("D6", b"--XX"),
+        ]);
+        let phylo = MSA::from_aligned(sequences, tree.clone()).unwrap();
+
+        let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
+        let tmp = PIPAsrInfo::new(&asr.model, &phylo);
+
+        let del = 1.0 - (-1.0_f64).exp();
+
+        let survive = del / (phylo.tree.length + 1.0);
+
+        let expected_deletion_probs = vec![0.0, del, del, del, del, del, del];
+        let expected_ins_survive_probs = [
+            1.0 / (phylo.tree.length + 1.0),
+            survive,
+            survive,
+            survive,
+            survive,
+            survive,
+            survive,
+        ];
+
+        assert_eq!(tmp.deletion_probs, expected_deletion_probs);
+        assert_relative_eq!(
+            tmp.insert_and_survive_probs.as_slice(),
+            expected_ins_survive_probs.as_slice()
+        );
     }
 
     #[test]
-    fn char_presence_deletion_at_i2() {
-        let tree = TREE_DELETION_AT_I2.clone();
+    fn intermediate_values_at_leaves() {
+        let tree = tree!("((A2:1,B3:1)I2:1,(C5:1,D6:1)I1:1)I0:0;");
         let sequences = Sequences::new_unchecked(vec![
-            record!("A", b"-"),
-            record!("B", b"-"),
-            record!("C", b"A"),
-            record!("D", b"A"),
+            record!("A2", b"XXX--X"),
+            record!("B3", b"X-X--X"),
+            record!("C5", b"X---X-"),
+            record!("D6", b"--XXX-"),
         ]);
-        let ancestors = Sequences::new_unchecked(vec![
-            record!("I2", b"-"),
-            record!("I1", b"X"),
-            record!("I0", b"X"),
-        ]);
-
-        let expected_bitsets = bitsets_by_id(&sequences, &ancestors);
-
         let phylo = MSA::from_aligned(sequences, tree.clone()).unwrap();
-        let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
-        let maps = asr.potential_character_presence(&phylo);
 
-        for node_idx in tree.postorder() {
-            assert_eq!(
-                maps[usize::from(node_idx)]
-                    .difference_count(&expected_bitsets[tree.node_id(node_idx)]),
-                0
-            );
+        let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
+        let mut tmp = PIPAsrInfo::new(&asr.model, &phylo);
+
+        for node in tree.leaves() {
+            asr.set_leaf(&phylo, &node.idx, &mut tmp);
         }
-    }
 
-    #[test]
-    fn char_presence_deletion_at_ab() {
-        let tree = TREE_DELETION_AT_AB.clone();
-        let sequences = Sequences::new_unchecked(vec![
-            record!("A", b"-"),
-            record!("B", b"-"),
-            record!("C", b"A"),
-            record!("D", b"A"),
-        ]);
-        let ancestors = Sequences::new_unchecked(vec![
-            record!("I2", b"X"),
-            record!("I1", b"X"),
-            record!("I0", b"X"),
-        ]);
+        let expected_extinct = [
+            FixedBitSet::new(),
+            FixedBitSet::new(),
+            FixedBitSet::from_iter([3, 4]),
+            FixedBitSet::from_iter([1, 3, 4]),
+            FixedBitSet::new(),
+            FixedBitSet::from_iter([1, 2, 3, 5]),
+            FixedBitSet::from_iter([0, 1, 5]),
+        ];
 
-        let expected_bitsets = bitsets_by_id(&sequences, &ancestors);
+        let expected_ancestor = [
+            FixedBitSet::new(),
+            FixedBitSet::new(),
+            FixedBitSet::from_iter([0, 1, 2, 5]),
+            FixedBitSet::from_iter([0, 2, 5]),
+            FixedBitSet::new(),
+            FixedBitSet::from_iter([0, 4]),
+            FixedBitSet::from_iter([2, 3, 4]),
+        ];
 
-        let phylo = MSA::from_aligned(sequences, tree.clone()).unwrap();
-        let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
-        let maps = asr.potential_character_presence(&phylo);
+        let del = 1.0 - (-1.0_f64).exp();
+        let survive = del / (phylo.tree.length + 1.0);
+        let expected_f = [
+            dvector![],
+            dvector![],
+            dvector![1.0 - del, 1.0 - del, 1.0 - del, del, del, 1.0 - del],
+            dvector![1.0 - del, del, 1.0 - del, del, del, 1.0 - del],
+            dvector![],
+            dvector![1.0 - del, del, del, del, 1.0 - del, del],
+            dvector![del, del, 1.0 - del, 1.0 - del, 1.0 - del, del],
+        ];
 
-        for node_idx in tree.postorder() {
+        let expected_p = [
+            dvector![],
+            dvector![],
+            dvector![survive, survive, survive, 0.0, 0.0, survive],
+            dvector![survive, 0.0, survive, 0.0, 0.0, survive],
+            dvector![],
+            dvector![survive, 0.0, 0.0, 0.0, survive, 0.0],
+            dvector![0.0, 0.0, survive, survive, survive, 0.0],
+        ];
+
+        for n in phylo.tree.leaves() {
+            let idx = usize::from(n.idx);
             assert_eq!(
-                maps[usize::from(node_idx)]
-                    .difference_count(&expected_bitsets[tree.node_id(node_idx)]),
-                0
-            );
-        }
-    }
-
-    #[test]
-    fn char_presence_multiple_sites() {
-        let sequences = Sequences::new_unchecked(vec![
-            record!("A", b"AC-A---AAA-"),
-            record!("B", b"AA--A--AA-A"),
-            record!("C", b"-CC--A-A-AA"),
-            record!("D", b"-CA---A-AAA"),
-        ]);
-
-        let ancestors = Sequences::new_unchecked(vec![
-            record!("I2", b"XX-XX--XXXX"),
-            record!("I1", b"-XX--XXXXXX"),
-            record!("I0", b"XXXXXXXXXXX"),
-        ]);
-        let tree = TREE_BALANCED.clone();
-
-        let expected_bitsets = bitsets_by_id(&sequences, &ancestors);
-
-        let phylo = MSA::from_aligned(sequences, tree.clone()).unwrap();
-        let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
-        let maps = asr.potential_character_presence(&phylo);
-
-        for node_idx in tree.postorder() {
-            let node_name = tree.node_id(node_idx);
-            assert_eq!(
-                maps[usize::from(node_idx)].difference_count(&expected_bitsets[node_name]),
+                tmp.extinct_subtree[idx].difference_count(&expected_extinct[idx]),
                 0,
-                "Mismatch at node index {node_idx}"
             );
+            assert_eq!(
+                tmp.ancestor_subtree[idx].difference_count(&expected_ancestor[idx]),
+                0,
+            );
+            assert_relative_eq!(tmp.f[idx], expected_f[idx]);
+            assert_relative_eq!(tmp.p[idx], expected_p[idx]);
+        }
+    }
+
+    #[test]
+    fn intermediate_values_at_internals() {
+        let tree = tree!("((A2:1,B3:1)I1:1,(C5:1,D6:1)I4:1)I0:0;");
+        let sequences = Sequences::new_unchecked(vec![
+            record!("A2", b"XXX--X"),
+            record!("B3", b"X-X--X"),
+            record!("C5", b"X---X-"),
+            record!("D6", b"--XXX-"),
+        ]);
+        let phylo = MSA::from_aligned(sequences, tree.clone()).unwrap();
+
+        let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
+        let mut tmp = PIPAsrInfo::new(&asr.model, &phylo);
+
+        for node_idx in phylo.tree.postorder() {
+            match node_idx {
+                Internal(_) => asr.set_internal(&phylo, node_idx, &mut tmp),
+                Leaf(_) => asr.set_leaf(&phylo, node_idx, &mut tmp),
+            }
+        }
+
+        let expected_extinct = [
+            FixedBitSet::new(),
+            FixedBitSet::from_iter([1, 3, 4]),
+            FixedBitSet::new(),
+            FixedBitSet::new(),
+            FixedBitSet::from_iter([1, 5]),
+            FixedBitSet::new(),
+            FixedBitSet::new(),
+        ];
+
+        let expected_ancestor = [
+            FixedBitSet::from_iter([0, 1, 2, 3, 4, 5]),
+            FixedBitSet::from_iter([0, 1, 2, 5]),
+            FixedBitSet::new(),
+            FixedBitSet::new(),
+            FixedBitSet::from_iter([0, 2, 3, 4]),
+            FixedBitSet::new(),
+            FixedBitSet::new(),
+        ];
+
+        let del = 1.0 - (-1.0_f64).exp();
+
+        let f_i1 = dvector![
+            (1.0 - del) * (1.0 - del) * (1.0 - del),
+            (1.0 - del) * (del) * (1.0 - del),
+            (1.0 - del) * (1.0 - del) * (1.0 - del),
+            del,
+            del,
+            (1.0 - del) * (1.0 - del) * (1.0 - del)
+        ];
+        let f_i4 = dvector![
+            (1.0 - del) * (1.0 - del) * (del),
+            del,
+            (1.0 - del) * (del) * (1.0 - del),
+            (1.0 - del) * (del) * (1.0 - del),
+            (1.0 - del) * (1.0 - del) * (1.0 - del),
+            del
+        ];
+
+        let f_i0 = f_i1.clone().component_mul(&f_i4);
+
+        let expected_f = [
+            f_i0,
+            f_i1.clone(),
+            dvector![],
+            dvector![],
+            f_i4.clone(),
+            dvector![],
+            dvector![],
+        ];
+
+        let survive = del / (phylo.tree.length + 1.0);
+        let p_i1 = dvector![
+            survive * (1.0 - del) * (1.0 - del),
+            survive,
+            survive * (1.0 - del) * (1.0 - del),
+            0.0,
+            0.0,
+            survive * (1.0 - del) * (1.0 - del)
+        ];
+        let p_i4 = dvector![
+            survive,
+            0.0,
+            survive,
+            survive,
+            survive * (1.0 - del) * (1.0 - del),
+            0.0
+        ];
+        let mut p_i0 = f_i1.clone().component_mul(&f_i4) / (phylo.tree.length + 1.0);
+        p_i0[1] = p_i1[1];
+        p_i0[3] = p_i4[3];
+        p_i0[4] = p_i4[4];
+        p_i0[5] = p_i1[5];
+
+        let expected_p = [
+            p_i0,
+            p_i1,
+            dvector![],
+            dvector![],
+            p_i4,
+            dvector![],
+            dvector![],
+        ];
+
+        assert_eq!(tmp.insertion_location, vec![0, 2, 0, 6, 4, 1]);
+
+        for n in phylo.tree.internals() {
+            let idx = usize::from(n.idx);
+
+            assert_eq!(
+                tmp.extinct_subtree[idx].difference_count(&expected_extinct[idx]),
+                0,
+            );
+            assert_eq!(
+                tmp.ancestor_subtree[idx].difference_count(&expected_ancestor[idx]),
+                0,
+            );
+
+            assert_relative_eq!(tmp.f[idx], expected_f[idx]);
+            assert_relative_eq!(tmp.p[idx], expected_p[idx]);
+        }
+    }
+
+    #[test]
+    fn final_reconstruction() {
+        let tree = tree!("((A2:1,B3:1)I1:1,(C5:1,D6:1)I4:1)I0:0;");
+        let sequences = Sequences::new_unchecked(vec![
+            record!("A2", b"XXX--X"),
+            record!("B3", b"X-X--X"),
+            record!("C5", b"X---X-"),
+            record!("D6", b"--XXX-"),
+        ]);
+        let all_seqs = Sequences::new_unchecked(vec![
+            record!("A2", b"XXX--X"),
+            record!("B3", b"X-X--X"),
+            record!("C5", b"X---X-"),
+            record!("D6", b"--XXX-"),
+            record!("I0", b"X-X---"),
+            record!("I1", b"X-X--X"),
+            record!("I4", b"X-X-X-"),
+        ]);
+
+        let phylo = MSA::from_aligned(sequences, tree.clone()).unwrap();
+
+        let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
+        let reconstruction = asr.reconstruct_ancestral_seqs_unchecked(phylo);
+
+        let expected = MASA::from_aligned_with_ancestral(all_seqs, tree.clone()).unwrap();
+
+        for node in tree.internals() {
+            let map = reconstruction.msa.ancestral_map(&node.idx);
+            assert_eq!(map, expected.msa.ancestral_map(&node.idx));
         }
     }
 }
