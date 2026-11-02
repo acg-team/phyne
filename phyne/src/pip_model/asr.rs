@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use bio::io::fasta::Record;
 use fixedbitset::FixedBitSet;
-use itertools::Itertools;
+use nalgebra::DVector;
 
 use crate::alignment::{mapping_to_bits, Alignment, AncestralAlignment, Sequences};
 use crate::alphabets::GAP;
@@ -10,10 +10,7 @@ use crate::asr::AncestralSequenceReconstruction;
 use crate::phylo_info::PhyloInfo;
 use crate::pip_model::PIPModel;
 use crate::substitution_models::QMatrix;
-use crate::tree::{
-    NodeIdx::{Internal, Leaf},
-    Tree,
-};
+use crate::tree::NodeIdx::{self, Internal, Leaf};
 use crate::{aligned_seq, record};
 
 pub struct PIPIndels<Q, A, AA>
@@ -24,6 +21,79 @@ where
 {
     model: PIPModel<Q>,
     phantom: PhantomData<(A, AA)>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct PIPAsrInfo<Q: QMatrix> {
+    phantom: PhantomData<Q>,
+    // Deletion probabilities for each node, indexed by node (single value per branch).
+    deletion_probs: Vec<f64>,
+    // Insertion and survival along branch probabilities, indexed by node (single value per branch).
+    insert_and_survive_probs: Vec<f64>,
+    // Deletion/survival probabilities for each node, indexed by node and column.
+    f: Vec<DVector<f64>>,
+    // Insertion probabilities for each node, indexed by node and column.
+    p: Vec<DVector<f64>>,
+    // Set G: the set of nodes where the character is extinct in the subtree
+    extinct_subtree: Vec<FixedBitSet>,
+    // Set A: the set of nodes where the character could be an insertion
+    ancestor_subtree: Vec<FixedBitSet>,
+    // Deletion locations for each character in the alignment, indexed by node and column.
+    deletion_locations: Vec<Vec<FixedBitSet>>,
+    // Insertion location for each character in the alignment, indexed by column (only one insertion is allowed per column).
+    insertion_location: Vec<usize>,
+}
+
+/// Probability of a deletion on the branch above each node, indexed by node index.
+/// \delta(v)
+fn deletion_probabilities<Q: QMatrix>(
+    pip: &PIPModel<Q>,
+    info: &PhyloInfo<impl Alignment>,
+) -> Vec<f64> {
+    info.tree
+        .iter()
+        .map(|node| -(-pip.mu() * node.blen).exp_m1())
+        .collect()
+}
+
+/// Combined probability of insertion and survival on the branch above each node, indexed by node index.
+/// \iota(v) times \beta(v)
+fn insert_and_survive_probabilities<Q: QMatrix>(
+    pip: &PIPModel<Q>,
+    info: &PhyloInfo<impl Alignment>,
+) -> Vec<f64> {
+    let common_factor = 1.0 / (info.tree.length + 1.0 / pip.mu());
+    info.tree
+        .iter()
+        .map(|node| {
+            (if node.idx == info.tree.root {
+                1.0 / pip.mu()
+            } else {
+                -(-pip.mu() * node.blen).exp_m1() / pip.mu()
+            }) * common_factor
+        })
+        .collect::<Vec<f64>>()
+}
+
+impl<Q: QMatrix> PIPAsrInfo<Q> {
+    pub fn new<A: Alignment>(model: &PIPModel<Q>, info: &PhyloInfo<A>) -> Self {
+        let node_count = info.tree.len();
+        let msa_length = info.msa.len();
+        PIPAsrInfo {
+            phantom: PhantomData,
+            insert_and_survive_probs: insert_and_survive_probabilities(model, info),
+            deletion_probs: deletion_probabilities(model, info),
+            f: vec![DVector::<f64>::zeros(msa_length); node_count],
+            p: vec![DVector::<f64>::zeros(msa_length); node_count],
+            extinct_subtree: vec![FixedBitSet::with_capacity(msa_length); node_count],
+            ancestor_subtree: vec![FixedBitSet::with_capacity(msa_length); node_count],
+            deletion_locations: vec![
+                vec![FixedBitSet::with_capacity(node_count); msa_length];
+                node_count
+            ],
+            insertion_location: vec![usize::from(info.tree.root); msa_length],
+        }
+    }
 }
 
 impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> AncestralSequenceReconstruction<A, AA>
@@ -69,122 +139,149 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
         }
     }
 
-    /// Combined probability of insertion and survival on the branch above each node, indexed by node index.
-    /// \iota(v) times \beta(v)
-    fn insert_and_survive_probabilities(&self, tree: &Tree) -> Vec<f64> {
-        let common_factor = 1.0 / (tree.length + 1.0 / self.model.mu());
-        tree.iter()
-            .map(|node| {
-                (if node.idx == tree.root {
-                    1.0 / self.model.mu()
-                } else {
-                    -(-self.model.mu() * node.blen).exp_m1() / self.model.mu()
-                }) * common_factor
-            })
-            .collect::<Vec<f64>>()
-    }
-
-    /// Probability of a deletion on the branch above each node, indexed by node index.
-    fn deletion_probabilities(&self, tree: &Tree) -> Vec<f64> {
-        tree.iter()
-            .map(|node| -(-self.model.mu() * node.blen).exp_m1())
-            .collect()
-    }
-
-    fn deletion_probabilities_at_children(&self, tree: &Tree) -> Vec<f64> {
-        let deletion_probs = self.deletion_probabilities(tree);
-        tree.iter()
-            .map(|node| {
-                node.children
-                    .iter()
-                    .map(|child| deletion_probs[usize::from(child)])
-                    .product1::<f64>()
-                    .unwrap_or(0.0)
-                    * (1.0 - deletion_probs[usize::from(node.idx)])
-            })
-            .collect()
-    }
-
-    fn delete_at_node_or_children(&self, tree: &Tree) -> FixedBitSet {
-        let deletion_at_node: Vec<f64> = self.deletion_probabilities(tree);
-        let deletion_at_children = self.deletion_probabilities_at_children(tree);
-        let mut delete_at_node_or_children = FixedBitSet::with_capacity(tree.len());
-        for node in tree.iter() {
-            let idx = usize::from(node.idx);
-            delete_at_node_or_children.set(idx, deletion_at_node[idx] > deletion_at_children[idx]);
-        }
-        delete_at_node_or_children
-    }
-
     /// Returns for every node (indexed by node index) a bitset over alignment columns that marks
     /// where the character is present at the node. Traverses the tree once in each direction for
     /// all sites.
     fn reconstruct_presence(&self, phylo: &PhyloInfo<A>) -> Vec<FixedBitSet> {
-        let alignment = &phylo.msa;
-        let tree = &phylo.tree;
-
-        let delete_at_node = self.delete_at_node_or_children(&phylo.tree);
-        let insert_and_survive_probs = self.insert_and_survive_probabilities(tree);
-
-        // has_data[node]: columns where some leaf below the node has a character
-        let has_data = self.potential_character_presence(phylo);
-
-        let mut present = vec![FixedBitSet::with_capacity(alignment.len()); tree.len()];
-        for node_idx in tree.preorder() {
-            let idx = usize::from(node_idx);
-            // A present leaf without an ancestral homolog is an insertion on its terminal
-            // branch; otherwise its character survived until the leaf.
-            if let Leaf(_) = node_idx {
-                present[idx] = has_data[idx].clone();
-                continue;
-            }
-
-            let children = tree.children(node_idx);
-            let mut both_children = has_data[usize::from(children[0])].clone();
-            both_children.intersect_with(&has_data[usize::from(children[1])]);
-
-            let inherited = match tree.node(node_idx).parent {
-                Some(parent) => present[usize::from(parent)].clone(),
-                None => FixedBitSet::with_capacity(alignment.len()),
+        let mut tmp = PIPAsrInfo::<Q>::new(&self.model, phylo);
+        // bottom up pass to fill in deletion and insertion sets
+        for node_idx in phylo.tree.postorder() {
+            match node_idx {
+                Internal(_) => {
+                    self.set_internal(phylo, node_idx, &mut tmp);
+                }
+                Leaf(_) => {
+                    self.set_leaf(phylo, node_idx, &mut tmp);
+                }
             };
-
-            // Inherited columns with data below always survive, those without data survive
-            // unless the deletion is placed at this node. Other columns are inserted here
-            // iff both children have data.
-            let mut row = if delete_at_node[idx] {
-                let mut surviving = inherited;
-                surviving.intersect_with(&has_data[idx]);
-                surviving
-            } else {
-                inherited
-            };
-            row.union_with(&both_children);
-            present[idx] = row;
         }
+
+        let mut present = vec![FixedBitSet::with_capacity(phylo.msa.len()); phylo.tree.len()];
+
+        for node_idx in phylo.tree.preorder() {
+            match node_idx {
+                Internal(idx) => {
+                    // Mark columns as present if the insertion occurred at this node.
+                    if let Some(parent_idx) = phylo.tree.node(node_idx).parent {
+                        let present_in_parent = present[usize::from(parent_idx)].clone();
+                        present[*idx].union_with(&present_in_parent);
+                    }
+
+                    for col in 0..phylo.msa.len() {
+                        if tmp.ancestor_subtree[*idx].contains(col)
+                            && tmp.insertion_location[col] == *idx
+                        {
+                            present[*idx].set(col, true);
+                        }
+                        if tmp.extinct_subtree[*idx].contains(col)
+                            && tmp.deletion_locations[*idx][col][*idx]
+                        {
+                            present[*idx].set(col, false);
+                        }
+                    }
+                }
+                Leaf(idx) => {
+                    present[*idx] = tmp.ancestor_subtree[*idx].clone();
+                }
+            };
+        }
+
         present
     }
 
-    fn potential_character_presence(&self, phylo: &PhyloInfo<A>) -> Vec<FixedBitSet> {
-        let alignment = &phylo.msa;
-        let tree = &phylo.tree;
-        let len = alignment.len();
+    fn set_internal(&self, phylo: &PhyloInfo<A>, node_idx: &NodeIdx, tmp: &mut PIPAsrInfo<Q>) {
+        let idx = usize::from(node_idx);
+        let children: Vec<usize> = phylo
+            .tree
+            .children(node_idx)
+            .iter()
+            .map(usize::from)
+            .collect();
 
-        let mut has_data = vec![FixedBitSet::with_capacity(len); tree.len()];
-        for node_idx in tree.postorder() {
-            let idx = usize::from(node_idx);
-            match node_idx {
-                Leaf(_) => {
-                    has_data[idx] = mapping_to_bits(alignment.leaf_map(node_idx));
+        let mut both_children = tmp.extinct_subtree[children[0]].clone();
+        both_children.intersect_with(&tmp.extinct_subtree[children[1]]);
+        tmp.extinct_subtree[idx] = both_children;
+
+        let f_child1 = tmp.f[children[0]].clone();
+
+        tmp.f[idx] = f_child1.clone().component_mul(&tmp.f[children[1]]);
+        tmp.f[idx] *= 1.0 - tmp.deletion_probs[idx];
+
+        tmp.p[idx] =
+            f_child1.component_mul(&tmp.f[children[1]]) * tmp.insert_and_survive_probs[idx];
+
+        let ch1 = tmp.ancestor_subtree[children[0]].clone();
+        let ch2 = tmp.ancestor_subtree[children[1]].clone();
+
+        tmp.ancestor_subtree[idx] = ch1.clone();
+        tmp.ancestor_subtree[idx].union_with(&ch2);
+
+        for col in tmp.extinct_subtree[idx].ones() {
+            // this subtree is extinct, so no insertion can occur here
+            tmp.ancestor_subtree[idx].set(col, false);
+            tmp.p[idx][col] = 0.0;
+
+            if tmp.f[idx][col] < tmp.deletion_probs[idx] {
+                tmp.f[idx][col] = tmp.deletion_probs[idx];
+                tmp.deletion_locations[idx][col].set(idx, true);
+            } else {
+                let mut del_children = tmp.deletion_locations[children[0]][col].clone();
+                del_children.union_with(&tmp.deletion_locations[children[1]][col]);
+                tmp.deletion_locations[idx][col] = del_children;
+            }
+        }
+
+        for col in tmp.extinct_subtree[idx].zeroes() {
+            if ch1[col] && ch2[col] {
+                // both children potentially in set A, therefore neither can be an insertion
+                tmp.ancestor_subtree[idx].set(col, true);
+                tmp.insertion_location[col] = idx;
+            } else if ch1[col] {
+                // only child 1 is in set A (potential insertion locations)
+                if tmp.p[children[0]][col] >= tmp.p[idx][col] {
+                    // the insertion is more likely to have happened in the child than at the current node
+                    tmp.ancestor_subtree[idx].set(col, true);
+                    tmp.p[idx][col] = tmp.p[children[0]][col];
+                } else {
+                    tmp.insertion_location[col] = idx;
                 }
-                Internal(_) => {
-                    for child in tree.children(node_idx) {
-                        let child_data = has_data[usize::from(child)].clone();
-                        has_data[idx].union_with(&child_data);
-                    }
+            } else if ch2[col] {
+                // only child 2 is in set A (potential insertion locations)
+                if tmp.p[children[1]][col] >= tmp.p[idx][col] {
+                    // the insertion is more likely to have happened in the child than at the current node
+                    tmp.ancestor_subtree[idx].set(col, true);
+                    tmp.p[idx][col] = tmp.p[children[1]][col];
+                } else {
+                    tmp.insertion_location[col] = idx;
                 }
             }
         }
-        has_data
+    }
+
+    fn set_leaf(&self, phylo: &PhyloInfo<A>, node_idx: &NodeIdx, tmp: &mut PIPAsrInfo<Q>) {
+        let idx = usize::from(node_idx);
+        let has_character = mapping_to_bits(phylo.msa.leaf_map(node_idx));
+
+        tmp.extinct_subtree[idx] = has_character.clone();
+        tmp.extinct_subtree[idx].toggle_range(..);
+
+        tmp.ancestor_subtree[idx] = has_character;
+
+        let deletion_probability = tmp.deletion_probs[idx];
+        tmp.f[idx].fill(1.0 - deletion_probability);
+        tmp.p[idx].fill(0.0);
+
+        for col in tmp.extinct_subtree[idx].ones() {
+            // extinct at leaf means potential deletion set
+            tmp.deletion_locations[idx][col].set(idx, true);
+            tmp.f[idx][col] = deletion_probability;
+        }
+
+        for col in tmp.ancestor_subtree[idx].ones() {
+            // present at leaf means potential insertion set (A)
+            tmp.insertion_location[col] = idx;
+            tmp.p[idx][col] = tmp.insert_and_survive_probs[idx];
+        }
     }
 }
 
