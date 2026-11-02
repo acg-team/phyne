@@ -13,6 +13,7 @@ fn homology_against_arpip() {
     // sim-0_msa_new.fasta as the input msa
     // sim-0_new.newick as the input tree (changed node ids from "x" -> "i_x")
     // sim-0_inferred.fasta is the result for comparison (concatenated alignment from input and ARPIP reconstruction)
+    // Note: this dataset has no insertions that are more likely to be higher than the MRCA.
     let fldr = Path::new("./data/pip/arpip");
     let alignment_file = fldr.join("sim-0_msa_new.fasta");
     let tree_file = fldr.join("sim-0_new.newick");
