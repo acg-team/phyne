@@ -655,7 +655,7 @@ mod private_tests {
 
         assert_matches!(
             error,
-            Err(Error::Sequence(msg)) if msg.contains("[\"C2\"]")
+            Err(Error::Tree(msg)) if msg.contains("number of tree nodes (9) does not match number of sequences (8)")
         );
     }
 
@@ -680,6 +680,90 @@ mod private_tests {
 
         // assert
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_ids_number_mismatch() {
+        let tree = tree!("((A0:1.0,B1:1.0)I1:1.0,C2:1.0)I0:1.0;");
+        let seqs = Sequences::new_unchecked(vec![
+            record!("A0", b"X"),
+            record!("B1", b"X"),
+            record!("I1", b"X"),
+            record!("I0", b"X"),
+        ]);
+        let result = validate_ids_with_ancestors(&tree, &seqs);
+        assert_matches!(
+            result,
+            Err(Error::Tree(msg)) if msg.contains("does not match number")
+        );
+    }
+
+    #[test]
+    fn validate_ids_missing_leaf_sequence() {
+        let tree = tree!("((A0:1.0,B1:1.0)I1:1.0,C2:1.0)I0:1.0;");
+        let seqs = Sequences::new_unchecked(vec![
+            record!("A0", b"X"),
+            record!("B1", b"X"),
+            record!("I1", b"X"),
+            record!("I1", b"X"),
+            record!("I0", b"X"),
+        ]);
+        let result = validate_ids_with_ancestors(&tree, &seqs);
+        assert_matches!(
+            result,
+            Err(Error::Sequence(msg)) if msg.contains("missing sequence IDs: [\"C2\"]")
+        );
+    }
+
+    #[test]
+    fn validate_ids_missing_internal_sequence() {
+        let tree = tree!("((A0:1.0,B1:1.0)I1:1.0,C2:1.0)I0:1.0;");
+        let seqs = Sequences::new_unchecked(vec![
+            record!("A0", b"X"),
+            record!("B1", b"X"),
+            record!("C2", b"X"),
+            record!("C2", b"X"),
+            record!("I0", b"X"),
+        ]);
+        let result = validate_ids_with_ancestors(&tree, &seqs);
+        assert_matches!(
+            result,
+            Err(Error::Sequence(msg)) if msg.contains("missing sequence IDs: [\"I1\"]")
+        );
+    }
+
+    #[test]
+    fn validate_ids_mismatched_taxa() {
+        let tree = tree!("((A0:1.0,B1:1.0)I1:1.0,C2:1.0)I0:1.0;");
+        let seqs = Sequences::new_unchecked(vec![
+            record!("A0_1", b"X"),
+            record!("B1_1", b"X"),
+            record!("C2_1", b"X"),
+            record!("I1", b"X"),
+            record!("I0", b"X"),
+        ]);
+        let result = validate_ids_with_ancestors(&tree, &seqs);
+        assert_matches!(
+            result,
+            Err(Error::Tree(msg)) if msg.contains("missing node IDs: [\"A0_1\", \"B1_1\", \"C2_1\"]")
+        );
+    }
+
+    #[test]
+    fn validate_ids_mismatched_internals() {
+        let tree = tree!("((A0:1.0,B1:1.0)I1:1.0,C2:1.0)I0:1.0;");
+        let seqs = Sequences::new_unchecked(vec![
+            record!("A0", b"X"),
+            record!("B1", b"X"),
+            record!("C2", b"X"),
+            record!("I1_1", b"X"),
+            record!("I0_1", b"X"),
+        ]);
+        let result = validate_ids_with_ancestors(&tree, &seqs);
+        assert_matches!(
+            result,
+            Err(Error::Tree(msg)) if msg.contains("missing node IDs: [\"I0_1\", \"I1_1\"]")
+        );
     }
 
     #[test]
