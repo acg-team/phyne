@@ -34,8 +34,8 @@ pub(crate) enum TKF92Parameters {
 /// This is currently set to 3, but changing it allows ad hoc testing.
 /// For example, a value of 2 optimizes only the ratio and the rate of
 /// `lambda` and `mu` but not the parameter `r`.
-/// In preliminary experiments, optimizing over the ratio and rate
-/// performed much better than optimizing over `lambda` and `mu` directly.
+/// In preliminary experiments, optimizing over the ratio, rate and `r`
+/// performed much better than optimizing over `lambda`, `mu` and `r` directly.
 const TKF92_SEARCH_PARAM_COUNT: usize = 3;
 
 /// Defined parameters/axes for the [`TKF92IndelModel`] where the parameter optimisation is
