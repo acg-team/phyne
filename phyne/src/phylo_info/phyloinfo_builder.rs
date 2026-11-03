@@ -556,7 +556,7 @@ mod private_tests {
     use crate::alphabets::UNKNOWN_ALPHABET;
     use crate::phylo_info::{
         phyloinfo_builder::{set_missing_tree_node_ids, PhyloInfoBuilder as PIB},
-        validate_ids_with_ancestors, validate_taxa_ids,
+        validate_ancestor_ids, validate_ids_with_ancestors, validate_taxa_ids,
     };
     use crate::random::FakeGenerator;
     use crate::{record_wo_desc as record, tree, Error};
@@ -764,6 +764,20 @@ mod private_tests {
             result,
             Err(Error::Tree(msg)) if msg.contains("missing node IDs: [\"I0_1\", \"I1_1\"]")
         );
+    }
+
+    #[test]
+    fn validate_ancestor_ids_wo_leaves() {
+        let tree = tree!("((A1:1.0,B1:1.0)I1:1.0,C2:1.0)I0:1.0;");
+        let sequences = Sequences::new_unchecked(vec![record!("I1", b"X"), record!("I0", b"X")]);
+        assert!(validate_ancestor_ids(&tree, &sequences).is_ok());
+    }
+
+    #[test]
+    fn validate_ancestor_ids_wo_leaves_fails() {
+        let tree = tree!("((A0:1.0,B1:1.0)I1:1.0,C2:1.0)I0:1.0;");
+        let sequences = Sequences::new_unchecked(vec![record!("I2", b"X"), record!("I0", b"X")]);
+        assert!(validate_ancestor_ids(&tree, &sequences).is_err());
     }
 
     #[test]
