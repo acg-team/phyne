@@ -90,9 +90,9 @@ fn setup_info_missing_sequence_file() {
     let error = PIB::with_attrs(&seq_file, fldr.join("tree_diff_branch_lengths_1.newick")).build();
     assert_matches!(
         error,
-        Err(Error::Io(msg))
-            if msg.contains(&format!("Failed to read fasta from {:?}", seq_file))
-                && msg.matches(seq_file.to_str().unwrap()).count() == 1
+        Err(Error::Other(msg))
+            if msg.to_string().contains(&format!("Failed to read fasta from {:?}", seq_file))
+                && msg.to_string().matches(seq_file.to_str().unwrap()).count() == 1
     );
 }
 

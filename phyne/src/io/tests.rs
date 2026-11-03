@@ -38,7 +38,13 @@ fn reading_correct_fasta() {
 )]
 fn reading_incorrect_fasta(#[case] input: &str, #[case] exp_error: &str) {
     let res = read_sequences(input);
-    assert_matches!(res, Err(Error::Io(msg)) if msg.contains(exp_error));
+    assert_matches!(
+        res,
+        Err(Error::Io(msg))
+            if msg.contains(exp_error)
+                && msg.contains(input)
+                && msg.matches(input).count() == 1
+    );
 }
 
 #[test]
@@ -46,8 +52,9 @@ fn reading_nonexistent_fasta() {
     let missing_path = "./data/sequences_nonexistent.fasta";
     assert_matches!(
         read_sequences(missing_path),
-        Err(Error::Io(msg))
-            if msg.contains(missing_path) && msg.matches(missing_path).count() == 1
+        Err(Error::Other(msg))
+            if msg.to_string().contains(missing_path)
+                && msg.to_string().matches(missing_path).count() == 1
     );
 }
 

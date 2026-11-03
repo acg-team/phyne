@@ -34,14 +34,13 @@ use crate::{bail, record, Error, Result};
 pub fn read_sequences(path: impl AsRef<Path> + Debug) -> Result<Vec<Record>> {
     let path_str = path.as_ref().display().to_string();
     info!("Reading sequences from file {path_str}");
-    let reader = Reader::from_file(&path).map_err(|err| Error::Io(err.to_string()))?;
-    // let reader = Reader::from_file(&path)?;
+    let reader = Reader::from_file(&path)?;
     let mut sequences = Vec::new();
 
     for record in reader.records() {
         let rec = record.context(format!("Failed to read fasta record from file {path_str}"))?;
         if let Err(e) = rec.check() {
-            bail!(Io, e)
+            bail!(Io, "invalid fasta record in file {path_str}: {e}")
         }
 
         let seq: Vec<u8> = rec
@@ -54,10 +53,8 @@ pub fn read_sequences(path: impl AsRef<Path> + Debug) -> Result<Vec<Record>> {
         if !Alphabet::protein().is_word(&seq) {
             bail!(
                 Io,
-                format!(
-                    "invalid genetic sequence encountered: {}",
-                    String::from_utf8_lossy(&seq)
-                )
+                "invalid genetic sequence in file {path_str}: {}",
+                String::from_utf8_lossy(&seq)
             )
         }
 
