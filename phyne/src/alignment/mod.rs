@@ -78,7 +78,7 @@ impl PairwiseAlignment {
 #[allow(clippy::len_without_is_empty)]
 pub trait Alignment: Display + Clone + Debug {
     /// Returns the alphabet of the sequences in the alignment.
-    fn alphabet(&self) -> &Alphabet;
+    fn alphabet(&self) -> &'static Alphabet;
     /// Returns the sequences without gaps
     fn seqs(&self) -> &Sequences;
     /// Returns the length of the sequences in the alignment
@@ -281,8 +281,8 @@ impl Alignment for MSA {
     /// assert_eq!(phylo.msa.alphabet(), Alphabet::dna());
     /// # Ok(()) }
     ///
-    fn alphabet(&self) -> &Alphabet {
-        self.seqs.alphabet
+    fn alphabet(&self) -> &'static Alphabet {
+        self.seqs.alphabet()
     }
 
     fn seqs(&self) -> &Sequences {
@@ -449,8 +449,8 @@ impl Display for MASA {
 }
 
 impl Alignment for MASA {
-    fn alphabet(&self) -> &Alphabet {
-        self.leaf_seqs.alphabet
+    fn alphabet(&self) -> &'static Alphabet {
+        self.leaf_seqs.alphabet()
     }
 
     fn seqs(&self) -> &Sequences {
