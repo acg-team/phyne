@@ -48,7 +48,7 @@ impl<Q: QMatrix, T: TKFModel, AA: AncestralAlignment> ModelSearchCost for TKFCos
     }
 
     fn param_count(&self) -> usize {
-        self.indel_cost.model.params().len() + self.subst_cost.model.qmatrix.params().len()
+        self.indel_cost.param_count() + self.subst_cost.param_count()
     }
 
     fn param(&self, idx: usize) -> f64 {
@@ -79,16 +79,16 @@ impl<Q: QMatrix, T: TKFModel, AA: AncestralAlignment> ModelSearchCost for TKFCos
         self.subst_cost.param_range(idx)
     }
 
+    fn freqs(&self) -> &FreqVector {
+        self.subst_cost.freqs()
+    }
+
     fn set_freqs(&mut self, freqs: FreqVector) -> Result<()> {
         self.subst_cost.set_freqs(freqs)
     }
 
     fn empirical_freqs(&self) -> FreqVector {
         self.subst_cost.info.freqs()
-    }
-
-    fn freqs(&self) -> &FreqVector {
-        self.subst_cost.freqs()
     }
 }
 

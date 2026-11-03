@@ -344,6 +344,10 @@ impl<Q: QMatrix, M: Alignment> ModelSearchCost for PIPCost<Q, M> {
         self.model.param_range(param)
     }
 
+    fn freqs(&self) -> &FreqVector {
+        self.model.freqs()
+    }
+
     fn set_freqs(&mut self, freqs: FreqVector) -> Result<()> {
         self.model.set_freqs(freqs)?;
         self.tmp.borrow_mut().models_valid.fill(false);
@@ -352,10 +356,6 @@ impl<Q: QMatrix, M: Alignment> ModelSearchCost for PIPCost<Q, M> {
 
     fn empirical_freqs(&self) -> FreqVector {
         self.info.freqs()
-    }
-
-    fn freqs(&self) -> &FreqVector {
-        self.model.freqs()
     }
 }
 

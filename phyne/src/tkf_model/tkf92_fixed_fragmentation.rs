@@ -60,8 +60,29 @@ impl TKFModel for TKF92FixedIndelModel {
         self.params[usize::from(TKF92Parameters::Mu)]
     }
 
-    fn params(&self) -> &[f64] {
-        &self.params
+    fn ln_insertion_factor_at_root(&self) -> f64 {
+        self.lambda().ln() - self.mu().ln()
+    }
+
+    fn ln_insertion_factor_at_non_root(&self, ln_beta: f64) -> f64 {
+        self.lambda().ln() + ln_beta
+    }
+
+    fn block_prob(&self, ln_tree_event_factor: f64, block_len: usize) -> f64 {
+        ln_tree_event_factor + (block_len as f64 - 1.0) * self.ln_r + (1.0 - self.r()).ln()
+    }
+
+    fn get_blocks<AA: AncestralAlignment>(&self, msa: &AA) -> Vec<usize> {
+        let alignment_blocks = blocks_of_ancestral_alignment(msa);
+        merge_fragmentation_with_blocks(&self.fragmentation, &alignment_blocks)
+    }
+
+    fn param_count(&self) -> usize {
+        TKF92_PARAM_COUNT
+    }
+
+    fn param(&self, idx: usize) -> f64 {
+        self.params[idx]
     }
 
     fn set_param(&mut self, idx: usize, value: f64) {
@@ -85,23 +106,6 @@ impl TKFModel for TKF92FixedIndelModel {
             TKF92Parameters::R => PARAM_RANGE_UNIT_INTERVAL_EXCLUSIVE,
             _ => panic!("Invalid parameter index for TKF model: {param:?}"),
         }
-    }
-
-    fn ln_insertion_factor_at_root(&self) -> f64 {
-        self.lambda().ln() - self.mu().ln()
-    }
-
-    fn ln_insertion_factor_at_non_root(&self, ln_beta: f64) -> f64 {
-        self.lambda().ln() + ln_beta
-    }
-
-    fn block_prob(&self, ln_tree_event_factor: f64, block_len: usize) -> f64 {
-        ln_tree_event_factor + (block_len as f64 - 1.0) * self.ln_r + (1.0 - self.r()).ln()
-    }
-
-    fn get_blocks<AA: AncestralAlignment>(&self, msa: &AA) -> Vec<usize> {
-        let alignment_blocks = blocks_of_ancestral_alignment(msa);
-        merge_fragmentation_with_blocks(&self.fragmentation, &alignment_blocks)
     }
 }
 
