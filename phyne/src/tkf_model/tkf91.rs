@@ -290,7 +290,7 @@ mod private_tests {
         // This caused parameters to differ slightly when setting rate or ratio multiple times,
         // i.e., setting rate to x_1, x_2, ..., x_n or setting rate straight to x_n would yield
         // different values for lambda and mu.
-        // With the current implementation, coordinates systems are separated: to calculate lambda
+        // With the current implementation, coordinate systems are separated: to calculate lambda
         // and mu, only ratio and rate are used, and to calculate ratio and rate, only lambda and mu
         // are used.
         let mut model1 = TKF91IndelModel::new(&[1.0, 2.0]).unwrap();

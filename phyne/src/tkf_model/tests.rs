@@ -385,9 +385,9 @@ pub(super) fn setup_test_phylo(alphabet: &'static Alphabet) -> PhyloInfo<MASA> {
 #[test]
 fn tkf_indel_get_and_set_params_and_freqs() {
     let mut model = TKF92IndelModel::new(&[1.0, 2.0, 0.3]).unwrap();
+    let phylo = setup_test_phylo(Alphabet::dna());
 
-    let mut cost =
-        TKFIndelCostBuilder::new(model.clone(), setup_test_phylo(Alphabet::dna())).build();
+    let mut cost = TKFIndelCostBuilder::new(model.clone(), phylo.clone()).build();
     // params
     assert_eq!(cost.param_count(), model.param_count());
     for param_idx in 0..cost.param_count() {
@@ -403,10 +403,7 @@ fn tkf_indel_get_and_set_params_and_freqs() {
     }
     // freqs
     assert_eq!(cost.freqs(), &*DUMMY_FREQS);
-    assert_eq!(
-        cost.empirical_freqs(),
-        setup_test_phylo(Alphabet::dna()).freqs()
-    );
+    assert_eq!(cost.empirical_freqs(), phylo.freqs());
 }
 
 #[test]
@@ -414,13 +411,10 @@ fn tkf_get_and_set_params() {
     let mut subst_model =
         SubstModel::<GTR>::new(&[0.1, 0.2, 0.3, 0.4], &[0.5, 0.6, 0.7, 0.8, 0.9]).unwrap();
     let mut indel_model = TKF92IndelModel::new(&[1.0, 2.0, 0.3]).unwrap();
-    let mut cost = TKFCostBuilder::new(
-        subst_model.clone(),
-        indel_model.clone(),
-        setup_test_phylo(Alphabet::dna()),
-    )
-    .build()
-    .unwrap();
+    let phylo = setup_test_phylo(Alphabet::dna());
+    let mut cost = TKFCostBuilder::new(subst_model.clone(), indel_model.clone(), phylo.clone())
+        .build()
+        .unwrap();
     //params
     assert_eq!(
         cost.param_count(),
@@ -456,10 +450,7 @@ fn tkf_get_and_set_params() {
         }
     }
 
-    assert_eq!(
-        cost.empirical_freqs(),
-        setup_test_phylo(Alphabet::dna()).freqs()
-    );
+    assert_eq!(cost.empirical_freqs(), phylo.freqs());
 }
 
 #[test]

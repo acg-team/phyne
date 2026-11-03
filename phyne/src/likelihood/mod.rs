@@ -45,12 +45,15 @@ pub trait ModelSearchCost {
     fn cost(&self) -> f64;
     /// Returns the number of parameters/axes the model is optimised over.
     fn param_count(&self) -> usize;
-    /// Returns a parameter value or a combination of parameters value (e.g. ratio or sum).
+    /// Returns a parameter value or a combination of parameter values (e.g. ratio or sum).
     fn param(&self, param_idx: usize) -> f64;
+    /// Sets a parameter value or a combination of parameter values (e.g. ratio or sum).
     fn set_param(&mut self, param_idx: usize, value: f64);
     /// Returns the valid range for a model parameter [min, max], inclusive.
     fn param_range(&self, param_idx: usize) -> ParamRange;
+    /// Returns the equilibrium distribution of the characters in the model.
     fn freqs(&self) -> &FreqVector;
+    /// Sets the equilibrium distribution of the characters in the model.
     fn set_freqs(&mut self, freqs: FreqVector) -> Result<()>;
     /// Returns the empirical frequencies of the characters of the alignment that is associated with the cost.
     fn empirical_freqs(&self) -> FreqVector;

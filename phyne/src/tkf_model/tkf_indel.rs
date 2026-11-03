@@ -18,7 +18,7 @@ use crate::tree::Tree;
 use crate::{bail, bug, Result};
 
 lazy_static! {
-    pub(super) static ref DUMMY_FREQS: DVector<f64> = DVector::<f64>::zeros(0);
+    pub(super) static ref DUMMY_FREQS: FreqVector = DVector::<f64>::zeros(0);
 }
 
 pub(super) static DEFAULT_LAMBDA: f64 = 1.0;

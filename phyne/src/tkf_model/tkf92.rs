@@ -27,9 +27,15 @@ pub(crate) enum TKF92Parameters {
     Invalid(usize),
 }
 
-/// By setting this to a value smaller than the number of parameters in [`TKF92SearchParameters`],
-/// we can limit the model search to a subset of parameters/axes. For example, if we set
-/// this to 2, then only the ratio and rate will be optimized. This is useful for ad hoc testing.
+/// Number of leading parameters (axes) of [`TKF92SearchParameters`] that are optimized directly.
+/// Parameters beyond this limit are not optimized directly, but they may still change
+/// implicitly as a consequence of the optimized ones.
+///
+/// This is currently set to 3, but changing it allows ad hoc testing.
+/// For example, a value of 2 optimizes only the ratio and the rate of
+/// `lambda` and `mu` but not the parameter `r`.
+/// In preliminary experiments, optimizing over the ratio and rate
+/// performed much better than optimizing over `lambda` and `mu` directly.
 const TKF92_SEARCH_PARAM_COUNT: usize = 3;
 
 /// Defined parameters/axes for the [`TKF92IndelModel`] where the parameter optimisation is
@@ -39,7 +45,7 @@ const TKF92_SEARCH_PARAM_COUNT: usize = 3;
 /// Searching over derived parameters can be useful for optimisation in case of constraints like lambda < mu,
 /// which is assumed so that the equilibrium root length distribution is well-defined.
 ///
-/// Code and tests are in a way that allows for changing the order. In combination with the
+/// Code and tests are set up in a way that allows for changing the order. In combination with the
 /// [`TKF92_SEARCH_PARAM_COUNT`] constant, this allows for ad hoc testing of different search strategies.
 #[derive(Debug, Eq, PartialEq, FromPrimitive, IntoPrimitive)]
 #[repr(usize)]
@@ -362,7 +368,7 @@ mod private_tests {
         // This caused parameters to differ slightly when setting rate or ratio multiple times,
         // i.e., setting rate to x_1, x_2, ..., x_n or setting rate straight to x_n would yield
         // different values for lambda and mu.
-        // With the current implementation, coordinates systems are separated: to calculate lambda
+        // With the current implementation, coordinate systems are separated: to calculate lambda
         // and mu, only ratio and rate are used, and to calculate ratio and rate, only lambda and mu
         // are used.
         let mut model1 = TKF92IndelModel::new(&[1.0, 2.0, 0.3]).unwrap();
