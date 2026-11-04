@@ -5,7 +5,7 @@ use fixedbitset::FixedBitSet;
 use nalgebra::DVector;
 
 use crate::alignment::{mapping_to_bits, Alignment, AncestralAlignment, Sequences};
-use crate::alphabets::GAP;
+use crate::alphabets::{AMB_CHAR, GAP};
 use crate::asr::AncestralSequenceReconstruction;
 use crate::phylo_info::PhyloInfo;
 use crate::pip_model::PIPModel;
@@ -106,12 +106,13 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> AncestralSequenceReconstr
         let present = self.reconstruct_presence(&phylo);
 
         let mut ancestral_records = Vec::<Record>::with_capacity(phylo.tree.len() - phylo.tree.n);
+
         for node_idx in phylo.tree.postorder() {
-            if let Internal(_) = node_idx {
-                let row = &present[usize::from(node_idx)];
-                let seq: Vec<u8> = (0..row.len())
-                    .map(|site| if row[site] { b'X' } else { GAP })
-                    .collect();
+            if let Internal(idx) = node_idx {
+                let mut seq = vec![GAP; phylo.msa.len()];
+                for site in present[*idx].ones() {
+                    seq[site] = AMB_CHAR;
+                }
                 ancestral_records.push(record!(phylo.tree.node_id(node_idx), None, &seq));
             }
         }
