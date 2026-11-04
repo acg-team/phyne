@@ -203,6 +203,8 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
             .map(usize::from)
             .collect();
 
+        // Important: the potential values for f and p are precomputed but can be reset by deletion
+        // and insertion processing
         let f_child1 = tmp.f[children[0]].clone();
         tmp.f[idx] = f_child1.clone().component_mul(&tmp.f[children[1]]);
         tmp.f[idx] *= 1.0 - tmp.deletion_probs[idx];
