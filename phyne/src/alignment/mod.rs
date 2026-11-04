@@ -10,7 +10,8 @@ use crate::alphabets::{Alphabet, AMB_CHAR};
 use crate::asr::AncestralSequenceReconstruction;
 use crate::parsimony_presence_absence::ParsimonyPresenceAbsence;
 use crate::phylo_info::{
-    set_missing_tree_node_ids, validate_ids_with_ancestors, validate_taxa_ids, PhyloInfo,
+    set_missing_tree_node_ids, validate_ancestor_ids, validate_ids_with_ancestors,
+    validate_taxa_ids, PhyloInfo,
 };
 use crate::random::RandomGenerator;
 use crate::tree::{NodeIdx, NodeIdx::Internal, NodeIdx::Leaf, Tree};
