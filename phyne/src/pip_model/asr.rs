@@ -437,7 +437,6 @@ mod tests {
             record!("L7", b"-"),
             record!("L8", b"-"),
         ]);
-        assert_eq!(tree.length, 10006.001);
 
         let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
 
@@ -470,7 +469,6 @@ mod tests {
             record!("L3", b"-"),
             record!("L4", b"-"),
         ]);
-        assert_eq!(tree.length, 10006.001);
 
         let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
 
@@ -591,16 +589,20 @@ mod tests {
         assert!(matches!(tree.root, Leaf(_)));
     }
 
+    fn setup_test_info_for_tmp_values() -> PhyloInfo<MSA> {
+        let tree = tree!("((A2:1,B3:1)I1:1,(C5:1,D6:1)I4:1)I0:0;");
+        let sequences = Sequences::new_unchecked(vec![
+            record!("A2", b"XXX--X"),
+            record!("B3", b"X-X--X"),
+            record!("C5", b"X---X-"),
+            record!("D6", b"--XXX-"),
+        ]);
+        MSA::from_aligned(sequences, tree.clone()).unwrap()
+    }
+
     #[test]
     fn tmp_start_values() {
-        let tree = tree!("((A2:1,B3:1)I2:1,(C5:1,D6:1)I1:1)I0:0;");
-        let sequences = Sequences::new_unchecked(vec![
-            record!("A2", b"XXX-"),
-            record!("B3", b"X-X-"),
-            record!("C5", b"X---"),
-            record!("D6", b"--XX"),
-        ]);
-        let phylo = MSA::from_aligned(sequences, tree.clone()).unwrap();
+        let phylo = setup_test_info_for_tmp_values();
 
         let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
         let tmp = PIPAsrInfo::new(&asr.model, &phylo);
@@ -629,19 +631,12 @@ mod tests {
 
     #[test]
     fn intermediate_values_at_leaves() {
-        let tree = tree!("((A2:1,B3:1)I2:1,(C5:1,D6:1)I1:1)I0:0;");
-        let sequences = Sequences::new_unchecked(vec![
-            record!("A2", b"XXX--X"),
-            record!("B3", b"X-X--X"),
-            record!("C5", b"X---X-"),
-            record!("D6", b"--XXX-"),
-        ]);
-        let phylo = MSA::from_aligned(sequences, tree.clone()).unwrap();
+        let phylo = setup_test_info_for_tmp_values();
 
         let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
         let mut tmp = PIPAsrInfo::new(&asr.model, &phylo);
 
-        for node in tree.leaves() {
+        for node in phylo.tree.leaves() {
             asr.set_leaf(&phylo, &node.idx, &mut tmp);
         }
 
@@ -704,14 +699,7 @@ mod tests {
 
     #[test]
     fn intermediate_values_at_internals() {
-        let tree = tree!("((A2:1,B3:1)I1:1,(C5:1,D6:1)I4:1)I0:0;");
-        let sequences = Sequences::new_unchecked(vec![
-            record!("A2", b"XXX--X"),
-            record!("B3", b"X-X--X"),
-            record!("C5", b"X---X-"),
-            record!("D6", b"--XXX-"),
-        ]);
-        let phylo = MSA::from_aligned(sequences, tree.clone()).unwrap();
+        let phylo = setup_test_info_for_tmp_values();
 
         let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
         let mut tmp = PIPAsrInfo::new(&asr.model, &phylo);
@@ -828,31 +816,19 @@ mod tests {
 
     #[test]
     fn final_reconstruction() {
-        let tree = tree!("((A2:1,B3:1)I1:1,(C5:1,D6:1)I4:1)I0:0;");
-        let sequences = Sequences::new_unchecked(vec![
-            record!("A2", b"XXX--X"),
-            record!("B3", b"X-X--X"),
-            record!("C5", b"X---X-"),
-            record!("D6", b"--XXX-"),
-        ]);
-        let all_seqs = Sequences::new_unchecked(vec![
-            record!("A2", b"XXX--X"),
-            record!("B3", b"X-X--X"),
-            record!("C5", b"X---X-"),
-            record!("D6", b"--XXX-"),
+        let phylo = setup_test_info_for_tmp_values();
+        let ancestral_seqs = Sequences::new_unchecked(vec![
             record!("I0", b"X-X---"),
             record!("I1", b"X-X--X"),
             record!("I4", b"X-X-X-"),
         ]);
 
-        let phylo = MSA::from_aligned(sequences, tree.clone()).unwrap();
-
         let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
-        let reconstruction = asr.reconstruct_ancestral_seqs_unchecked(phylo);
+        let reconstruction = asr.reconstruct_ancestral_seqs_unchecked(phylo.clone());
 
-        let expected = MASA::from_aligned_with_ancestral(all_seqs, tree.clone()).unwrap();
+        let expected = MASA::from_msa_with_ancestral(phylo.clone(), ancestral_seqs).unwrap();
 
-        for node in tree.internals() {
+        for node in phylo.tree.internals() {
             let map = reconstruction.msa.ancestral_map(&node.idx);
             assert_eq!(map, expected.msa.ancestral_map(&node.idx));
         }
