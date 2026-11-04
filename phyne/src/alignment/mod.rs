@@ -151,6 +151,7 @@ pub trait AncestralAlignment: Alignment {
 
         Ok(ancestral_alignment)
     }
+
     /// Constructs a [`PhyloInfo`] with ancestral sequences from aligned sequences and a
     /// phylogenetic tree. Is called by the default implementation of
     /// [`AncestralAlignment::from_aligned_with_ancestral`].
@@ -164,11 +165,21 @@ pub trait AncestralAlignment: Alignment {
     /// Use [`surviving_columns_mask`] to inspect which columns survive before removal.
     fn remove_extinct_columns(&mut self);
 
-    /// Constructs a [`PhyloInfo`] with ancestral sequences from a PhyloInfo with an alignment and
+    /// Constructs a [`PhyloInfo`] with ancestral sequences from a [`PhyloInfo`] with an [`Alignment`] and
     /// aligned ancestral sequences.
+    /// Checks if inputs are compatible and calls [`Self::from_msa_with_ancestral_unchecked`].
+    /// Checks:
+    /// - if ancestral sequences have the same alphabet as the leaf sequences
+    /// - if ancestral sequences are aligned
+    /// - if ancestral sequences have the same length as the leaf sequences
+    /// - if sequence IDs match the node IDs in the tree ([`validate_ids_with_ancestors`])
     ///
-    /// Tree is consumed and stored together with the alignment, because the alignment is only
+    /// Tree is consumed and stored together with the ancestral alignment, because the alignment is only
     /// meaningful in the context of the tree that it was built from.
+    ///
+    /// Only overwrite this method if absolutely necessary. The default implementation
+    /// ensures that prerequisites are met. Overwriting and not ensuring these checks
+    /// may lead to unexpected panics or wrong results.
     fn from_msa_with_ancestral(
         phylo: PhyloInfo<impl Alignment>,
         ancestral_seqs: Sequences,
@@ -199,6 +210,12 @@ pub trait AncestralAlignment: Alignment {
         ))
     }
 
+    /// Constructs a [`PhyloInfo`] with ancestral sequences from a [`PhyloInfo`] with an [`Alignment`] and
+    /// aligned ancestral sequences. Is called by the default implementation of
+    /// [`AncestralAlignment::from_msa_with_ancestral`].
+    ///
+    /// Tree is consumed and stored together with the ancestral alignment, because the alignment is only
+    /// meaningful in the context of the tree that it was built from.
     fn from_msa_with_ancestral_unchecked(
         phylo: PhyloInfo<impl Alignment>,
         ancestral_seqs: Sequences,
@@ -781,6 +798,30 @@ impl AncestralAlignment for MASA {
         }
     }
 
+    /// # Example
+    /// ```
+    /// use phyne::alignment::{Alignment, AncestralAlignment, Sequences, MASA, MSA};
+    /// use phyne::{record, tree};
+    /// # use phyne::Result;
+    ///
+    /// # fn main() -> Result<()> {
+    /// let tree = tree!("(((A0:1.0,B1:1.0)I1:1.0,C2:1.0)I2:1.0);");
+    /// let seqs = Sequences::new(vec![
+    ///     record!("A0", Some("A0 sequence"), b"AG-T"),
+    ///     record!("B1", Some("B1 sequence"), b"---T"),
+    ///     record!("C2", Some("C2 sequence"), b"AC--"),
+    /// ])?;
+    /// let ancestral_seqs = Sequences::new(vec![
+    ///     record!("I1", Some("I1 sequence"), b"AA-A"),
+    ///     record!("I2", Some("I2 sequence"), b"ACGT"),
+    /// ])?;
+    /// let phylo = MSA::from_aligned(seqs.clone(), tree)?;
+    /// let phylo = MASA::from_msa_with_ancestral_unchecked(phylo, ancestral_seqs.clone());
+    ///
+    /// assert_eq!(phylo.msa.seqs(), &seqs.into_gapless());
+    /// assert_eq!(phylo.msa.ancestral_seqs(), &ancestral_seqs.into_gapless());
+    /// # Ok(()) }
+    /// ```
     fn from_msa_with_ancestral_unchecked(
         phylo: PhyloInfo<impl Alignment>,
         ancestral_seqs: Sequences,
