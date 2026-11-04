@@ -178,15 +178,14 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
 
         tmp.ancestor_subtree[idx] = has_character;
 
-        let deletion_probability = tmp.deletion_probs[idx];
-        tmp.f[idx].fill(1.0 - deletion_probability);
+        tmp.f[idx].fill(1.0 - tmp.deletion_probs[idx]);
         tmp.p[idx].fill(tmp.insert_and_survive_probs[idx]);
 
         for col in tmp.extinct_subtree[idx].ones() {
             // extinct at leaf means potential deletion set
-            tmp.deletion_locations[idx][col].set(idx, true);
-            tmp.f[idx][col] = deletion_probability;
             tmp.p[idx][col] = 0.0;
+            tmp.f[idx][col] = tmp.deletion_probs[idx];
+            tmp.deletion_locations[idx][col].set(idx, true);
         }
 
         for col in tmp.ancestor_subtree[idx].ones() {
