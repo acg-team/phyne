@@ -164,6 +164,37 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
         tmp.presence
     }
 
+    fn compute_leaf_probabilities(
+        &self,
+        phylo: &PhyloInfo<A>,
+        node_idx: &NodeIdx,
+        tmp: &mut PIPAsrInfo<Q>,
+    ) {
+        let idx = usize::from(node_idx);
+        let has_character = mapping_to_bits(phylo.msa.leaf_map(node_idx));
+
+        tmp.extinct_subtree[idx] = has_character.clone();
+        tmp.extinct_subtree[idx].toggle_range(..);
+
+        tmp.ancestor_subtree[idx] = has_character;
+
+        let deletion_probability = tmp.deletion_probs[idx];
+        tmp.f[idx].fill(1.0 - deletion_probability);
+        tmp.p[idx].fill(tmp.insert_and_survive_probs[idx]);
+
+        for col in tmp.extinct_subtree[idx].ones() {
+            // extinct at leaf means potential deletion set
+            tmp.deletion_locations[idx][col].set(idx, true);
+            tmp.f[idx][col] = deletion_probability;
+            tmp.p[idx][col] = 0.0;
+        }
+
+        for col in tmp.ancestor_subtree[idx].ones() {
+            // present at leaf means potential insertion set (A)
+            tmp.insertion_location[col] = idx;
+        }
+    }
+
     fn compute_internal_probabilities(
         &self,
         phylo: &PhyloInfo<A>,
@@ -186,66 +217,6 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
 
         self.deletion_at_node_or_children(idx, &children, tmp);
         self.potential_insertion_at_node(idx, &children, tmp);
-    }
-
-    fn compute_leaf_probabilities(
-        &self,
-        phylo: &PhyloInfo<A>,
-        node_idx: &NodeIdx,
-        tmp: &mut PIPAsrInfo<Q>,
-    ) {
-        let idx = usize::from(node_idx);
-        let has_character = mapping_to_bits(phylo.msa.leaf_map(node_idx));
-
-        tmp.extinct_subtree[idx] = has_character.clone();
-        tmp.extinct_subtree[idx].toggle_range(..);
-
-        tmp.ancestor_subtree[idx] = has_character;
-
-        let deletion_probability = tmp.deletion_probs[idx];
-        tmp.f[idx].fill(1.0 - deletion_probability);
-        tmp.p[idx].fill(0.0);
-
-        for col in tmp.extinct_subtree[idx].ones() {
-            // extinct at leaf means potential deletion set
-            tmp.deletion_locations[idx][col].set(idx, true);
-            tmp.f[idx][col] = deletion_probability;
-        }
-
-        for col in tmp.ancestor_subtree[idx].ones() {
-            // present at leaf means potential insertion set (A)
-            tmp.insertion_location[col] = idx;
-            tmp.p[idx][col] = tmp.insert_and_survive_probs[idx];
-        }
-    }
-
-    fn compute_ancestral_presence(
-        &self,
-        phylo: &PhyloInfo<A>,
-        node_idx: &NodeIdx,
-        tmp: &mut PIPAsrInfo<Q>,
-    ) {
-        let idx = usize::from(node_idx);
-
-        // Mark columns as present if they are inherited from the parent
-        if let Some(parent_idx) = phylo.tree.node(node_idx).parent {
-            let present_in_parent = tmp.presence[usize::from(parent_idx)].clone();
-            tmp.presence[idx].union_with(&present_in_parent);
-        }
-
-        // Mark columns as present if the insertion occurred at this node
-        for col in tmp.ancestor_subtree[idx].ones() {
-            if tmp.insertion_location[col] == idx {
-                tmp.presence[idx].set(col, true);
-            }
-        }
-
-        // Mark columns as absent if the deletion occurred at this node
-        for col in tmp.extinct_subtree[idx].ones() {
-            if tmp.deletion_locations[idx][col][idx] {
-                tmp.presence[idx].set(col, false);
-            }
-        }
     }
 
     fn deletion_at_node_or_children(
@@ -301,6 +272,35 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
                 } else {
                     tmp.insertion_location[col] = idx;
                 }
+            }
+        }
+    }
+
+    fn compute_ancestral_presence(
+        &self,
+        phylo: &PhyloInfo<A>,
+        node_idx: &NodeIdx,
+        tmp: &mut PIPAsrInfo<Q>,
+    ) {
+        let idx = usize::from(node_idx);
+
+        // Mark columns as present if they are inherited from the parent
+        if let Some(parent_idx) = phylo.tree.node(node_idx).parent {
+            let present_in_parent = tmp.presence[usize::from(parent_idx)].clone();
+            tmp.presence[idx].union_with(&present_in_parent);
+        }
+
+        // Mark columns as present if the insertion occurred at this node
+        for col in tmp.ancestor_subtree[idx].ones() {
+            if tmp.insertion_location[col] == idx {
+                tmp.presence[idx].set(col, true);
+            }
+        }
+
+        // Mark columns as absent if the deletion occurred at this node
+        for col in tmp.extinct_subtree[idx].ones() {
+            if tmp.deletion_locations[idx][col][idx] {
+                tmp.presence[idx].set(col, false);
             }
         }
     }
