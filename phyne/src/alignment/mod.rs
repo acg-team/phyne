@@ -168,6 +168,16 @@ pub trait AncestralAlignment: Alignment {
     /// where all leaf sequences have a gap, updating all sequence mappings accordingly.
     /// Use [`surviving_columns_mask`] to inspect which columns survive before removal.
     fn remove_extinct_columns(&mut self);
+
+    /// Constructs a [`PhyloInfo`] with ancestral sequences from a PhyloInfo with an alignment and
+    /// aligned ancestral sequences.
+    ///
+    /// Tree is consumed and stored together with the alignment, because the alignment is only
+    /// meaningful in the context of the tree that it was built from.
+    fn from_msa_with_ancestral(
+        phylo: PhyloInfo<impl Alignment>,
+        ancestral_seqs: Sequences,
+    ) -> Result<PhyloInfo<Self>>;
 }
 
 /// Returns a [`FixedBitSet`] mask over alignment columns indicating which do not go extinct.
@@ -745,6 +755,77 @@ impl AncestralAlignment for MASA {
             .unwrap_or_else(|e| bug!("updating record failed", e));
         }
     }
+
+    fn from_msa_with_ancestral(
+        phylo: PhyloInfo<impl Alignment>,
+        ancestral_seqs: Sequences,
+    ) -> Result<PhyloInfo<Self>> {
+        if !ancestral_seqs.alphabet().eq(phylo.msa.alphabet()) {
+            bail!(
+                AncestralAlignment,
+                "ancestral sequences must have the same alphabet as the provided alignment"
+            );
+        }
+
+        if !ancestral_seqs.aligned {
+            bail!(AncestralAlignment, "ancestral sequences must be aligned")
+        }
+
+        if !ancestral_seqs
+            .into_iter()
+            .all(|r| r.seq().len() == phylo.msa.len())
+        {
+            bail!(
+                AncestralAlignment,
+                "ancestral sequences must have the same length as the provided alignment"
+            );
+        }
+
+        validate_ancestor_ids(&phylo.tree, &ancestral_seqs)?;
+
+        let tree = &phylo.tree;
+
+        let mut ancestral_maps = HashMap::<NodeIdx, Mapping>::with_capacity(tree.len() - tree.n);
+        let mut ancestral_records = Vec::with_capacity(tree.len() - tree.n);
+        let mut idx_to_id = vec![String::new(); tree.len()];
+
+        for node_idx in tree.postorder() {
+            let id = tree.node_id(node_idx);
+            idx_to_id[usize::from(node_idx)] = id.to_string();
+            match node_idx {
+                Internal(_) => {
+                    let record = ancestral_seqs.record_by_id(id);
+                    let mapping = align!(record.seq());
+                    ancestral_maps.insert(*node_idx, mapping);
+
+                    ancestral_records.push(record.clone());
+                }
+                Leaf(_) => {}
+            };
+        }
+
+        let ancestral_seqs =
+            Sequences::with_alphabet_unchecked(ancestral_records, phylo.msa.alphabet())
+                .into_gapless();
+
+        let masa = MASA {
+            leaf_seqs: phylo.msa.seqs().clone(),
+            leaf_maps: phylo.msa.leaf_maps().clone(),
+            ancestral_seqs,
+            ancestral_maps,
+            idx_to_id,
+            internal_alignments: HashMap::<NodeIdx, PairwiseAlignment>::new(),
+        };
+
+        warn_on_extinct_columns(&masa);
+
+        let phylo_info = PhyloInfo {
+            msa: masa,
+            tree: phylo.tree,
+        };
+
+        Ok(phylo_info)
+    }
 }
 
 impl MASA {
@@ -782,6 +863,17 @@ impl MASA {
         self.ancestral_seqs
             .update_record(id, new_record)
             .unwrap_or_else(|e| bug!("udating ancestral record failed", e));
+    }
+}
+
+fn warn_on_extinct_columns(masa: &impl AncestralAlignment) {
+    let surviving = surviving_columns_mask(masa);
+    if !surviving.is_full() {
+        warn!(
+            "Columns {} go extinct in all leaf sequences. \
+                    Consider calling `remove_extinct_columns` on the alignment.",
+            surviving.ones().format(", ")
+        );
     }
 }
 
