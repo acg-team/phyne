@@ -251,7 +251,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
         tmp.ancestor_subtree[idx] = ch1.clone();
         tmp.ancestor_subtree[idx].union_with(&ch2);
 
-        for col in tmp.ancestor_subtree[idx].clone().ones() {
+        for col in tmp.ancestor_subtree[idx].ones() {
             if ch1[col] && ch2[col] {
                 // both children potentially in set A, therefore neither can be an insertion
                 tmp.insertion_location[col] = idx;
