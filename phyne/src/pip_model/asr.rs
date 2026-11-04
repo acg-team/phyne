@@ -179,47 +179,13 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
             .collect();
 
         let f_child1 = tmp.f[children[0]].clone();
-
         tmp.f[idx] = f_child1.clone().component_mul(&tmp.f[children[1]]);
         tmp.f[idx] *= 1.0 - tmp.deletion_probs[idx];
-
         tmp.p[idx] =
             f_child1.component_mul(&tmp.f[children[1]]) * tmp.insert_and_survive_probs[idx];
 
         self.deletion_at_node_or_children(idx, &children, tmp);
-
-        let ch1 = tmp.ancestor_subtree[children[0]].clone();
-        let ch2 = tmp.ancestor_subtree[children[1]].clone();
-
-        tmp.ancestor_subtree[idx] = ch1.clone();
-        tmp.ancestor_subtree[idx].union_with(&ch2);
-
-
-        for col in tmp.extinct_subtree[idx].zeroes() {
-            if ch1[col] && ch2[col] {
-                // both children potentially in set A, therefore neither can be an insertion
-                tmp.ancestor_subtree[idx].set(col, true);
-                tmp.insertion_location[col] = idx;
-            } else if ch1[col] {
-                // only child 1 is in set A (potential insertion locations)
-                if tmp.p[children[0]][col] >= tmp.p[idx][col] {
-                    // the insertion is more likely to have happened in the child than at the current node
-                    tmp.ancestor_subtree[idx].set(col, true);
-                    tmp.p[idx][col] = tmp.p[children[0]][col];
-                } else {
-                    tmp.insertion_location[col] = idx;
-                }
-            } else if ch2[col] {
-                // only child 2 is in set A (potential insertion locations)
-                if tmp.p[children[1]][col] >= tmp.p[idx][col] {
-                    // the insertion is more likely to have happened in the child than at the current node
-                    tmp.ancestor_subtree[idx].set(col, true);
-                    tmp.p[idx][col] = tmp.p[children[1]][col];
-                } else {
-                    tmp.insertion_location[col] = idx;
-                }
-            }
-        }
+        self.potential_insertion_at_node(idx, &children, tmp);
     }
 
     fn compute_leaf_probabilities(
@@ -304,6 +270,37 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
                 let mut del_children = tmp.deletion_locations[children[0]][col].clone();
                 del_children.union_with(&tmp.deletion_locations[children[1]][col]);
                 tmp.deletion_locations[idx][col] = del_children;
+            }
+        }
+    }
+
+    fn potential_insertion_at_node(&self, idx: usize, children: &[usize], tmp: &mut PIPAsrInfo<Q>) {
+        let ch1 = tmp.ancestor_subtree[children[0]].clone();
+        let ch2 = tmp.ancestor_subtree[children[1]].clone();
+
+        tmp.ancestor_subtree[idx] = ch1.clone();
+        tmp.ancestor_subtree[idx].union_with(&ch2);
+
+        for col in tmp.ancestor_subtree[idx].clone().ones() {
+            if ch1[col] && ch2[col] {
+                // both children potentially in set A, therefore neither can be an insertion
+                tmp.insertion_location[col] = idx;
+            } else if ch1[col] {
+                // only child 1 is in set A (potential insertion locations)
+                if tmp.p[children[0]][col] >= tmp.p[idx][col] {
+                    // the insertion is more likely to have happened in the child than at the current node
+                    tmp.p[idx][col] = tmp.p[children[0]][col];
+                } else {
+                    tmp.insertion_location[col] = idx;
+                }
+            } else if ch2[col] {
+                // only child 2 is in set A (potential insertion locations)
+                if tmp.p[children[1]][col] >= tmp.p[idx][col] {
+                    // the insertion is more likely to have happened in the child than at the current node
+                    tmp.p[idx][col] = tmp.p[children[1]][col];
+                } else {
+                    tmp.insertion_location[col] = idx;
+                }
             }
         }
     }
