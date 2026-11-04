@@ -147,14 +147,8 @@ pub trait AncestralAlignment: Alignment {
         validate_ids_with_ancestors(&tree, &all_seqs)?;
         all_seqs.remove_gap_cols();
         let ancestral_alignment = Self::from_aligned_with_ancestral_unchecked(all_seqs, tree);
-        let surviving = surviving_columns_mask(&ancestral_alignment.msa);
-        if !surviving.is_full() {
-            warn!(
-                "Columns {} go extinct in all leaf sequences. \
-                Consider calling `remove_extinct_columns` on the alignment.",
-                surviving.ones().format(", ")
-            );
-        }
+        warn_on_extinct_columns(&ancestral_alignment.msa);
+
         Ok(ancestral_alignment)
     }
     /// Constructs a [`PhyloInfo`] with ancestral sequences from aligned sequences and a
