@@ -784,8 +784,150 @@ fn test_mapping_to_bits(#[case] mapping: Mapping, #[case] expected: &[usize]) {
     let bits = mapping_to_bits(&mapping);
 
     let expected = FixedBitSet::from_iter(expected.iter().copied());
-    assert_eq!(
-        bits, expected,
+    assert!(
+        bits.ones().eq(expected.ones()),
         "Mapping did not match expected bits: expected: {expected} got: {bits}"
+    );
+}
+
+fn test_phylo_from_aligned() -> PhyloInfo<MSA> {
+    let tree = tree!("((A2:1,B3:1)I1:1,(C5:1,D6:1)I4:1)I0:0;");
+    let sequences = Sequences::with_alphabet_unchecked(
+        vec![
+            record_wo_desc!("A2", b"XXX--X"),
+            record_wo_desc!("B3", b"X-X--X"),
+            record_wo_desc!("C5", b"X---X-"),
+            record_wo_desc!("D6", b"--XXX-"),
+        ],
+        Alphabet::dna(),
+    );
+    MSA::from_aligned(sequences, tree.clone()).unwrap()
+}
+
+#[test]
+fn masa_from_msa_and_ancestral() {
+    let phylo = test_phylo_from_aligned();
+    let ancestral_seqs = Sequences::new_unchecked(vec![
+        record_wo_desc!("I0", b"X-X---"),
+        record_wo_desc!("I1", b"X-X--X"),
+        record_wo_desc!("I4", b"X-X-X-"),
+    ]);
+
+    let ancestral_gapless = ancestral_seqs.clone().into_gapless();
+    let ancestral_maps = ancestral_seqs
+        .into_iter()
+        .map(|r| (phylo.tree.idx(r.id()), align!(r.seq())))
+        .collect::<SeqMaps>();
+
+    let phylo_w_ancestors = MASA::from_msa_with_ancestral(phylo.clone(), ancestral_seqs).unwrap();
+
+    assert_eq!(phylo_w_ancestors.msa.leaf_maps(), phylo.msa.leaf_maps());
+    assert_eq!(phylo_w_ancestors.msa.seqs(), phylo.msa.seqs());
+    assert_eq!(phylo_w_ancestors.msa.ancestral_seqs(), &ancestral_gapless);
+    assert_eq!(phylo_w_ancestors.msa.ancestral_maps(), &ancestral_maps);
+}
+
+#[test]
+fn masa_from_msa_and_ancestral_unaligned_error() {
+    let phylo = test_phylo_from_aligned();
+
+    let ancestral_seqs = Sequences::new_unchecked(vec![
+        record_wo_desc!("I0", b"XX"),
+        record_wo_desc!("I1", b"XXX"),
+        record_wo_desc!("I4", b"XXX"),
+    ]);
+
+    let err = MASA::from_msa_with_ancestral(phylo, ancestral_seqs);
+    assert_matches!(
+        err,
+        Err(Error::AncestralAlignment(msg)) if msg.contains("sequences must be aligned")
+    );
+}
+
+#[test]
+fn masa_from_msa_and_ancestral_wrong_length_error() {
+    let phylo = test_phylo_from_aligned();
+
+    let ancestral_seqs = Sequences::new_unchecked(vec![
+        record_wo_desc!("I0", b"X-X"),
+        record_wo_desc!("I1", b"XXX"),
+        record_wo_desc!("I4", b"XXX"),
+    ]);
+
+    let err = MASA::from_msa_with_ancestral(phylo, ancestral_seqs);
+    assert_matches!(
+        err,
+        Err(Error::AncestralAlignment(msg)) if msg.contains("sequences must have the same length as the provided alignment")
+    );
+}
+
+#[test]
+fn masa_from_msa_with_ancestral_wrong_alphabet() {
+    let phylo = test_phylo_from_aligned();
+
+    let ancestral_seqs = Sequences::with_alphabet_unchecked(
+        vec![
+            record_wo_desc!("I0", b"X-X---"),
+            record_wo_desc!("I1", b"X-X--X"),
+            record_wo_desc!("I4", b"X-X-X-"),
+        ],
+        Alphabet::protein(),
+    );
+
+    let err = MASA::from_msa_with_ancestral(phylo, ancestral_seqs);
+    assert_matches!(
+        err,
+        Err(Error::AncestralAlignment(msg)) if msg.contains("ancestral sequences must have the same alphabet as the provided alignment")
+    );
+}
+
+#[test]
+fn masa_from_msa_with_ancestral_wrong_seq_ids() {
+    let phylo = test_phylo_from_aligned();
+
+    let ancestral_seqs = Sequences::new_unchecked(vec![
+        record_wo_desc!("I5", b"X-X---"),
+        record_wo_desc!("I1", b"X-X--X"),
+        record_wo_desc!("I4", b"X-X-X-"),
+    ]);
+
+    let err = MASA::from_msa_with_ancestral(phylo, ancestral_seqs);
+    assert_matches!(
+        err,
+        Err(Error::Tree(msg)) if msg.contains("mismatched IDs found, missing node IDs: [\"I5\"]")
+    );
+}
+
+#[test]
+fn masa_from_msa_with_ancestral_extra_ids() {
+    let phylo = test_phylo_from_aligned();
+
+    let ancestral_seqs = Sequences::new_unchecked(vec![
+        record_wo_desc!("I0", b"X-X---"),
+        record_wo_desc!("I1", b"X-X--X"),
+        record_wo_desc!("I4", b"X-X-X-"),
+        record_wo_desc!("ADD4", b"X-X-X-"),
+    ]);
+
+    let err = MASA::from_msa_with_ancestral(phylo, ancestral_seqs);
+    assert_matches!(
+        err,
+        Err(Error::Tree(msg)) if msg.contains("mismatched IDs found, missing node IDs: [\"ADD4\"]")
+    );
+}
+
+#[test]
+fn masa_from_msa_with_ancestral_missing_seqs() {
+    let phylo = test_phylo_from_aligned();
+
+    let ancestral_seqs = Sequences::new_unchecked(vec![
+        record_wo_desc!("I0", b"X-X---"),
+        record_wo_desc!("I1", b"X-X--X"),
+    ]);
+
+    let err = MASA::from_msa_with_ancestral(phylo, ancestral_seqs);
+    assert_matches!(
+        err,
+        Err(Error::Sequence(msg)) if msg.contains("mismatched IDs found, missing sequence IDs: [\"I4\"]")
     );
 }
