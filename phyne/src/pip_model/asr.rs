@@ -39,7 +39,7 @@ pub(crate) struct PIPAsrInfo<Q: QMatrix> {
     // Set A: the set of nodes where the character could be an insertion
     ancestor_subtree: Vec<FixedBitSet>,
     // Deletion locations for each character in the alignment, indexed by node and column.
-    deletion_locations: Vec<Vec<FixedBitSet>>,
+    deletion_locations: Vec<FixedBitSet>,
     // Insertion location for each character in the alignment, indexed by column (only one insertion is allowed per column).
     insertion_location: Vec<usize>,
     // Presence for each character in the alignment, indexed by node and column.
@@ -89,10 +89,7 @@ impl<Q: QMatrix> PIPAsrInfo<Q> {
             p: vec![DVector::<f64>::zeros(msa_length); node_count],
             extinct_subtree: vec![FixedBitSet::with_capacity(msa_length); node_count],
             ancestor_subtree: vec![FixedBitSet::with_capacity(msa_length); node_count],
-            deletion_locations: vec![
-                vec![FixedBitSet::with_capacity(node_count); msa_length];
-                node_count
-            ],
+            deletion_locations: vec![FixedBitSet::with_capacity(node_count); msa_length],
             insertion_location: vec![usize::from(info.tree.root); msa_length],
             presence: vec![FixedBitSet::with_capacity(msa_length); node_count],
         }
@@ -181,7 +178,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
             // extinct at leaf means potential deletion set
             tmp.p[idx][col] = 0.0;
             tmp.f[idx][col] = tmp.deletion_probs[idx];
-            tmp.deletion_locations[idx][col].set(idx, true);
+            tmp.deletion_locations[col].set(idx, true);
         }
 
         for col in tmp.ancestor_subtree[idx].ones() {
@@ -231,12 +228,9 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
             if tmp.f[idx][col] < tmp.deletion_probs[idx] {
                 // deletion at node is more probable than deletion in children
                 tmp.f[idx][col] = tmp.deletion_probs[idx];
-                tmp.deletion_locations[idx][col].set(idx, true);
-            } else {
-                // deletion in children is more probable than deletion at node, propagate deletion sets
-                let mut del_children = tmp.deletion_locations[children[0]][col].clone();
-                del_children.union_with(&tmp.deletion_locations[children[1]][col]);
-                tmp.deletion_locations[idx][col] = del_children;
+                tmp.deletion_locations[col].set(idx, true);
+                tmp.deletion_locations[col].set(children[0], false);
+                tmp.deletion_locations[col].set(children[1], false);
             }
         }
     }
@@ -295,7 +289,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
 
         // mark columns as absent if the deletion occurred at this node
         for col in tmp.extinct_subtree[idx].ones() {
-            if tmp.deletion_locations[idx][col][idx] {
+            if tmp.deletion_locations[col][idx] {
                 tmp.presence[idx].set(col, false);
             }
         }
