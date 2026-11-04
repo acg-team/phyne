@@ -42,6 +42,8 @@ pub(crate) struct PIPAsrInfo<Q: QMatrix> {
     deletion_locations: Vec<Vec<FixedBitSet>>,
     // Insertion location for each character in the alignment, indexed by column (only one insertion is allowed per column).
     insertion_location: Vec<usize>,
+    // Presence for each character in the alignment, indexed by node and column.
+    presence: Vec<FixedBitSet>,
 }
 
 /// Probability of a deletion on the branch above each node, indexed by node index.
@@ -92,6 +94,7 @@ impl<Q: QMatrix> PIPAsrInfo<Q> {
                 node_count
             ],
             insertion_location: vec![usize::from(info.tree.root); msa_length],
+            presence: vec![FixedBitSet::with_capacity(msa_length); node_count],
         }
     }
 }
@@ -145,37 +148,20 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
             };
         }
 
-        let mut present = vec![FixedBitSet::with_capacity(phylo.msa.len()); phylo.tree.len()];
-
+        // top down pass to determine character presence at each node
         for node_idx in phylo.tree.preorder() {
             match node_idx {
-                Internal(idx) => {
-                    // Mark columns as present if the insertion occurred at this node.
-                    if let Some(parent_idx) = phylo.tree.node(node_idx).parent {
-                        let present_in_parent = present[usize::from(parent_idx)].clone();
-                        present[*idx].union_with(&present_in_parent);
-                    }
-
-                    for col in 0..phylo.msa.len() {
-                        if tmp.ancestor_subtree[*idx].contains(col)
-                            && tmp.insertion_location[col] == *idx
-                        {
-                            present[*idx].set(col, true);
-                        }
-                        if tmp.extinct_subtree[*idx].contains(col)
-                            && tmp.deletion_locations[*idx][col][*idx]
-                        {
-                            present[*idx].set(col, false);
-                        }
-                    }
+                Internal(_) => {
+                    self.compute_ancestral_presence(phylo, node_idx, &mut tmp);
                 }
                 Leaf(idx) => {
-                    present[*idx] = tmp.ancestor_subtree[*idx].clone();
+                    // Leaf node character presence is defined by the observations
+                    tmp.presence[*idx] = tmp.ancestor_subtree[*idx].clone();
                 }
             };
         }
 
-        present
+        tmp.presence
     }
 
     fn compute_internal_probabilities(
@@ -280,6 +266,35 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
             // present at leaf means potential insertion set (A)
             tmp.insertion_location[col] = idx;
             tmp.p[idx][col] = tmp.insert_and_survive_probs[idx];
+        }
+    }
+
+    fn compute_ancestral_presence(
+        &self,
+        phylo: &PhyloInfo<A>,
+        node_idx: &NodeIdx,
+        tmp: &mut PIPAsrInfo<Q>,
+    ) {
+        let idx = usize::from(node_idx);
+
+        // Mark columns as present if they are inherited from the parent
+        if let Some(parent_idx) = phylo.tree.node(node_idx).parent {
+            let present_in_parent = tmp.presence[usize::from(parent_idx)].clone();
+            tmp.presence[idx].union_with(&present_in_parent);
+        }
+
+        // Mark columns as present if the insertion occurred at this node
+        for col in tmp.ancestor_subtree[idx].ones() {
+            if tmp.insertion_location[col] == idx {
+                tmp.presence[idx].set(col, true);
+            }
+        }
+
+        // Mark columns as absent if the deletion occurred at this node
+        for col in tmp.extinct_subtree[idx].ones() {
+            if tmp.deletion_locations[idx][col][idx] {
+                tmp.presence[idx].set(col, false);
+            }
         }
     }
 }
