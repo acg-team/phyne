@@ -178,10 +178,6 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
             .map(usize::from)
             .collect();
 
-        let mut both_children = tmp.extinct_subtree[children[0]].clone();
-        both_children.intersect_with(&tmp.extinct_subtree[children[1]]);
-        tmp.extinct_subtree[idx] = both_children;
-
         let f_child1 = tmp.f[children[0]].clone();
 
         tmp.f[idx] = f_child1.clone().component_mul(&tmp.f[children[1]]);
@@ -190,26 +186,14 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
         tmp.p[idx] =
             f_child1.component_mul(&tmp.f[children[1]]) * tmp.insert_and_survive_probs[idx];
 
+        self.deletion_at_node_or_children(idx, &children, tmp);
+
         let ch1 = tmp.ancestor_subtree[children[0]].clone();
         let ch2 = tmp.ancestor_subtree[children[1]].clone();
 
         tmp.ancestor_subtree[idx] = ch1.clone();
         tmp.ancestor_subtree[idx].union_with(&ch2);
 
-        for col in tmp.extinct_subtree[idx].ones() {
-            // this subtree is extinct, so no insertion can occur here
-            tmp.ancestor_subtree[idx].set(col, false);
-            tmp.p[idx][col] = 0.0;
-
-            if tmp.f[idx][col] < tmp.deletion_probs[idx] {
-                tmp.f[idx][col] = tmp.deletion_probs[idx];
-                tmp.deletion_locations[idx][col].set(idx, true);
-            } else {
-                let mut del_children = tmp.deletion_locations[children[0]][col].clone();
-                del_children.union_with(&tmp.deletion_locations[children[1]][col]);
-                tmp.deletion_locations[idx][col] = del_children;
-            }
-        }
 
         for col in tmp.extinct_subtree[idx].zeroes() {
             if ch1[col] && ch2[col] {
@@ -294,6 +278,32 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
         for col in tmp.extinct_subtree[idx].ones() {
             if tmp.deletion_locations[idx][col][idx] {
                 tmp.presence[idx].set(col, false);
+            }
+        }
+    }
+
+    fn deletion_at_node_or_children(
+        &self,
+        idx: usize,
+        children: &[usize],
+        tmp: &mut PIPAsrInfo<Q>,
+    ) {
+        let mut both_children_extinct = tmp.extinct_subtree[children[0]].clone();
+        both_children_extinct.intersect_with(&tmp.extinct_subtree[children[1]]);
+        tmp.extinct_subtree[idx] = both_children_extinct;
+
+        for col in tmp.extinct_subtree[idx].ones() {
+            // this subtree is extinct, so no insertion can occur here
+            tmp.p[idx][col] = 0.0;
+            if tmp.f[idx][col] < tmp.deletion_probs[idx] {
+                // deletion at node is more probable than deletion in children
+                tmp.f[idx][col] = tmp.deletion_probs[idx];
+                tmp.deletion_locations[idx][col].set(idx, true);
+            } else {
+                // deletion in children is more probable than deletion at node, propagate deletion sets
+                let mut del_children = tmp.deletion_locations[children[0]][col].clone();
+                del_children.union_with(&tmp.deletion_locations[children[1]][col]);
+                tmp.deletion_locations[idx][col] = del_children;
             }
         }
     }
