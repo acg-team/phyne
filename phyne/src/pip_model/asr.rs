@@ -140,10 +140,10 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
         for node_idx in phylo.tree.postorder() {
             match node_idx {
                 Internal(_) => {
-                    self.compute_internal_probabilities(phylo, node_idx, &mut tmp);
+                    self.set_internal_values(phylo, node_idx, &mut tmp);
                 }
                 Leaf(_) => {
-                    self.compute_leaf_probabilities(phylo, node_idx, &mut tmp);
+                    self.set_leaf_values(phylo, node_idx, &mut tmp);
                 }
             };
         }
@@ -152,7 +152,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
         for node_idx in phylo.tree.preorder() {
             match node_idx {
                 Internal(_) => {
-                    self.compute_ancestral_presence(phylo, node_idx, &mut tmp);
+                    self.set_internal_presence(phylo, node_idx, &mut tmp);
                 }
                 Leaf(idx) => {
                     // Leaf node character presence is defined by the observations
@@ -164,12 +164,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
         tmp.presence
     }
 
-    fn compute_leaf_probabilities(
-        &self,
-        phylo: &PhyloInfo<A>,
-        node_idx: &NodeIdx,
-        tmp: &mut PIPAsrInfo<Q>,
-    ) {
+    fn set_leaf_values(&self, phylo: &PhyloInfo<A>, node_idx: &NodeIdx, tmp: &mut PIPAsrInfo<Q>) {
         let idx = usize::from(node_idx);
         let has_character = mapping_to_bits(phylo.msa.leaf_map(node_idx));
 
@@ -194,7 +189,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
         }
     }
 
-    fn compute_internal_probabilities(
+    fn set_internal_values(
         &self,
         phylo: &PhyloInfo<A>,
         node_idx: &NodeIdx,
@@ -275,7 +270,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
         }
     }
 
-    fn compute_ancestral_presence(
+    fn set_internal_presence(
         &self,
         phylo: &PhyloInfo<A>,
         node_idx: &NodeIdx,
@@ -405,8 +400,8 @@ mod tests {
 
         for node_idx in tree.postorder() {
             match node_idx {
-                Internal(_) => asr.compute_internal_probabilities(&phylo, node_idx, &mut tmp),
-                Leaf(_) => asr.compute_leaf_probabilities(&phylo, node_idx, &mut tmp),
+                Internal(_) => asr.set_internal_values(&phylo, node_idx, &mut tmp),
+                Leaf(_) => asr.set_leaf_values(&phylo, node_idx, &mut tmp),
             }
         }
         assert_eq!(tmp.insertion_location, vec![0]);
@@ -657,7 +652,7 @@ mod tests {
         let mut tmp = PIPAsrInfo::new(&asr.model, &phylo);
 
         for node in phylo.tree.leaves() {
-            asr.compute_leaf_probabilities(&phylo, &node.idx, &mut tmp);
+            asr.set_leaf_values(&phylo, &node.idx, &mut tmp);
         }
 
         let expected_extinct = [
@@ -726,8 +721,8 @@ mod tests {
 
         for node_idx in phylo.tree.postorder() {
             match node_idx {
-                Internal(_) => asr.compute_internal_probabilities(&phylo, node_idx, &mut tmp),
-                Leaf(_) => asr.compute_leaf_probabilities(&phylo, node_idx, &mut tmp),
+                Internal(_) => asr.set_internal_values(&phylo, node_idx, &mut tmp),
+                Leaf(_) => asr.set_leaf_values(&phylo, node_idx, &mut tmp),
             }
         }
 
