@@ -506,6 +506,7 @@ pub fn validate_taxa_ids(tree: &Tree, sequences: &Sequences) -> Result<()> {
 /// ```
 pub fn validate_ancestor_ids(tree: &Tree, sequences: &Sequences) -> Result<()> {
     info!("Checking that internal node and sequence IDs match");
+    let leaf_ids = tree.leaf_ids();
 
     let internal_ids = HashSet::<String>::from_iter(tree.preorder().iter().filter_map(
         |node_idx| match node_idx {
@@ -515,7 +516,7 @@ pub fn validate_ancestor_ids(tree: &Tree, sequences: &Sequences) -> Result<()> {
     ));
     let internal_sequence_ids = HashSet::from_iter(sequences.into_iter().filter_map(|rec| {
         let id = rec.id().to_string();
-        if !tree.leaf_ids().contains(&id) {
+        if !leaf_ids.contains(&id) {
             Some(id)
         } else {
             None
