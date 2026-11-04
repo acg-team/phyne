@@ -158,6 +158,7 @@ pub trait AncestralAlignment: Alignment {
     /// Tree is consumed and stored together with the alignment, because the alignment is only
     /// meaningful in the context of the tree that it was built from.
     fn from_aligned_with_ancestral_unchecked(all_seqs: Sequences, tree: Tree) -> PhyloInfo<Self>;
+
     /// Removes columns from the alignment where the ancestral character goes extinct, i.e. columns
     /// where all leaf sequences have a gap, updating all sequence mappings accordingly.
     /// Use [`surviving_columns_mask`] to inspect which columns survive before removal.
@@ -171,7 +172,37 @@ pub trait AncestralAlignment: Alignment {
     fn from_msa_with_ancestral(
         phylo: PhyloInfo<impl Alignment>,
         ancestral_seqs: Sequences,
-    ) -> Result<PhyloInfo<Self>>;
+    ) -> Result<PhyloInfo<Self>> {
+        if !ancestral_seqs.alphabet().eq(phylo.msa.alphabet()) {
+            bail!(
+                AncestralAlignment,
+                "ancestral sequences must have the same alphabet as the provided alignment"
+            );
+        }
+        if !ancestral_seqs.aligned {
+            bail!(AncestralAlignment, "ancestral sequences must be aligned")
+        }
+        if !ancestral_seqs
+            .into_iter()
+            .all(|r| r.seq().len() == phylo.msa.len())
+        {
+            bail!(
+                AncestralAlignment,
+                "ancestral sequences must have the same length as the provided alignment"
+            );
+        }
+        validate_ancestor_ids(&phylo.tree, &ancestral_seqs)?;
+
+        Ok(Self::from_msa_with_ancestral_unchecked(
+            phylo,
+            ancestral_seqs,
+        ))
+    }
+
+    fn from_msa_with_ancestral_unchecked(
+        phylo: PhyloInfo<impl Alignment>,
+        ancestral_seqs: Sequences,
+    ) -> PhyloInfo<Self>;
 }
 
 /// Returns a [`FixedBitSet`] mask over alignment columns indicating which do not go extinct.
@@ -750,33 +781,10 @@ impl AncestralAlignment for MASA {
         }
     }
 
-    fn from_msa_with_ancestral(
+    fn from_msa_with_ancestral_unchecked(
         phylo: PhyloInfo<impl Alignment>,
         ancestral_seqs: Sequences,
-    ) -> Result<PhyloInfo<Self>> {
-        if !ancestral_seqs.alphabet().eq(phylo.msa.alphabet()) {
-            bail!(
-                AncestralAlignment,
-                "ancestral sequences must have the same alphabet as the provided alignment"
-            );
-        }
-
-        if !ancestral_seqs.aligned {
-            bail!(AncestralAlignment, "ancestral sequences must be aligned")
-        }
-
-        if !ancestral_seqs
-            .into_iter()
-            .all(|r| r.seq().len() == phylo.msa.len())
-        {
-            bail!(
-                AncestralAlignment,
-                "ancestral sequences must have the same length as the provided alignment"
-            );
-        }
-
-        validate_ancestor_ids(&phylo.tree, &ancestral_seqs)?;
-
+    ) -> PhyloInfo<Self> {
         let tree = &phylo.tree;
 
         let mut ancestral_maps = HashMap::<NodeIdx, Mapping>::with_capacity(tree.len() - tree.n);
@@ -813,12 +821,10 @@ impl AncestralAlignment for MASA {
 
         warn_on_extinct_columns(&masa);
 
-        let phylo_info = PhyloInfo {
+        PhyloInfo {
             msa: masa,
             tree: phylo.tree,
-        };
-
-        Ok(phylo_info)
+        }
     }
 }
 
