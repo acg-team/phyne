@@ -203,8 +203,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
             .map(usize::from)
             .collect();
 
-        // Important: the potential values for f and p are precomputed but can be reset by deletion
-        // and insertion processing
+        // the potential values for f and p are precomputed but can be reset by deletion and insertion processing
         let f_child1 = tmp.f[children[0]].clone();
         tmp.f[idx] = f_child1.clone().component_mul(&tmp.f[children[1]]);
         tmp.f[idx] *= 1.0 - tmp.deletion_probs[idx];
@@ -280,20 +279,20 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
     ) {
         let idx = usize::from(node_idx);
 
-        // Mark columns as present if they are inherited from the parent
+        // mark columns as present if they are inherited from the parent
         if let Some(parent_idx) = phylo.tree.node(node_idx).parent {
             let present_in_parent = tmp.presence[usize::from(parent_idx)].clone();
             tmp.presence[idx].union_with(&present_in_parent);
         }
 
-        // Mark columns as present if the insertion occurred at this node
+        // mark columns as present if the insertion occurred at this node
         for col in tmp.ancestor_subtree[idx].ones() {
             if tmp.insertion_location[col] == idx {
                 tmp.presence[idx].set(col, true);
             }
         }
 
-        // Mark columns as absent if the deletion occurred at this node
+        // mark columns as absent if the deletion occurred at this node
         for col in tmp.extinct_subtree[idx].ones() {
             if tmp.deletion_locations[idx][col][idx] {
                 tmp.presence[idx].set(col, false);
