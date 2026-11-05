@@ -11,6 +11,7 @@ pub mod alphabets;
 pub mod asr;
 pub mod evolutionary_distances;
 pub mod evolutionary_models;
+pub mod fastml;
 pub mod io;
 pub mod likelihood;
 pub mod optimisers;
