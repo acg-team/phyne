@@ -406,6 +406,7 @@ pub fn set_missing_tree_node_ids(tree: &mut Tree) -> Result<()> {
 ///       record!("A1", Some("A1 record"), b"X"),
 ///       record!("B1", Some("B1 record"), b"X"),
 ///       record!("C2", Some("C2 record"), b"X"),
+///       record!("I1", Some("I1 record"), b"X"),
 ///   ])?;
 ///   validate_ids_with_ancestors(&tree, &sequences)?;
 ///   # Ok(())}
@@ -467,9 +468,6 @@ pub fn validate_taxa_ids(tree: &Tree, sequences: &Sequences) -> Result<()> {
 /// # fn main() -> Result<()> {
 ///   let tree = tree!("((A1:1.0,B1:1.0)I1:1.0,C2:1.0)I0:1.0;");
 ///   let sequences = Sequences::new(vec![
-///       record!("A1", Some("A1 record"), b"X"),
-///       record!("B1", Some("B1 record"), b"X"),
-///       record!("C2", Some("C2 record"), b"X"),
 ///       record!("I1", Some("I1 record"), b"X"),
 ///       record!("I0", Some("I0 record"), b"X"),
 ///   ])?;
@@ -543,11 +541,15 @@ mod private_tests {
     use std::path::Path;
 
     use assert_matches::assert_matches;
+    use hashbrown::HashSet;
 
     use crate::alignment::Sequences;
     use crate::alphabets::UNKNOWN_ALPHABET;
     use crate::phylo_info::{
-        phyloinfo_builder::{set_missing_tree_node_ids, PhyloInfoBuilder as PIB},
+        phyloinfo_builder::{
+            check_node_sequence_ids_match, ensure_ancestral_ids_set, set_missing_tree_node_ids,
+            PhyloInfoBuilder as PIB,
+        },
         validate_ancestor_ids, validate_ids_with_ancestors, validate_taxa_ids,
     };
     use crate::random::FakeGenerator;
@@ -631,7 +633,8 @@ mod private_tests {
 
     #[test]
     fn not_valid_ids_with_ancestors() {
-        let tree = tree!("((A1:1.0, B1:1.0) I1:1.0,(C2:1.0,(D3:1.0, E4:1.0) I9:1.0)I10:1.0):1.0;");
+        let tree =
+            tree!("((A1:1.0, B1:1.0) I1:1.0,(C2:1.0,(D3:1.0, E4:1.0) I9:1.0)I10:1.0)root:1.0;");
         let seqs = Sequences::new_unchecked(vec![
             record!("A1", b"X"),
             record!("B1", b"X"),
@@ -640,21 +643,22 @@ mod private_tests {
             record!("I1", b"X"),
             record!("I9", b"X"),
             record!("I10", b"X"),
-            record!("", b"X"),
+            record!("root", b"X"),
         ]);
 
         let error = validate_ids_with_ancestors(&tree, &seqs);
 
         assert_matches!(
             error,
-            Err(Error::Tree(msg)) if msg.contains("number of tree nodes (9) does not match number of sequences (8)")
+            Err(Error::Sequence(msg)) if msg.contains("missing sequence IDs: [\"C2\"]")
         );
     }
 
     #[test]
     fn valid_ids_with_ancestors() {
         // arrange
-        let tree = tree!("((A1:1.0, B1:1.0) I1:1.0,(C2:1.0,(D3:1.0, E4:1.0) I9:1.0)I10:1.0):1.0;");
+        let tree =
+            tree!("((A1:1.0, B1:1.0) I1:1.0,(C2:1.0,(D3:1.0, E4:1.0) I9:1.0)I10:1.0)root:1.0;");
         let seqs = Sequences::new_unchecked(vec![
             record!("A1", b"X"),
             record!("B1", b"X"),
@@ -664,7 +668,7 @@ mod private_tests {
             record!("I1", b"X"),
             record!("I9", b"X"),
             record!("I10", b"X"),
-            record!("", b"X"),
+            record!("root", b"X"),
         ]);
 
         // act
@@ -675,18 +679,23 @@ mod private_tests {
     }
 
     #[test]
-    fn validate_ids_number_mismatch() {
-        let tree = tree!("((A0:1.0,B1:1.0)I1:1.0,C2:1.0)I0:1.0;");
+    fn missing_ancestor_id() {
+        let tree = tree!("((A1:1.0, B1:1.0)I1:1.0,(C2:1.0,D3:1.0):1.0)I2:1.0;");
         let seqs = Sequences::new_unchecked(vec![
-            record!("A0", b"X"),
+            record!("A1", b"X"),
             record!("B1", b"X"),
+            record!("C2", b"X"),
+            record!("D3", b"X"),
+            record!("E4", b"X"),
             record!("I1", b"X"),
-            record!("I0", b"X"),
+            record!("", b"X"),
+            record!("I2", b"X"),
         ]);
         let result = validate_ids_with_ancestors(&tree, &seqs);
+
         assert_matches!(
             result,
-            Err(Error::Tree(msg)) if msg.contains("does not match number")
+            Err(Error::Tree(msg)) if msg.contains("some internal node IDs are not set")
         );
     }
 
