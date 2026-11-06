@@ -412,17 +412,18 @@ pub fn set_missing_tree_node_ids(tree: &mut Tree) -> Result<()> {
 /// ```
 ///
 pub fn validate_ids_with_ancestors(tree: &Tree, sequences: &Sequences) -> Result<()> {
-    if tree.len() != sequences.len() {
-        bail!(
-            Tree,
-            "number of tree nodes ({}) does not match number of sequences ({})",
-            tree.len(),
-            sequences.len()
-        );
-    }
-    validate_taxa_ids(tree, sequences)?;
-    validate_ancestor_ids(tree, sequences)?;
-    Ok(())
+    info!("Checking that tree node (internal and leaf) and sequence IDs match");
+    ensure_ancestral_ids_set(tree)?;
+
+    let node_ids = HashSet::<String>::from_iter(
+        tree.preorder()
+            .iter()
+            .map(|node_idx| tree.node_id(node_idx).to_string()),
+    );
+
+    let sequence_ids = HashSet::from_iter(sequences.into_iter().map(|rec| rec.id().to_string()));
+
+    check_node_sequence_ids_match(node_ids, sequence_ids, "tree node")
 }
 
 /// Checks that the IDs of the tree leaves and the sequences match, bails with an error otherwise.
@@ -448,38 +449,9 @@ pub fn validate_taxa_ids(tree: &Tree, sequences: &Sequences) -> Result<()> {
     info!("Checking that tree tip and sequence IDs match");
 
     let tip_ids = tree.leaf_ids();
-    let internal_ids = HashSet::<String>::from_iter(tree.preorder().iter().filter_map(
-        |node_idx| match node_idx {
-            NodeIdx::Internal(_) => Some(tree.node_id(node_idx).to_string()),
-            _ => None,
-        },
-    ));
-    let tip_sequence_ids = HashSet::from_iter(sequences.into_iter().filter_map(|rec| {
-        let id = rec.id().to_string();
-        if !internal_ids.contains(&id) {
-            Some(id)
-        } else {
-            None
-        }
-    }));
+    let sequence_ids = HashSet::from_iter(sequences.into_iter().map(|rec| rec.id().to_string()));
 
-    let mut missing_tips = tip_sequence_ids.difference(&tip_ids).collect::<Vec<_>>();
-    if !missing_tips.is_empty() {
-        missing_tips.sort();
-        bail!(
-            Tree,
-            "mismatched IDs found, missing node IDs: {missing_tips:?}"
-        )
-    }
-    let mut missing_seqs = tip_ids.difference(&tip_sequence_ids).collect::<Vec<_>>();
-    if !missing_seqs.is_empty() {
-        missing_seqs.sort();
-        bail!(
-            Sequence,
-            "mismatched IDs found, missing sequence IDs: {missing_seqs:?}"
-        );
-    }
-    Ok(())
+    check_node_sequence_ids_match(tip_ids, sequence_ids, "tree tip")
 }
 
 /// Checks that the IDs of the internal tree nodes and the sequences match, bails with an error otherwise.
@@ -504,9 +476,10 @@ pub fn validate_taxa_ids(tree: &Tree, sequences: &Sequences) -> Result<()> {
 ///   validate_ancestor_ids(&tree, &sequences)?;
 ///   # Ok(())}
 /// ```
-pub fn validate_ancestor_ids(tree: &Tree, sequences: &Sequences) -> Result<()> {
+pub fn validate_ancestor_ids(tree: &Tree, ancestral_seqs: &Sequences) -> Result<()> {
     info!("Checking that internal node and sequence IDs match");
-    let leaf_ids = tree.leaf_ids();
+
+    ensure_ancestral_ids_set(tree)?;
 
     let internal_ids = HashSet::<String>::from_iter(tree.preorder().iter().filter_map(
         |node_idx| match node_idx {
@@ -514,35 +487,53 @@ pub fn validate_ancestor_ids(tree: &Tree, sequences: &Sequences) -> Result<()> {
             _ => None,
         },
     ));
-    let internal_sequence_ids = HashSet::from_iter(sequences.into_iter().filter_map(|rec| {
-        let id = rec.id().to_string();
-        if !leaf_ids.contains(&id) {
-            Some(id)
-        } else {
-            None
-        }
-    }));
+    let sequence_ids =
+        HashSet::from_iter(ancestral_seqs.into_iter().map(|rec| rec.id().to_string()));
 
-    let mut missing_nodes = internal_sequence_ids
-        .difference(&internal_ids)
-        .collect::<Vec<_>>();
+    check_node_sequence_ids_match(internal_ids, sequence_ids, "tree internal node")
+}
+
+// Checks that all internal node IDs are not empty and returns an error if any are missing
+fn ensure_ancestral_ids_set(tree: &Tree) -> Result<()> {
+    info!("Checking that all internal nodes have IDs set");
+    for node_idx in tree.preorder().iter() {
+        if matches!(node_idx, NodeIdx::Internal(_)) && tree.node_id(node_idx).is_empty() {
+            bail!(Tree, "some internal node IDs are not set");
+        }
+    }
+
+    Ok(())
+}
+
+// Helper function for error reporting, checks that the node IDs and sequence IDs match, returns an error if
+// there are missing IDs.
+//
+// `tree_node_context` is a string describing the context of the tree nodes, used in error messages (e.g., "tree internal node").
+fn check_node_sequence_ids_match(
+    node_ids: HashSet<String>,
+    sequence_ids: HashSet<String>,
+    tree_node_context: &str,
+) -> Result<()> {
+    let mut missing_nodes = sequence_ids.difference(&node_ids).collect::<Vec<_>>();
     if !missing_nodes.is_empty() {
         missing_nodes.sort();
         bail!(
             Tree,
-            "mismatched IDs found, missing node IDs: {missing_nodes:?}"
-        )
+            "mismatched sequence and {} IDs found, missing node IDs: {missing_nodes:?}",
+            tree_node_context
+        );
     }
-    let mut missing_seqs = internal_ids
-        .difference(&internal_sequence_ids)
-        .collect::<Vec<_>>();
+
+    let mut missing_seqs = node_ids.difference(&sequence_ids).collect::<Vec<_>>();
     if !missing_seqs.is_empty() {
         missing_seqs.sort();
         bail!(
             Sequence,
-            "mismatched IDs found, missing sequence IDs: {missing_seqs:?}"
+            "mismatched sequence and {} IDs found, missing sequence IDs: {missing_seqs:?}",
+            tree_node_context
         );
     }
+
     Ok(())
 }
 
