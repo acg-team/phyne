@@ -894,7 +894,8 @@ fn masa_from_msa_with_ancestral_wrong_seq_ids() {
     let err = MASA::from_msa_with_ancestral(phylo, ancestral_seqs);
     assert_matches!(
         err,
-        Err(Error::Tree(msg)) if msg.contains("mismatched IDs found, missing node IDs: [\"I5\"]")
+        Err(Error::Tree(msg))
+            if msg.contains("mismatched sequence and tree internal node IDs found, missing node IDs: [\"I5\"]")
     );
 }
 
@@ -912,7 +913,8 @@ fn masa_from_msa_with_ancestral_extra_ids() {
     let err = MASA::from_msa_with_ancestral(phylo, ancestral_seqs);
     assert_matches!(
         err,
-        Err(Error::Tree(msg)) if msg.contains("mismatched IDs found, missing node IDs: [\"ADD4\"]")
+        Err(Error::Tree(msg))
+            if msg.contains("mismatched sequence and tree internal node IDs found, missing node IDs: [\"ADD4\"]")
     );
 }
 
@@ -928,6 +930,7 @@ fn masa_from_msa_with_ancestral_missing_seqs() {
     let err = MASA::from_msa_with_ancestral(phylo, ancestral_seqs);
     assert_matches!(
         err,
-        Err(Error::Sequence(msg)) if msg.contains("mismatched IDs found, missing sequence IDs: [\"I4\"]")
+        Err(Error::Sequence(msg))
+            if msg.contains("mismatched sequence and tree internal node IDs found, missing sequence IDs: [\"I4\"]")
     );
 }
