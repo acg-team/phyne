@@ -174,8 +174,8 @@ pub trait AncestralAlignment: Alignment {
     /// - if ancestral sequences have the same length as the leaf sequences
     /// - if sequence IDs match the node IDs in the tree ([`validate_ids_with_ancestors`])
     ///
-    /// Tree is consumed and stored together with the ancestral alignment, because the alignment is only
-    /// meaningful in the context of the tree that it was built from.
+    /// The `PhyloInfo` (i.e., `Tree` and associated `MSA`) is consumed, the ancestral alignment and
+    /// corresponding tree are returned together, because the alignment is only meaningful in the context of the tree.
     ///
     /// Only overwrite this method if absolutely necessary. The default implementation
     /// ensures that prerequisites are met. Overwriting and not ensuring these checks
