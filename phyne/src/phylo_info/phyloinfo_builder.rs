@@ -813,4 +813,49 @@ mod private_tests {
             Err(Error::Alphabet(msg)) if msg.contains("unknown alphabet")
         );
     }
+
+    #[test]
+    fn ensure_ancestral_ids() {
+        let tree = tree!("((A0:1.0,B1:1.0)I1:1.0,C2:1.0)I0:1.0;");
+        assert!(ensure_ancestral_ids_set(&tree).is_ok());
+    }
+
+    #[test]
+    fn ensure_ancestral_ids_missing() {
+        let tree = tree!("((A0:1.0,B1:1.0):1.0,C2:1.0)I0:1.0;");
+        assert_matches!(
+            ensure_ancestral_ids_set(&tree),
+            Err(Error::Tree(msg)) if msg.contains("some internal node IDs are not set")
+        );
+    }
+
+    #[test]
+    fn report_id_mismatch_missing_nodes() {
+        let nodes = HashSet::from(["A".to_string(), "B".to_string()]);
+        let sequences = HashSet::from(["A".to_string(), "B".to_string(), "C".to_string()]);
+
+        assert_matches!(
+            check_node_sequence_ids_match(nodes, sequences, "tree"),
+            Err(Error::Tree(msg)) if msg.contains("mismatched sequence and tree IDs found, missing node IDs: [\"C\"]")
+        );
+    }
+
+    #[test]
+    fn report_id_mismatch_missing_sequences() {
+        let nodes = HashSet::from(["A".to_string(), "B".to_string(), "C".to_string()]);
+        let sequences = HashSet::from(["A".to_string(), "B".to_string()]);
+
+        assert_matches!(
+            check_node_sequence_ids_match(nodes, sequences, "tree"),
+            Err(Error::Sequence(msg)) if msg.contains("mismatched sequence and tree IDs found, missing sequence IDs: [\"C\"]")
+        );
+    }
+
+    #[test]
+    fn report_no_id_mismatch() {
+        let nodes = HashSet::from(["A".to_string(), "B".to_string(), "C".to_string()]);
+        let sequences = HashSet::from(["A".to_string(), "B".to_string(), "C".to_string()]);
+
+        assert!(check_node_sequence_ids_match(nodes, sequences, "tree").is_ok());
+    }
 }
