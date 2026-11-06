@@ -189,7 +189,7 @@ impl TKFModel for TKF92IndelModel {
         let param = TKF92SearchParameters::from_primitive(idx);
         match param {
             TKF92SearchParameters::R => {
-                self.params[usize::from(TKF92Parameters::R)] = value;
+                self.params[idx] = value;
                 self.ln_r = value.ln();
                 self.ln_one_minus_r_over_r = (-value).ln_1p() - value.ln();
             }
