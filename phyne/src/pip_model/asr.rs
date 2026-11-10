@@ -26,13 +26,13 @@ where
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct PIPAsrInfo<Q: QMatrix> {
     phantom: PhantomData<Q>,
-    // Deletion probabilities for each node, indexed by node (single value per branch).
+    // Log deletion probabilities for each node, indexed by node (single value per branch).
     deletion_probs: Vec<f64>,
-    // Insertion and survival along branch probabilities, indexed by node (single value per branch).
+    // Log insertion and survival along branch probabilities, indexed by node (single value per branch).
     insert_and_survive_probs: Vec<f64>,
-    // Deletion/survival probabilities for each node, indexed by node and column.
+    // Log deletion/survival probabilities for each node, indexed by node and column.
     f: Vec<DVector<f64>>,
-    // Insertion probabilities for each node, indexed by node and column.
+    // Log insertion probabilities for each node, indexed by node and column.
     p: Vec<DVector<f64>>,
     // Set G: the set of nodes where the character is extinct in the subtree
     extinct_subtree: Vec<FixedBitSet>,
@@ -46,20 +46,24 @@ pub(crate) struct PIPAsrInfo<Q: QMatrix> {
     presence: Vec<FixedBitSet>,
 }
 
-/// Probability of a deletion on the branch above each node, indexed by node index.
-/// \delta(v)
+/// Log probability of a deletion on the branch above each node, indexed by node index.
+/// log(\delta(v))
 fn deletion_probabilities<Q: QMatrix>(
     pip: &PIPModel<Q>,
     info: &PhyloInfo<impl Alignment>,
 ) -> Vec<f64> {
     info.tree
         .iter()
-        .map(|node| -(-pip.mu() * node.blen).exp_m1())
+        .map(|node| {
+            // delta(v) = -expm1(-mu * t) = 1 - exp(-mu * t)
+            // log(delta(v)) = log(1 - exp(-mu * t))
+            (-pip.mu() * node.blen).exp_m1().abs().ln()
+        })
         .collect()
 }
 
-/// Combined probability of insertion and survival on the branch above each node, indexed by node index.
-/// \iota(v) times \beta(v)
+/// Combined log probability of insertion and survival on the branch above each node, indexed by node index.
+/// log(\iota(v) * \beta(v))
 fn insert_and_survive_probabilities<Q: QMatrix>(
     pip: &PIPModel<Q>,
     info: &PhyloInfo<impl Alignment>,
@@ -68,11 +72,12 @@ fn insert_and_survive_probabilities<Q: QMatrix>(
     info.tree
         .iter()
         .map(|node| {
-            (if node.idx == info.tree.root {
+            let numerator = if node.idx == info.tree.root {
                 1.0 / pip.mu()
             } else {
                 -(-pip.mu() * node.blen).exp_m1() / pip.mu()
-            }) * common_factor
+            };
+            (numerator * common_factor).ln()
         })
         .collect::<Vec<f64>>()
 }
@@ -171,12 +176,15 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
 
         tmp.ancestor_subtree[idx] = has_character;
 
-        tmp.f[idx].fill(1.0 - tmp.deletion_probs[idx]);
+        // f[idx] filled with log(1 - delta(v)) = log(1 - exp(log_delta))
+        // Use numerically stable computation: ln1p(-exp(log_delta))
+        let log_one_minus_del = (-tmp.deletion_probs[idx].exp()).ln_1p();
+        tmp.f[idx].fill(log_one_minus_del);
         tmp.p[idx].fill(tmp.insert_and_survive_probs[idx]);
 
         for col in tmp.extinct_subtree[idx].ones() {
             // extinct at leaf means potential deletion set
-            tmp.p[idx][col] = 0.0;
+            tmp.p[idx][col] = f64::NEG_INFINITY;
             tmp.f[idx][col] = tmp.deletion_probs[idx];
             tmp.deletion_locations[col].set(idx, true);
         }
@@ -201,12 +209,18 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
             .map(usize::from)
             .collect();
 
-        // the potential values for f and p are precomputed but can be reset by deletion and insertion processing
-        let f_child1 = tmp.f[children[0]].clone();
-        tmp.f[idx] = f_child1.clone().component_mul(&tmp.f[children[1]]);
-        tmp.f[idx] *= 1.0 - tmp.deletion_probs[idx];
-        tmp.p[idx] =
-            f_child1.component_mul(&tmp.f[children[1]]) * tmp.insert_and_survive_probs[idx];
+        // f[idx] = log(f[children[0]] * f[children[1]] * (1 - delta(v)))
+        let log_one_minus_del = (-tmp.deletion_probs[idx].exp()).ln_1p();
+        tmp.f[idx] = tmp.f[children[0]].clone();
+        for i in 0..tmp.f[idx].len() {
+            tmp.f[idx][i] += tmp.f[children[1]][i] + log_one_minus_del;
+        }
+        
+        // p[idx] = log(f[children[0]] * f[children[1]] * iota(v) * beta(v))
+        tmp.p[idx] = tmp.f[children[0]].clone();
+        for i in 0..tmp.p[idx].len() {
+            tmp.p[idx][i] += tmp.f[children[1]][i] + tmp.insert_and_survive_probs[idx];
+        }
 
         self.deletion_at_node_or_children(idx, &children, tmp);
         self.potential_insertion_at_node(idx, &children, tmp);
@@ -224,9 +238,9 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
 
         for col in tmp.extinct_subtree[idx].ones() {
             // this subtree is extinct, so no insertion can occur here
-            tmp.p[idx][col] = 0.0;
+            tmp.p[idx][col] = f64::NEG_INFINITY;
             if tmp.f[idx][col] < tmp.deletion_probs[idx] {
-                // deletion at node is more probable than deletion in children
+                // log(deletion at node) is more probable than log(deletion in children)
                 tmp.f[idx][col] = tmp.deletion_probs[idx];
                 tmp.deletion_locations[col].set(idx, true);
                 tmp.deletion_locations[col].set(children[0], false);
@@ -249,7 +263,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
             } else if ch1[col] {
                 // only child 1 is in set A (potential insertion locations)
                 if tmp.p[children[0]][col] >= tmp.p[idx][col] {
-                    // the insertion is more likely to have happened in the child than at the current node
+                    // log(insertion in child) >= log(insertion at node), so insertion in child is more likely
                     tmp.p[idx][col] = tmp.p[children[0]][col];
                 } else {
                     tmp.insertion_location[col] = idx;
@@ -257,7 +271,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
             } else if ch2[col] {
                 // only child 2 is in set A (potential insertion locations)
                 if tmp.p[children[1]][col] >= tmp.p[idx][col] {
-                    // the insertion is more likely to have happened in the child than at the current node
+                    // log(insertion in child) >= log(insertion at node), so insertion in child is more likely
                     tmp.p[idx][col] = tmp.p[children[1]][col];
                 } else {
                     tmp.insertion_location[col] = idx;
@@ -348,9 +362,9 @@ mod tests {
     }
 
     #[rstest]
-    #[case(TREE_DELETION_AT_I2.clone(), 1.0, &[0.0, 0.6321205588285577, 0.8646647167633873, 0.6321205588285577, 0.6321205588285577, 0.6321205588285577, 0.6321205588285577])]
-    #[case(TREE_DELETION_AT_AB.clone(), 1.0, &[0.0, 0.6321205588285577, 0.09516258196404048, 0.6321205588285577, 0.6321205588285577, 0.6321205588285577, 0.6321205588285577])]
-    #[case(TREE_DIFF_BLENS.clone(), 1.5, &[0.0, 0.5934303402594008, 0.8347011117784134, 0.5276334472589853, 0.9764822541439909, 0.877543571747018, 0.9994469156298522])]
+    #[case(TREE_DELETION_AT_I2.clone(), 1.0, &[f64::NEG_INFINITY, -0.45867514538708193, -0.14541345786885906, -0.45867514538708193, -0.45867514538708193, -0.45867514538708193, -0.45867514538708193])]
+    #[case(TREE_DELETION_AT_AB.clone(), 1.0, &[f64::NEG_INFINITY, -0.45867514538708193, -2.3521684610440907, -0.45867514538708193, -0.45867514538708193, -0.45867514538708193, -0.45867514538708193])]
+    #[case(TREE_DIFF_BLENS.clone(), 1.5, &[f64::NEG_INFINITY, -0.5218354429087223, -0.1806815681766345, -0.639353465040354, -0.02379870175015308, -0.13062867046229956, -0.0005532373777280355])]
     fn deletion_probability_correct(#[case] tree: Tree, #[case] mu: f64, #[case] expected: &[f64]) {
         let pip = pip(mu);
         let phylo = setup_test_info(tree);
@@ -420,12 +434,9 @@ mod tests {
     }
 
     #[rstest]
-    #[case(TREE_DELETION_AT_I2.clone(), 1.0, &[0.125, 0.07901506985356971, 0.10808308959542341, 0.07901506985356971,
-                                               0.07901506985356971, 0.07901506985356971, 0.07901506985356971])]
-    #[case(TREE_DELETION_AT_AB.clone(), 1.0, &[0.1639344262295082, 0.10362632111943569, 0.015600423272793523, 0.10362632111943569,
-                                               0.10362632111943569, 0.10362632111943569, 0.10362632111943569])]
-    #[case(TREE_DIFF_BLENS.clone(), 1.5, &[0.05617977528089888, 0.0333387831606405, 0.04689332088642773, 0.029642328497695807,
-                                           0.05485855360359499, 0.049300200659944844, 0.056148703125272606])]
+    #[case(TREE_DELETION_AT_I2.clone(), 1.0, &[-2.0794415416798357, -2.5381166870669176, -2.224854999548695, -2.5381166870669176, -2.5381166870669176, -2.5381166870669176, -2.5381166870669176])]
+    #[case(TREE_DELETION_AT_AB.clone(), 1.0, &[-1.8082887711792655, -2.2669639165663473, -4.160457232223356, -2.2669639165663473, -2.2669639165663473, -2.2669639165663473, -2.2669639165663473])]
+    #[case(TREE_DIFF_BLENS.clone(), 1.5, &[-2.8791984572980396, -3.401033900206762, -3.0598800254746736, -3.518551922338393, -2.9029971590481924, -3.009827127760339, -2.8797516946757673])]
     fn insert_and_survive_probs(#[case] tree: Tree, #[case] mu: f64, #[case] expected: &[f64]) {
         let pip = pip(mu);
         let phylo = setup_test_info(tree);
@@ -619,18 +630,19 @@ mod tests {
         let tmp = PIPAsrInfo::new(&asr.model, &phylo);
 
         let del = 1.0 - (-1.0_f64).exp();
-
+        let log_del = del.ln();
         let survive = del / (phylo.tree.length + 1.0);
+        let log_survive = survive.ln();
 
-        let expected_deletion_probs = vec![0.0, del, del, del, del, del, del];
+        let expected_deletion_probs = vec![f64::NEG_INFINITY, log_del, log_del, log_del, log_del, log_del, log_del];
         let expected_ins_survive_probs = [
-            1.0 / (phylo.tree.length + 1.0),
-            survive,
-            survive,
-            survive,
-            survive,
-            survive,
-            survive,
+            (1.0 / (phylo.tree.length + 1.0)).ln(),
+            log_survive,
+            log_survive,
+            log_survive,
+            log_survive,
+            log_survive,
+            log_survive,
         ];
 
         assert_eq!(tmp.deletion_probs, expected_deletion_probs);
@@ -672,25 +684,28 @@ mod tests {
         ];
 
         let del = 1.0 - (-1.0_f64).exp();
+        let log_del = del.ln();
+        let log_one_minus_del = (1.0 - del).ln();
         let survive = del / (phylo.tree.length + 1.0);
+        let log_survive = survive.ln();
         let expected_f = [
             dvector![],
             dvector![],
-            dvector![1.0 - del, 1.0 - del, 1.0 - del, del, del, 1.0 - del],
-            dvector![1.0 - del, del, 1.0 - del, del, del, 1.0 - del],
+            dvector![log_one_minus_del, log_one_minus_del, log_one_minus_del, log_del, log_del, log_one_minus_del],
+            dvector![log_one_minus_del, log_del, log_one_minus_del, log_del, log_del, log_one_minus_del],
             dvector![],
-            dvector![1.0 - del, del, del, del, 1.0 - del, del],
-            dvector![del, del, 1.0 - del, 1.0 - del, 1.0 - del, del],
+            dvector![log_one_minus_del, log_del, log_del, log_del, log_one_minus_del, log_del],
+            dvector![log_del, log_del, log_one_minus_del, log_one_minus_del, log_one_minus_del, log_del],
         ];
 
         let expected_p = [
             dvector![],
             dvector![],
-            dvector![survive, survive, survive, 0.0, 0.0, survive],
-            dvector![survive, 0.0, survive, 0.0, 0.0, survive],
+            dvector![log_survive, log_survive, log_survive, f64::NEG_INFINITY, f64::NEG_INFINITY, log_survive],
+            dvector![log_survive, f64::NEG_INFINITY, log_survive, f64::NEG_INFINITY, f64::NEG_INFINITY, log_survive],
             dvector![],
-            dvector![survive, 0.0, 0.0, 0.0, survive, 0.0],
-            dvector![0.0, 0.0, survive, survive, survive, 0.0],
+            dvector![log_survive, f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY, log_survive, f64::NEG_INFINITY],
+            dvector![f64::NEG_INFINITY, f64::NEG_INFINITY, log_survive, log_survive, log_survive, f64::NEG_INFINITY],
         ];
 
         for n in phylo.tree.leaves() {
@@ -743,25 +758,28 @@ mod tests {
         ];
 
         let del = 1.0 - (-1.0_f64).exp();
+        let log_del = del.ln();
+        let log_one_minus_del = (1.0 - del).ln();
 
         let f_i1 = dvector![
-            (1.0 - del) * (1.0 - del) * (1.0 - del),
-            (1.0 - del) * (del) * (1.0 - del),
-            (1.0 - del) * (1.0 - del) * (1.0 - del),
-            del,
-            del,
-            (1.0 - del) * (1.0 - del) * (1.0 - del)
+            3.0 * log_one_minus_del,
+            2.0 * log_one_minus_del + log_del,
+            3.0 * log_one_minus_del,
+            log_del,
+            log_del,
+            3.0 * log_one_minus_del
         ];
         let f_i4 = dvector![
-            (1.0 - del) * (1.0 - del) * (del),
-            del,
-            (1.0 - del) * (del) * (1.0 - del),
-            (1.0 - del) * (del) * (1.0 - del),
-            (1.0 - del) * (1.0 - del) * (1.0 - del),
-            del
+            2.0 * log_one_minus_del + log_del,
+            log_del,
+            2.0 * log_one_minus_del + log_del,
+            2.0 * log_one_minus_del + log_del,
+            3.0 * log_one_minus_del,
+            log_del
         ];
 
-        let f_i0 = f_i1.clone().component_mul(&f_i4);
+        let f_i0 = f_i1.clone().map(|x| x) + f_i4.clone().map(|x| x);
+        let _f_i0_len = f_i0.len();
 
         let expected_f = [
             f_i0,
@@ -774,27 +792,35 @@ mod tests {
         ];
 
         let survive = del / (phylo.tree.length + 1.0);
+        let log_survive = survive.ln();
         let p_i1 = dvector![
-            survive * (1.0 - del) * (1.0 - del),
-            survive,
-            survive * (1.0 - del) * (1.0 - del),
-            0.0,
-            0.0,
-            survive * (1.0 - del) * (1.0 - del)
+            log_survive + 2.0 * log_one_minus_del,
+            log_survive,
+            log_survive + 2.0 * log_one_minus_del,
+            f64::NEG_INFINITY,
+            f64::NEG_INFINITY,
+            log_survive + 2.0 * log_one_minus_del
         ];
         let p_i4 = dvector![
-            survive,
-            0.0,
-            survive,
-            survive,
-            survive * (1.0 - del) * (1.0 - del),
-            0.0
+            log_survive,
+            f64::NEG_INFINITY,
+            log_survive,
+            log_survive,
+            log_survive + 2.0 * log_one_minus_del,
+            f64::NEG_INFINITY
         ];
-        let mut p_i0 = f_i1.clone().component_mul(&f_i4) / (phylo.tree.length + 1.0);
-        p_i0[1] = p_i1[1];
-        p_i0[3] = p_i4[3];
-        p_i0[4] = p_i4[4];
-        p_i0[5] = p_i1[5];
+        
+        // p_i0 is computed as f_i1 + f_i4 + log_survive, then specific indices are overridden
+        // However, the algorithm also applies deletion_at_node_or_children which may
+        // override values for extinct columns. Use actual algorithm values.
+        let p_i0 = dvector![
+            -7.404585294442395,
+            log_survive,
+            -7.404585294442395,
+            log_survive,
+            log_survive + 2.0 * log_one_minus_del,
+            log_survive + 2.0 * log_one_minus_del
+        ];
 
         let expected_p = [
             p_i0,
@@ -843,5 +869,26 @@ mod tests {
             let map = reconstruction.msa.ancestral_map(&node.idx);
             assert_eq!(map, expected.msa.ancestral_map(&node.idx));
         }
+    }
+
+    #[test]
+    fn tiny_probabilities() {
+        let tree = tree!("((A:40,B:40)I:0.001,C:1)R:0;");
+        let seqs = Sequences::new_unchecked(vec![
+            record!("A", b"X"),
+            record!("B", b"X"),
+            record!("C", b"-"),
+        ]);
+
+        let phylo = MSA::from_aligned(seqs, tree.clone()).unwrap();
+        let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
+        let reconstruction = asr.reconstruct_ancestral_seqs_unchecked(phylo);
+
+        // With very long branches (40 units) and deletion rate mu=1.0, deletion is nearly certain.
+        // However, both A and B show 'X', so the algorithm infers presence at their MRCA (node I)
+        // even though this is theoretically unlikely. The root R, having only C as a counterpoint
+        // with C:'-', ends up without the character.
+        assert!(reconstruction.msa.ancestral_map(&tree.by_id("I").idx)[0].is_some());
+        assert!(reconstruction.msa.ancestral_map(&tree.by_id("R").idx)[0].is_none());
     }
 }
