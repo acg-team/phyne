@@ -26,7 +26,7 @@ where
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct PIPAsrInfo<Q: QMatrix> {
     phantom: PhantomData<Q>,
-    // Log deletion probabilities for each node, indexed by node (single value per branch).
+    // Log deletion probabilities (delta(v)) for each node, indexed by node (single value per branch).
     deletion_probs: Vec<f64>,
     // Log pure survival probabilities (zeta(v)) for each node, indexed by node (single value per branch), computed as ln(1 - exp(-mu * b(v))).
     pure_survival_probs: Vec<f64>,
@@ -49,7 +49,7 @@ pub(crate) struct PIPAsrInfo<Q: QMatrix> {
 }
 
 /// Log probability of a deletion on the branch above each node, indexed by node index.
-/// log(\delta(v))
+/// ln(delta(v)) = ln(1 - exp(-mu * b(v)))
 fn deletion_probabilities<Q: QMatrix>(
     pip: &PIPModel<Q>,
     info: &PhyloInfo<impl Alignment>,
@@ -77,7 +77,7 @@ fn pure_survival_probabilities<Q: QMatrix>(
 }
 
 /// Combined log probability of insertion and survival on the branch above each node, indexed by node index.
-/// log(\iota(v) * \beta(v))
+/// ln(iota(v)) + ln(beta(v)))
 fn insert_and_survive_probabilities<Q: QMatrix>(
     pip: &PIPModel<Q>,
     info: &PhyloInfo<impl Alignment>,
@@ -245,7 +245,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
             // this subtree is extinct, so no insertion can occur here
             tmp.p[idx][col] = f64::NEG_INFINITY;
             if tmp.f[idx][col] < tmp.deletion_probs[idx] {
-                // log(deletion at node) is more probable than log(deletion in children)
+                // deletion at node is more probable than deletion in children
                 tmp.f[idx][col] = tmp.deletion_probs[idx];
                 tmp.deletion_locations[col].set(idx, true);
                 tmp.deletion_locations[col].set(children[0], false);
@@ -268,7 +268,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
             } else if ch1[col] {
                 // only child 1 is in set A (potential insertion locations)
                 if tmp.p[children[0]][col] >= tmp.p[idx][col] {
-                    // log(insertion in child) >= log(insertion at node), so insertion in child is more likely
+                    // insertion in child 1 is more likely
                     tmp.p[idx][col] = tmp.p[children[0]][col];
                 } else {
                     tmp.insertion_location[col] = idx;
@@ -276,7 +276,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
             } else if ch2[col] {
                 // only child 2 is in set A (potential insertion locations)
                 if tmp.p[children[1]][col] >= tmp.p[idx][col] {
-                    // log(insertion in child) >= log(insertion at node), so insertion in child is more likely
+                    // insertion in child 2 is more likely
                     tmp.p[idx][col] = tmp.p[children[1]][col];
                 } else {
                     tmp.insertion_location[col] = idx;
