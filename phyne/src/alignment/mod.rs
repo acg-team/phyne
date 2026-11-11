@@ -184,7 +184,7 @@ pub trait AncestralAlignment: Alignment {
         phylo: PhyloInfo<impl Alignment>,
         ancestral_seqs: Sequences,
     ) -> Result<PhyloInfo<Self>> {
-        if !ancestral_seqs.alphabet().eq(phylo.msa.alphabet()) {
+        if ancestral_seqs.alphabet() != (phylo.msa.alphabet()) {
             bail!(
                 AncestralAlignment,
                 "ancestral sequences must have the same alphabet as the provided alignment"
