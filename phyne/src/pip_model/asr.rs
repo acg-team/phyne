@@ -56,9 +56,7 @@ fn deletion_probabilities<Q: QMatrix>(
 ) -> Vec<f64> {
     info.tree
         .iter()
-        .map(|node| {
-            (-(-pip.mu() * node.blen).exp_m1()).ln()
-        })
+        .map(|node| (-(-pip.mu() * node.blen).exp_m1()).ln())
         .collect()
 }
 
@@ -68,12 +66,7 @@ fn pure_survival_probabilities<Q: QMatrix>(
     pip: &PIPModel<Q>,
     info: &PhyloInfo<impl Alignment>,
 ) -> Vec<f64> {
-    info.tree
-        .iter()
-        .map(|node| {
-            -pip.mu() * node.blen
-        })
-        .collect()
+    info.tree.iter().map(|node| -pip.mu() * node.blen).collect()
 }
 
 /// Combined log probability of insertion and survival on the branch above each node, indexed by node index.
