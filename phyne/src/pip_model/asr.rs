@@ -871,11 +871,9 @@ mod tests {
         let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
         let reconstruction = asr.reconstruct_ancestral_seqs_unchecked(phylo);
 
-        // With very long branches (40 units) and deletion rate mu=1.0, deletion is nearly certain.
-        // However, both A and B show 'X', so the algorithm infers presence at their MRCA (node I)
-        // even though this is theoretically unlikely. The root R, having only C as a counterpoint
-        // with C:'-', ends up without the character.
+        // The probability of insertion at I is 632 times lower than insertion at R, thus the
+        // character must be inserted in R and deleted in C
         assert!(reconstruction.msa.ancestral_map(&tree.by_id("I").idx)[0].is_some());
-        assert!(reconstruction.msa.ancestral_map(&tree.by_id("R").idx)[0].is_none());
+        assert!(reconstruction.msa.ancestral_map(&tree.by_id("R").idx)[0].is_some());
     }
 }
