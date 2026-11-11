@@ -77,7 +77,7 @@ fn insert_and_survive_probabilities<Q: QMatrix>(
             } else {
                 -(-pip.mu() * node.blen).exp_m1() / pip.mu()
             };
-            (numerator * common_factor).ln()
+            numerator.ln() + common_factor.ln()
         })
         .collect::<Vec<f64>>()
 }
@@ -211,16 +211,12 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
 
         // f[idx] = log(f[children[0]] * f[children[1]] * (1 - delta(v)))
         let log_one_minus_del = (-tmp.deletion_probs[idx].exp()).ln_1p();
-        tmp.f[idx] = tmp.f[children[0]].clone();
-        for i in 0..tmp.f[idx].len() {
-            tmp.f[idx][i] += tmp.f[children[1]][i] + log_one_minus_del;
-        }
-        
+        tmp.f[idx] = tmp.f[children[0]].clone() + tmp.f[children[1]].clone();
+        tmp.f[idx].add_scalar_mut(log_one_minus_del);
+
         // p[idx] = log(f[children[0]] * f[children[1]] * iota(v) * beta(v))
-        tmp.p[idx] = tmp.f[children[0]].clone();
-        for i in 0..tmp.p[idx].len() {
-            tmp.p[idx][i] += tmp.f[children[1]][i] + tmp.insert_and_survive_probs[idx];
-        }
+        tmp.p[idx] = tmp.f[children[0]].clone() + tmp.f[children[1]].clone();
+        tmp.p[idx].add_scalar_mut(tmp.insert_and_survive_probs[idx]);
 
         self.deletion_at_node_or_children(idx, &children, tmp);
         self.potential_insertion_at_node(idx, &children, tmp);
