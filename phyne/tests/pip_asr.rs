@@ -5,7 +5,6 @@ use phyne::asr::AncestralSequenceReconstruction;
 use phyne::phylo_info::{PhyloInfo, PhyloInfoBuilder};
 use phyne::pip_model::{PIPIndels, PIPModel};
 use phyne::substitution_models::JC69;
-use phyne::Result;
 
 #[test]
 fn homology_against_arpip() {
@@ -19,7 +18,7 @@ fn homology_against_arpip() {
     let tree_file = fldr.join("sim-0_new.newick");
     let inferred_file = fldr.join("sim-0_inferred.fasta");
 
-    let info: PhyloInfo<MSA> = PhyloInfoBuilder::with_attrs(alignment_file, tree_file.clone())
+    let info: PhyloInfo<MSA> = PhyloInfoBuilder::with_attrs(alignment_file, &tree_file)
         .build()
         .unwrap();
 
@@ -27,11 +26,9 @@ fn homology_against_arpip() {
         PIPModel::<JC69>::with_default_substitution(&[1.0, 0.1]).unwrap(),
     );
 
-    let result: Result<PhyloInfo<MASA>> = asr.reconstruct_ancestral_seqs(info);
-    assert!(result.is_ok());
-    let reconstruction = result.unwrap();
+    let reconstruction = asr.reconstruct_ancestral_seqs(info).unwrap();
 
-    let reconstruction_arpip = PhyloInfoBuilder::with_attrs(inferred_file, tree_file)
+    let reconstruction_arpip = PhyloInfoBuilder::with_attrs(inferred_file, &tree_file)
         .build_with_ancestors()
         .unwrap();
 
