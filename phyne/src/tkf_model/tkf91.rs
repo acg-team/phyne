@@ -218,6 +218,7 @@ impl<Q: QMatrix, AA: AncestralAlignment> TKF91CostBuilder<Q, AA> {
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage, coverage(off))]
 mod private_tests {
     use approx::assert_relative_eq;
 

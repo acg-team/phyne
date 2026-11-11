@@ -409,6 +409,7 @@ fn detect_alphabet(sequences: &[Record]) -> &'static Alphabet {
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage, coverage(off))]
 mod private_tests {
     use assert_matches::assert_matches;
     use rstest::rstest;
