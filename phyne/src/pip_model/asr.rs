@@ -26,25 +26,25 @@ where
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct PIPAsrInfo<Q: QMatrix> {
     phantom: PhantomData<Q>,
-    // Log deletion probabilities (delta(v)) for each node, indexed by node (single value per branch).
+    /// Log deletion probabilities (delta(v)) for each node, indexed by node (single value per branch).
     deletion_probs: Vec<f64>,
-    // Log pure survival probabilities (zeta(v)) for each node, indexed by node (single value per branch), computed as ln(1 - exp(-mu * b(v))).
+    /// Log pure survival probabilities (zeta(v)) for each node, indexed by node (single value per branch), computed as ln(1 - exp(-mu * b(v))).
     pure_survival_probs: Vec<f64>,
-    // Log insertion and survival along branch probabilities (iota(v) * beta(v)), indexed by node (single value per branch).
+    /// Log insertion and survival along branch probabilities (iota(v) * beta(v)), indexed by node (single value per branch).
     insert_and_survive_probs: Vec<f64>,
-    // Log deletion/survival probabilities for each node, indexed by node and column.
+    /// Log deletion/survival probabilities for each node, indexed by node and column.
     f: Vec<DVector<f64>>,
-    // Log insertion probabilities for each node, indexed by node and column.
+    /// Log insertion probabilities for each node, indexed by node and column.
     p: Vec<DVector<f64>>,
-    // Set G: the set of nodes where the character is extinct in the subtree
+    /// Set G: the set of nodes where the character is extinct in the subtree
     extinct_subtree: Vec<FixedBitSet>,
-    // Set A: the set of nodes where the character could be an insertion
+    /// Set A: the set of nodes where the character could be an insertion
     ancestor_subtree: Vec<FixedBitSet>,
-    // Deletion locations for each character in the alignment, indexed by node and column.
+    /// Deletion locations for each character in the alignment, indexed by node and column.
     deletion_locations: Vec<FixedBitSet>,
-    // Insertion location for each character in the alignment, indexed by column (only one insertion is allowed per column).
+    /// Insertion location for each character in the alignment, indexed by column (only one insertion is allowed per column).
     insertion_location: Vec<usize>,
-    // Presence for each character in the alignment, indexed by node and column.
+    /// Presence for each character in the alignment, indexed by node and column.
     presence: Vec<FixedBitSet>,
 }
 
