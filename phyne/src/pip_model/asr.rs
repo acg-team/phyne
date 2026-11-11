@@ -356,7 +356,7 @@ mod tests {
             record!("C", b"A"),
             record!("D", b"A"),
         ]);
-        MSA::from_aligned(sequences, tree).unwrap()
+        MSA::from_aligned_unchecked(sequences, tree)
     }
 
     fn reconstruct_on_single_site(tree: Tree, mu: f64) -> PhyloInfo<MASA> {
