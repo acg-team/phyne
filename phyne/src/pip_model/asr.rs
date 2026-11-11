@@ -851,7 +851,7 @@ mod tests {
         let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
         let reconstruction = asr.reconstruct_ancestral_seqs_unchecked(phylo.clone());
 
-        let expected = MASA::from_msa_with_ancestral(phylo.clone(), ancestral_seqs).unwrap();
+        let expected = MASA::from_msa_with_ancestral_unchecked(phylo.clone(), ancestral_seqs);
 
         for node in phylo.tree.internals() {
             let map = reconstruction.msa.ancestral_map(&node.idx);
