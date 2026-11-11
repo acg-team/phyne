@@ -24,8 +24,7 @@ where
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct PIPAsrInfo<Q: QMatrix> {
-    phantom: PhantomData<Q>,
+pub(crate) struct PIPAsrInfo {
     /// Log deletion probabilities (delta(v)) for each node, indexed by node (single value per branch).
     deletion_probs: Vec<f64>,
     /// Log pure survival probabilities (zeta(v)) for each node, indexed by node (single value per branch), computed as ln(1 - exp(-mu * b(v))).
@@ -89,12 +88,11 @@ fn insert_and_survive_probabilities<Q: QMatrix>(
         .collect::<Vec<f64>>()
 }
 
-impl<Q: QMatrix> PIPAsrInfo<Q> {
-    pub fn new<A: Alignment>(model: &PIPModel<Q>, info: &PhyloInfo<A>) -> Self {
+impl PIPAsrInfo {
+    pub fn new<A: Alignment>(model: &PIPModel<impl QMatrix>, info: &PhyloInfo<A>) -> Self {
         let node_count = info.tree.len();
         let msa_length = info.msa.len();
         PIPAsrInfo {
-            phantom: PhantomData,
             insert_and_survive_probs: insert_and_survive_probabilities(model, info),
             deletion_probs: deletion_probabilities(model, info),
             pure_survival_probs: pure_survival_probabilities(model, info),
@@ -146,7 +144,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
     /// where the character is present at the node. Traverses the tree once in each direction for
     /// all sites.
     fn reconstruct_presence(&self, phylo: &PhyloInfo<A>) -> Vec<FixedBitSet> {
-        let mut tmp = PIPAsrInfo::<Q>::new(&self.model, phylo);
+        let mut tmp = PIPAsrInfo::new(&self.model, phylo);
         // bottom up pass to fill in deletion and insertion sets
         for node_idx in phylo.tree.postorder() {
             match node_idx {
@@ -175,7 +173,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
         tmp.presence
     }
 
-    fn set_leaf_values(&self, phylo: &PhyloInfo<A>, node_idx: &NodeIdx, tmp: &mut PIPAsrInfo<Q>) {
+    fn set_leaf_values(&self, phylo: &PhyloInfo<A>, node_idx: &NodeIdx, tmp: &mut PIPAsrInfo) {
         let idx = usize::from(node_idx);
         let has_character = mapping_to_bits(phylo.msa.leaf_map(node_idx));
 
@@ -200,12 +198,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
         }
     }
 
-    fn set_internal_values(
-        &self,
-        phylo: &PhyloInfo<A>,
-        node_idx: &NodeIdx,
-        tmp: &mut PIPAsrInfo<Q>,
-    ) {
+    fn set_internal_values(&self, phylo: &PhyloInfo<A>, node_idx: &NodeIdx, tmp: &mut PIPAsrInfo) {
         let idx = usize::from(node_idx);
         let children: Vec<usize> = phylo
             .tree
@@ -225,12 +218,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
         self.potential_insertion_at_node(idx, &children, tmp);
     }
 
-    fn deletion_at_node_or_children(
-        &self,
-        idx: usize,
-        children: &[usize],
-        tmp: &mut PIPAsrInfo<Q>,
-    ) {
+    fn deletion_at_node_or_children(&self, idx: usize, children: &[usize], tmp: &mut PIPAsrInfo) {
         let mut both_children_extinct = tmp.extinct_subtree[children[0]].clone();
         both_children_extinct.intersect_with(&tmp.extinct_subtree[children[1]]);
         tmp.extinct_subtree[idx] = both_children_extinct;
@@ -248,7 +236,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
         }
     }
 
-    fn potential_insertion_at_node(&self, idx: usize, children: &[usize], tmp: &mut PIPAsrInfo<Q>) {
+    fn potential_insertion_at_node(&self, idx: usize, children: &[usize], tmp: &mut PIPAsrInfo) {
         let ch1 = tmp.ancestor_subtree[children[0]].clone();
         let ch2 = tmp.ancestor_subtree[children[1]].clone();
 
@@ -283,7 +271,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
         &self,
         phylo: &PhyloInfo<A>,
         node_idx: &NodeIdx,
-        tmp: &mut PIPAsrInfo<Q>,
+        tmp: &mut PIPAsrInfo,
     ) {
         let idx = usize::from(node_idx);
 
