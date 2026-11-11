@@ -28,7 +28,9 @@ pub(crate) struct PIPAsrInfo<Q: QMatrix> {
     phantom: PhantomData<Q>,
     // Log deletion probabilities for each node, indexed by node (single value per branch).
     deletion_probs: Vec<f64>,
-    // Log insertion and survival along branch probabilities, indexed by node (single value per branch).
+    // Log pure survival probabilities (zeta(v)) for each node, indexed by node (single value per branch), computed as ln(1 - exp(-mu * b(v))).
+    pure_survival_probs: Vec<f64>,
+    // Log insertion and survival along branch probabilities (iota(v) * beta(v)), indexed by node (single value per branch).
     insert_and_survive_probs: Vec<f64>,
     // Log deletion/survival probabilities for each node, indexed by node and column.
     f: Vec<DVector<f64>>,
@@ -55,9 +57,21 @@ fn deletion_probabilities<Q: QMatrix>(
     info.tree
         .iter()
         .map(|node| {
-            // delta(v) = -expm1(-mu * t) = 1 - exp(-mu * t)
-            // log(delta(v)) = log(1 - exp(-mu * t))
-            (-pip.mu() * node.blen).exp_m1().abs().ln()
+            (-(-pip.mu() * node.blen).exp_m1()).ln()
+        })
+        .collect()
+}
+
+/// Log probability of pure survival on the branch above each node, indexed by node index.
+/// ln(zeta(v)) = ln(exp(-mu * b(v))) = -mu * b(v)
+fn pure_survival_probabilities<Q: QMatrix>(
+    pip: &PIPModel<Q>,
+    info: &PhyloInfo<impl Alignment>,
+) -> Vec<f64> {
+    info.tree
+        .iter()
+        .map(|node| {
+            -pip.mu() * node.blen
         })
         .collect()
 }
@@ -90,6 +104,7 @@ impl<Q: QMatrix> PIPAsrInfo<Q> {
             phantom: PhantomData,
             insert_and_survive_probs: insert_and_survive_probabilities(model, info),
             deletion_probs: deletion_probabilities(model, info),
+            pure_survival_probs: pure_survival_probabilities(model, info),
             f: vec![DVector::<f64>::zeros(msa_length); node_count],
             p: vec![DVector::<f64>::zeros(msa_length); node_count],
             extinct_subtree: vec![FixedBitSet::with_capacity(msa_length); node_count],
@@ -176,10 +191,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
 
         tmp.ancestor_subtree[idx] = has_character;
 
-        // f[idx] filled with log(1 - delta(v)) = log(1 - exp(log_delta))
-        // Use numerically stable computation: ln1p(-exp(log_delta))
-        let log_one_minus_del = (-tmp.deletion_probs[idx].exp()).ln_1p();
-        tmp.f[idx].fill(log_one_minus_del);
+        tmp.f[idx].fill(tmp.pure_survival_probs[idx]);
         tmp.p[idx].fill(tmp.insert_and_survive_probs[idx]);
 
         for col in tmp.extinct_subtree[idx].ones() {
@@ -209,12 +221,9 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
             .map(usize::from)
             .collect();
 
-        // f[idx] = log(f[children[0]] * f[children[1]] * (1 - delta(v)))
-        let log_one_minus_del = (-tmp.deletion_probs[idx].exp()).ln_1p();
         tmp.f[idx] = tmp.f[children[0]].clone() + tmp.f[children[1]].clone();
-        tmp.f[idx].add_scalar_mut(log_one_minus_del);
+        tmp.f[idx].add_scalar_mut(tmp.pure_survival_probs[idx]);
 
-        // p[idx] = log(f[children[0]] * f[children[1]] * iota(v) * beta(v))
         tmp.p[idx] = tmp.f[children[0]].clone() + tmp.f[children[1]].clone();
         tmp.p[idx].add_scalar_mut(tmp.insert_and_survive_probs[idx]);
 
