@@ -85,7 +85,7 @@ fn insert_and_survive_probabilities<Q: QMatrix>(
             };
             numerator.ln() + common_factor.ln()
         })
-        .collect::<Vec<f64>>()
+        .collect()
 }
 
 impl PIPAsrInfo {
