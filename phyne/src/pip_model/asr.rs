@@ -122,7 +122,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> AncestralSequenceReconstr
         let ancestral_seqs =
             Sequences::with_alphabet_unchecked(ancestral_records, phylo.msa.alphabet());
 
-        AA::from_msa_with_ancestral(phylo, ancestral_seqs).unwrap()
+        AA::from_msa_with_ancestral_unchecked(phylo, ancestral_seqs)
     }
 }
 
