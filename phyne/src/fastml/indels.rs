@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 use nalgebra::DMatrix;
 
 use crate::alignment::{Alignment, MSA};
+use crate::evolutionary_models::ProbabilityMatrix;
 use crate::phylo_info::PhyloInfo;
 use crate::{Error, Result};
 
@@ -43,7 +44,7 @@ impl IndelModel {
         [self.loss / total, self.gain / total]
     }
 
-    fn transition(self, time: f64) -> DMatrix<f64> {
+    fn transition(self, time: f64) -> ProbabilityMatrix {
         let pi = self.prior();
         // expm1 retains precision on very short branches.
         let change = -(-(self.gain + self.loss) * time).exp_m1();
