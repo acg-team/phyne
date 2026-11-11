@@ -214,6 +214,7 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> PIPIndels<Q, A, AA> {
             .map(usize::from)
             .collect();
 
+        // Precompute potential values for f and p. They might be overwritten by deletion and insertion processing
         tmp.f[idx] = tmp.f[children[0]].clone() + tmp.f[children[1]].clone();
         tmp.f[idx].add_scalar_mut(tmp.pure_survival_probs[idx]);
 
