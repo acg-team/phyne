@@ -367,20 +367,20 @@ mod tests {
     }
 
     #[rstest]
-    #[case(TREE_DELETION_AT_I2.clone(), 1.0, &[f64::NEG_INFINITY, -0.45867514538708193, -0.14541345786885906, -0.45867514538708193, -0.45867514538708193, -0.45867514538708193, -0.45867514538708193])]
-    #[case(TREE_DELETION_AT_AB.clone(), 1.0, &[f64::NEG_INFINITY, -0.45867514538708193, -2.3521684610440907, -0.45867514538708193, -0.45867514538708193, -0.45867514538708193, -0.45867514538708193])]
-    #[case(TREE_DIFF_BLENS.clone(), 1.5, &[f64::NEG_INFINITY, -0.5218354429087223, -0.1806815681766345, -0.639353465040354, -0.02379870175015308, -0.13062867046229956, -0.0005532373777280355])]
+    #[case(TREE_DELETION_AT_I2.clone(), 1.0, &[0.0, 0.6321205588285577, 0.8646647167633873, 0.6321205588285577, 0.6321205588285577, 0.6321205588285577, 0.6321205588285577])]
+    #[case(TREE_DELETION_AT_AB.clone(), 1.0, &[0.0, 0.6321205588285577, 0.09516258196404048, 0.6321205588285577, 0.6321205588285577, 0.6321205588285577, 0.6321205588285577])]
+    #[case(TREE_DIFF_BLENS.clone(), 1.5, &[0.0, 0.5934303402594008, 0.8347011117784134, 0.5276334472589853, 0.9764822541439909, 0.877543571747018, 0.9994469156298522])]
     fn deletion_probability_correct(#[case] tree: Tree, #[case] mu: f64, #[case] expected: &[f64]) {
         let pip = pip(mu);
         let phylo = setup_test_info(tree);
         let deletion_at_node = deletion_probabilities(&pip, &phylo);
+        let expected = expected.iter().map(|x| x.ln()).collect::<Vec<_>>();
 
-        for node_idx in phylo.tree.preorder() {
-            assert_relative_eq!(
-                deletion_at_node[usize::from(node_idx)],
-                expected[usize::from(node_idx)],
-            );
-        }
+        assert_relative_eq!(
+            deletion_at_node.as_slice(),
+            expected.as_slice(),
+            epsilon = 1e-10
+        );
     }
 
     #[test]
@@ -439,16 +439,21 @@ mod tests {
     }
 
     #[rstest]
-    #[case(TREE_DELETION_AT_I2.clone(), 1.0, &[-2.0794415416798357, -2.5381166870669176, -2.224854999548695, -2.5381166870669176, -2.5381166870669176, -2.5381166870669176, -2.5381166870669176])]
-    #[case(TREE_DELETION_AT_AB.clone(), 1.0, &[-1.8082887711792655, -2.2669639165663473, -4.160457232223356, -2.2669639165663473, -2.2669639165663473, -2.2669639165663473, -2.2669639165663473])]
-    #[case(TREE_DIFF_BLENS.clone(), 1.5, &[-2.8791984572980396, -3.401033900206762, -3.0598800254746736, -3.518551922338393, -2.9029971590481924, -3.009827127760339, -2.8797516946757673])]
+    #[case(TREE_DELETION_AT_I2.clone(), 1.0,  &[0.125, 0.07901506985356971, 0.10808308959542341, 0.07901506985356971,
+                                                0.07901506985356971, 0.07901506985356971, 0.07901506985356971])]
+    #[case(TREE_DELETION_AT_AB.clone(), 1.0, &[0.1639344262295082, 0.10362632111943569, 0.015600423272793523, 0.10362632111943569,
+                                               0.10362632111943569, 0.10362632111943569, 0.10362632111943569])]
+    #[case(TREE_DIFF_BLENS.clone(), 1.5, &[0.05617977528089888, 0.0333387831606405, 0.04689332088642773, 0.029642328497695807,
+                                           0.05485855360359499, 0.049300200659944844, 0.056148703125272606])]
     fn insert_and_survive_probs(#[case] tree: Tree, #[case] mu: f64, #[case] expected: &[f64]) {
         let pip = pip(mu);
         let phylo = setup_test_info(tree);
         let insert_and_survive_probabilities = insert_and_survive_probabilities(&pip, &phylo);
+        let expected = expected.iter().map(|x| x.ln()).collect::<Vec<_>>();
+
         assert_relative_eq!(
             insert_and_survive_probabilities.as_slice(),
-            expected,
+            expected.as_slice(),
             epsilon = 1e-10
         );
     }
@@ -634,21 +639,12 @@ mod tests {
         let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
         let tmp = PIPAsrInfo::new(&asr.model, &phylo);
 
-        let del = 1.0 - (-1.0_f64).exp();
-        let log_del = del.ln();
-        let survive = del / (phylo.tree.length + 1.0);
-        let log_survive = survive.ln();
+        let delta = (-(-1.0_f64).exp_m1()).ln();
+        let beta = delta - (phylo.tree.length + 1.0).ln();
 
-        let expected_deletion_probs = vec![f64::NEG_INFINITY, log_del, log_del, log_del, log_del, log_del, log_del];
-        let expected_ins_survive_probs = [
-            (1.0 / (phylo.tree.length + 1.0)).ln(),
-            log_survive,
-            log_survive,
-            log_survive,
-            log_survive,
-            log_survive,
-            log_survive,
-        ];
+        let expected_deletion_probs =
+            vec![f64::NEG_INFINITY, delta, delta, delta, delta, delta, delta];
+        let expected_ins_survive_probs = [beta - delta, beta, beta, beta, beta, beta, beta];
 
         assert_eq!(tmp.deletion_probs, expected_deletion_probs);
         assert_relative_eq!(
@@ -688,29 +684,28 @@ mod tests {
             FixedBitSet::from_iter([2, 3, 4]),
         ];
 
-        let del = 1.0 - (-1.0_f64).exp();
-        let log_del = del.ln();
-        let log_one_minus_del = (1.0 - del).ln();
-        let survive = del / (phylo.tree.length + 1.0);
-        let log_survive = survive.ln();
+        let delta = (-(-1.0_f64).exp_m1()).ln();
+        let zeta = -1.0;
+        let iota_beta = delta - (phylo.tree.length + 1.0).ln();
+        let neg_inf = f64::NEG_INFINITY;
         let expected_f = [
             dvector![],
             dvector![],
-            dvector![log_one_minus_del, log_one_minus_del, log_one_minus_del, log_del, log_del, log_one_minus_del],
-            dvector![log_one_minus_del, log_del, log_one_minus_del, log_del, log_del, log_one_minus_del],
+            dvector![zeta, zeta, zeta, delta, delta, zeta],
+            dvector![zeta, delta, zeta, delta, delta, zeta],
             dvector![],
-            dvector![log_one_minus_del, log_del, log_del, log_del, log_one_minus_del, log_del],
-            dvector![log_del, log_del, log_one_minus_del, log_one_minus_del, log_one_minus_del, log_del],
+            dvector![zeta, delta, delta, delta, zeta, delta],
+            dvector![delta, delta, zeta, zeta, zeta, delta],
         ];
 
         let expected_p = [
             dvector![],
             dvector![],
-            dvector![log_survive, log_survive, log_survive, f64::NEG_INFINITY, f64::NEG_INFINITY, log_survive],
-            dvector![log_survive, f64::NEG_INFINITY, log_survive, f64::NEG_INFINITY, f64::NEG_INFINITY, log_survive],
+            dvector![iota_beta, iota_beta, iota_beta, neg_inf, neg_inf, iota_beta],
+            dvector![iota_beta, neg_inf, iota_beta, neg_inf, neg_inf, iota_beta],
             dvector![],
-            dvector![log_survive, f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY, log_survive, f64::NEG_INFINITY],
-            dvector![f64::NEG_INFINITY, f64::NEG_INFINITY, log_survive, log_survive, log_survive, f64::NEG_INFINITY],
+            dvector![iota_beta, neg_inf, neg_inf, neg_inf, iota_beta, neg_inf],
+            dvector![neg_inf, neg_inf, iota_beta, iota_beta, iota_beta, neg_inf],
         ];
 
         for n in phylo.tree.leaves() {
@@ -762,29 +757,27 @@ mod tests {
             FixedBitSet::new(),
         ];
 
-        let del = 1.0 - (-1.0_f64).exp();
-        let log_del = del.ln();
-        let log_one_minus_del = (1.0 - del).ln();
+        let delta = (-(-1.0_f64).exp_m1()).ln();
+        let zeta = -1.0;
 
         let f_i1 = dvector![
-            3.0 * log_one_minus_del,
-            2.0 * log_one_minus_del + log_del,
-            3.0 * log_one_minus_del,
-            log_del,
-            log_del,
-            3.0 * log_one_minus_del
+            3.0 * zeta,
+            2.0 * zeta + delta,
+            3.0 * zeta,
+            delta,
+            delta,
+            3.0 * zeta
         ];
         let f_i4 = dvector![
-            2.0 * log_one_minus_del + log_del,
-            log_del,
-            2.0 * log_one_minus_del + log_del,
-            2.0 * log_one_minus_del + log_del,
-            3.0 * log_one_minus_del,
-            log_del
+            2.0 * zeta + delta,
+            delta,
+            2.0 * zeta + delta,
+            2.0 * zeta + delta,
+            3.0 * zeta,
+            delta
         ];
 
-        let f_i0 = f_i1.clone().map(|x| x) + f_i4.clone().map(|x| x);
-        let _f_i0_len = f_i0.len();
+        let f_i0 = f_i1.clone() + f_i4.clone();
 
         let expected_f = [
             f_i0,
@@ -796,36 +789,32 @@ mod tests {
             dvector![],
         ];
 
-        let survive = del / (phylo.tree.length + 1.0);
-        let log_survive = survive.ln();
+        let iota_beta = delta - (phylo.tree.length + 1.0).ln();
+
+        let neg_inf = f64::NEG_INFINITY;
         let p_i1 = dvector![
-            log_survive + 2.0 * log_one_minus_del,
-            log_survive,
-            log_survive + 2.0 * log_one_minus_del,
-            f64::NEG_INFINITY,
-            f64::NEG_INFINITY,
-            log_survive + 2.0 * log_one_minus_del
+            iota_beta + 2.0 * zeta,
+            iota_beta,
+            iota_beta + 2.0 * zeta,
+            neg_inf,
+            neg_inf,
+            iota_beta + 2.0 * zeta
         ];
         let p_i4 = dvector![
-            log_survive,
-            f64::NEG_INFINITY,
-            log_survive,
-            log_survive,
-            log_survive + 2.0 * log_one_minus_del,
-            f64::NEG_INFINITY
+            iota_beta,
+            neg_inf,
+            iota_beta,
+            iota_beta,
+            iota_beta + 2.0 * zeta,
+            neg_inf
         ];
-        
-        // p_i0 is computed as f_i1 + f_i4 + log_survive, then specific indices are overridden
-        // However, the algorithm also applies deletion_at_node_or_children which may
-        // override values for extinct columns. Use actual algorithm values.
-        let p_i0 = dvector![
-            -7.404585294442395,
-            log_survive,
-            -7.404585294442395,
-            log_survive,
-            log_survive + 2.0 * log_one_minus_del,
-            log_survive + 2.0 * log_one_minus_del
-        ];
+
+        let mut p_i0 = f_i1 + f_i4;
+        p_i0.add_scalar_mut(-(phylo.tree.length + 1.0).ln());
+        p_i0[1] = p_i1[1];
+        p_i0[3] = p_i4[3];
+        p_i0[4] = p_i4[4];
+        p_i0[5] = p_i1[5];
 
         let expected_p = [
             p_i0,
