@@ -5,10 +5,10 @@
 // implement parsimony_presence_absence implementation for indel handling
 // test against FastML paper's example data and results
 
-use nalgebra::DMatrix; //use bio::io::fasta::Record;
+use nalgebra::DMatrix;
 
 use crate::alignment::{Alignment, AncestralAlignment, Sequences, MASA, MSA};
-//use crate::alphabets::GAP;
+use crate::alphabets::GAP;
 use crate::asr::AncestralSequenceReconstruction;
 use crate::evolutionary_models::{EvoModel, ProbabilityMatrix};
 use crate::phylo_info::{set_missing_tree_node_ids, PhyloInfo};
@@ -194,7 +194,7 @@ impl<Q: QMatrix> FastML<Q> {
                 .enumerate()
                 .map(|(site, &state)| {
                     if gaps.is_some_and(|g| g[usize::from(node.idx)][site]) {
-                        crate::alphabets::GAP
+                        GAP
                     } else {
                         alphabet.symbols()[state]
                     }
