@@ -99,7 +99,16 @@ fn pure_survival_probabilities<Q: QMatrix>(
     pip: &PIPModel<Q>,
     info: &PhyloInfo<impl Alignment>,
 ) -> Vec<f64> {
-    info.tree.iter().map(|node| -pip.mu() * node.blen).collect()
+    info.tree
+        .iter()
+        .map(|node| {
+            if node.idx == info.tree.root {
+                0.0
+            } else {
+                -pip.mu() * node.blen
+            }
+        })
+        .collect()
 }
 
 /// Combined log probability of insertion and survival on the branch above each node, indexed by node index.
