@@ -478,6 +478,7 @@ pub fn validate_ancestor_ids(tree: &Tree, ancestral_seqs: &Sequences) -> Result<
     info!("Checking that internal node and sequence IDs match");
 
     ensure_ancestral_ids_set(tree)?;
+    tree.node_ids_are_unique()?;
 
     let internal_ids = HashSet::<String>::from_iter(tree.preorder().iter().filter_map(
         |node_idx| match node_idx {
@@ -768,17 +769,32 @@ mod private_tests {
     }
 
     #[test]
-    fn validate_ancestor_ids_wo_leaves() {
+    fn validate_ancestor_ids_correct() {
         let tree = tree!("((A1:1.0,B1:1.0)I1:1.0,C2:1.0)I0:1.0;");
         let sequences = Sequences::new_unchecked(vec![record!("I1", b"X"), record!("I0", b"X")]);
         assert!(validate_ancestor_ids(&tree, &sequences).is_ok());
     }
 
     #[test]
-    fn validate_ancestor_ids_wo_leaves_fails() {
+    fn validate_ancestor_ids_fails() {
         let tree = tree!("((A0:1.0,B1:1.0)I1:1.0,C2:1.0)I0:1.0;");
         let sequences = Sequences::new_unchecked(vec![record!("I2", b"X"), record!("I0", b"X")]);
-        assert!(validate_ancestor_ids(&tree, &sequences).is_err());
+        let result = validate_ancestor_ids(&tree, &sequences);
+        assert_matches!(
+            result,
+            Err(Error::Tree(msg)) if msg.contains("missing node IDs: [\"I2\"]")
+        );
+    }
+
+    #[test]
+    fn validate_ancestor_ids_duplicates() {
+        let tree = tree!("((A0:1.0,B1:1.0)I:1.0,(C2:1.0,D3:1.0)I:1.0)I0:1.0;");
+        let sequences = Sequences::new_unchecked(vec![record!("I", b"X"), record!("I0", b"X")]);
+        let result = validate_ancestor_ids(&tree, &sequences);
+        assert_matches!(
+            result,
+            Err(Error::Tree(msg)) if msg.contains("duplicate node id (I) found in the tree")
+        );
     }
 
     #[test]
