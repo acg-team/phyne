@@ -434,7 +434,7 @@ mod tests {
             record!("C", b"A"),
             record!("D", b"A"),
         ]);
-        let phylo = MSA::from_aligned(sequences, tree.clone()).unwrap();
+        let phylo = MSA::from_aligned_unchecked(sequences, tree.clone());
 
         let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
         let mut tmp = PIPAsrInfo::new(&asr.model, &phylo);
@@ -499,7 +499,7 @@ mod tests {
         let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
 
         let phylo = asr
-            .reconstruct_ancestral_seqs(MSA::from_aligned(sequences, tree).unwrap())
+            .reconstruct_ancestral_seqs(MSA::from_aligned_unchecked(sequences, tree))
             .unwrap();
         let ancestral = phylo.msa;
         let tree = &phylo.tree;
@@ -531,7 +531,7 @@ mod tests {
         let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
 
         let phylo = asr
-            .reconstruct_ancestral_seqs(MSA::from_aligned(sequences, tree).unwrap())
+            .reconstruct_ancestral_seqs(MSA::from_aligned_unchecked(sequences, tree))
             .unwrap();
         let ancestral = phylo.msa;
         let tree = &phylo.tree;
@@ -563,7 +563,7 @@ mod tests {
         let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
 
         let phylo = asr
-            .reconstruct_ancestral_seqs(MSA::from_aligned(sequences, tree).unwrap())
+            .reconstruct_ancestral_seqs(MSA::from_aligned_unchecked(sequences, tree))
             .unwrap();
         let ancestral = phylo.msa;
         let tree = &phylo.tree;
@@ -597,7 +597,7 @@ mod tests {
         let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
 
         let phylo = asr
-            .reconstruct_ancestral_seqs(MSA::from_aligned(sequences, tree).unwrap())
+            .reconstruct_ancestral_seqs(MSA::from_aligned_unchecked(sequences, tree))
             .unwrap();
         let ancestral = phylo.msa;
         let tree = &phylo.tree;
@@ -626,7 +626,7 @@ mod tests {
             record!("B", b"-"),
             record!("C", b"-"),
         ]);
-        let phylo = MSA::from_aligned(sequences, tree.clone()).unwrap();
+        let phylo = MSA::from_aligned_unchecked(sequences, tree.clone());
         let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
         let ancestral: MASA = asr.reconstruct_ancestral_seqs(phylo).unwrap().msa;
 
@@ -639,7 +639,7 @@ mod tests {
     fn single_leaf_tree_reconstructs_presence() {
         let tree = tree!("A:0.0;");
         let sequences = Sequences::new_unchecked(vec![record!("A", b"A")]);
-        let phylo = MSA::from_aligned(sequences, tree.clone()).unwrap();
+        let phylo = MSA::from_aligned_unchecked(sequences, tree.clone());
         let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
         let ancestral: MASA = asr.reconstruct_ancestral_seqs(phylo).unwrap().msa;
 
@@ -655,7 +655,7 @@ mod tests {
             record!("C5", b"X---X-"),
             record!("D6", b"--XXX-"),
         ]);
-        MSA::from_aligned(sequences, tree.clone()).unwrap()
+        MSA::from_aligned_unchecked(sequences, tree.clone())
     }
 
     #[test]
@@ -900,7 +900,7 @@ mod tests {
             record!("C", b"-"),
         ]);
 
-        let phylo = MSA::from_aligned(seqs, tree.clone()).unwrap();
+        let phylo = MSA::from_aligned_unchecked(seqs, tree.clone());
         let asr = PIPIndels::<_, MSA, MASA>::new(pip(1.0));
         let reconstruction = asr.reconstruct_ancestral_seqs_unchecked(phylo);
 
