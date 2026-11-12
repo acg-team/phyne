@@ -77,8 +77,8 @@ pub(crate) struct PIPAsrInfo {
 
 /// Log probability of a deletion on the branch above each node, indexed by node v.
 /// ln(delta(v)) = ln(1 - exp(-mu * b(v))) for non-root, -inf for root.
-fn deletion_probabilities<Q: QMatrix>(
-    pip: &PIPModel<Q>,
+fn deletion_probabilities(
+    pip: &PIPModel<impl QMatrix>,
     info: &PhyloInfo<impl Alignment>,
 ) -> Vec<f64> {
     info.tree
@@ -95,8 +95,8 @@ fn deletion_probabilities<Q: QMatrix>(
 
 /// Log probability of pure survival on the branch above each node, indexed by node v.
 /// ln(zeta(v)) = ln(exp(-mu * b(v))) = -mu * b(v) for non-root, 0.0 for root.
-fn pure_survival_probabilities<Q: QMatrix>(
-    pip: &PIPModel<Q>,
+fn pure_survival_probabilities(
+    pip: &PIPModel<impl QMatrix>,
     info: &PhyloInfo<impl Alignment>,
 ) -> Vec<f64> {
     info.tree
@@ -113,8 +113,8 @@ fn pure_survival_probabilities<Q: QMatrix>(
 
 /// Combined log probability of insertion and survival on the branch above each node, indexed by node index.
 /// ln(iota(v) * beta(v)) = ln(delta(v)) - ln(||tree|| mu + 1) for non-root, -ln(||tree|| mu + 1) for root.
-fn insert_and_survive_probabilities<Q: QMatrix>(
-    pip: &PIPModel<Q>,
+fn insert_and_survive_probabilities(
+    pip: &PIPModel<impl QMatrix>,
     info: &PhyloInfo<impl Alignment>,
 ) -> Vec<f64> {
     let common_factor = (info.tree.length * pip.mu() + 1.0).ln();
@@ -132,7 +132,7 @@ fn insert_and_survive_probabilities<Q: QMatrix>(
 }
 
 impl PIPAsrInfo {
-    pub fn new<A: Alignment>(model: &PIPModel<impl QMatrix>, info: &PhyloInfo<A>) -> Self {
+    pub fn new(model: &PIPModel<impl QMatrix>, info: &PhyloInfo<impl Alignment>) -> Self {
         let node_count = info.tree.len();
         let msa_length = info.msa.len();
         PIPAsrInfo {
