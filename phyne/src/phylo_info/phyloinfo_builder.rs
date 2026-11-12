@@ -846,6 +846,15 @@ mod private_tests {
     }
 
     #[test]
+    fn ensure_ancestral_ids_several_missing() {
+        let tree = tree!("((A0:1.0,B1:1.0):1.0,(C2:1.0,D3:1.0):1.0)I0:1.0;");
+        assert_matches!(
+            ensure_ancestral_ids_set(&tree),
+            Err(Error::Tree(msg)) if msg.contains("some internal node IDs are not set")
+        );
+    }
+
+    #[test]
     fn report_id_mismatch_missing_nodes() {
         let nodes = HashSet::from(["A".to_string(), "B".to_string()]);
         let sequences = HashSet::from(["A".to_string(), "B".to_string(), "C".to_string()]);
