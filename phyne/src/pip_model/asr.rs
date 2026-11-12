@@ -83,7 +83,13 @@ fn deletion_probabilities<Q: QMatrix>(
 ) -> Vec<f64> {
     info.tree
         .iter()
-        .map(|node| (-(-pip.mu() * node.blen).exp_m1()).ln())
+        .map(|node| {
+            if node.idx == info.tree.root {
+                f64::NEG_INFINITY
+            } else {
+                (-(-pip.mu() * node.blen).exp_m1()).ln()
+            }
+        })
         .collect()
 }
 
