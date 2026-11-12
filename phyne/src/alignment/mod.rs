@@ -214,8 +214,8 @@ pub trait AncestralAlignment: Alignment {
     /// aligned ancestral sequences. Is called by the default implementation of
     /// [`AncestralAlignment::from_msa_with_ancestral`].
     ///
-    /// Tree is consumed and stored together with the ancestral alignment, because the alignment is only
-    /// meaningful in the context of the tree that it was built from.
+    /// The `PhyloInfo` (i.e., `Tree` and associated `MSA`) is consumed, the ancestral alignment and
+    /// corresponding tree are returned together, because the alignment is only meaningful in the context of the tree.
     fn from_msa_with_ancestral_unchecked(
         phylo: PhyloInfo<impl Alignment>,
         ancestral_seqs: Sequences,
