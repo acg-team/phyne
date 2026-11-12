@@ -41,32 +41,42 @@ where
     phantom: PhantomData<(A, AA)>,
 }
 
+/// Stores temporary information used during the PIP ancestral sequence reconstruction.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct PIPAsrInfo {
-    /// Log deletion probabilities (delta(v)) for each node, indexed by node (single value per branch).
+    /// Log deletion probabilities ln(delta(v)) per node v (single value per branch), computed as
+    /// ln(1 - exp(-mu * b(v))) for non-root nodes and -inf for the root node.
     deletion_probs: Vec<f64>,
-    /// Log pure survival probabilities (zeta(v)) for each node, indexed by node (single value per branch), computed as ln(1 - exp(-mu * b(v))).
+    /// Log pure survival probabilities ln(zeta(v)) per node v (single value per branch), computed as
+    /// ln(1 - delta(v)) or ln(exp(-mu * b(v))) for non-root nodes and 0.0 for the root node.
     pure_survival_probs: Vec<f64>,
-    /// Log insertion and survival along branch probabilities (iota(v) * beta(v)), indexed by node (single value per branch).
+    /// Combined log insertion and survival along branch probabilities ln(iota(v) * beta(v)), per node v
+    /// (single value per branch), computed as
+    /// ln(iota(v) * beta(v)) = ln(delta(v)) - ln(||tree|| mu + 1) for non-root nodes and
+    /// 0.0 - ln(||tree|| mu + 1) for the root node.
     insert_and_survive_probs: Vec<f64>,
-    /// Log deletion/survival probabilities for each node, indexed by node and column.
+    /// Log deletion/survival probabilities per node and site.
     f: Vec<DVector<f64>>,
-    /// Log insertion probabilities for each node, indexed by node and column.
+    /// Log insertion probabilities per node and site.
     p: Vec<DVector<f64>>,
-    /// Set G: the set of nodes where the character is extinct in the subtree
+    /// Set G: the set of nodes where the character is extinct in the whole subtree below the node, stored per
+    /// node and site.
     extinct_subtree: Vec<FixedBitSet>,
-    /// Set A: the set of nodes where the character could be an insertion
+    /// Set A: the set of nodes where the character could be an insertion, used to propagate insertion information up
+    /// the tree, stored per node and site.
     ancestor_subtree: Vec<FixedBitSet>,
-    /// Deletion locations for each character in the alignment, indexed by node and column.
+    /// Current most likely deletion location sets for each character in the alignment, stored per node and site.
     deletion_locations: Vec<FixedBitSet>,
-    /// Insertion location for each character in the alignment, indexed by column (only one insertion is allowed per column).
+    /// Current best insertion location for each character in the alignment (only one insertion is allowed per site),
+    /// stored per site.
     insertion_location: Vec<usize>,
-    /// Presence for each character in the alignment, indexed by node and column.
+    /// Presence for each character in the alignment per node and site, used in the downward pass after the homology
+    /// paths have been fully determined.
     presence: Vec<FixedBitSet>,
 }
 
-/// Log probability of a deletion on the branch above each node, indexed by node index.
-/// ln(delta(v)) = ln(1 - exp(-mu * b(v)))
+/// Log probability of a deletion on the branch above each node, indexed by node v.
+/// ln(delta(v)) = ln(1 - exp(-mu * b(v))) for non-root, -inf for root.
 fn deletion_probabilities<Q: QMatrix>(
     pip: &PIPModel<Q>,
     info: &PhyloInfo<impl Alignment>,
@@ -77,8 +87,8 @@ fn deletion_probabilities<Q: QMatrix>(
         .collect()
 }
 
-/// Log probability of pure survival on the branch above each node, indexed by node index.
-/// ln(zeta(v)) = ln(exp(-mu * b(v))) = -mu * b(v)
+/// Log probability of pure survival on the branch above each node, indexed by node v.
+/// ln(zeta(v)) = ln(exp(-mu * b(v))) = -mu * b(v) for non-root, 0.0 for root.
 fn pure_survival_probabilities<Q: QMatrix>(
     pip: &PIPModel<Q>,
     info: &PhyloInfo<impl Alignment>,
@@ -87,7 +97,7 @@ fn pure_survival_probabilities<Q: QMatrix>(
 }
 
 /// Combined log probability of insertion and survival on the branch above each node, indexed by node index.
-/// ln(iota(v)) + ln(beta(v)))
+/// ln(iota(v) * beta(v)) = ln(delta(v)) - ln(||tree|| mu + 1) for non-root, -ln(||tree|| mu + 1) for root.
 fn insert_and_survive_probabilities<Q: QMatrix>(
     pip: &PIPModel<Q>,
     info: &PhyloInfo<impl Alignment>,
