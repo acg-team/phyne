@@ -169,10 +169,10 @@ pub trait AncestralAlignment: Alignment {
     /// aligned ancestral sequences.
     /// Checks if inputs are compatible and calls [`Self::from_msa_with_ancestral_unchecked`].
     /// Checks:
-    /// - if ancestral sequences have the same alphabet as the leaf sequences
+    /// - if ancestral sequences have the same alphabet as the alignment
     /// - if ancestral sequences are aligned
-    /// - if ancestral sequences have the same length as the leaf sequences
-    /// - if sequence IDs match the node IDs in the tree ([`validate_ids_with_ancestors`])
+    /// - if ancestral sequences have the same length as the alignment
+    /// - if internal node IDs are set and match the ancestralsequence IDs ([`validate_ancestor_ids`])
     ///
     /// The `PhyloInfo` (i.e., `Tree` and associated `MSA`) is consumed, the ancestral alignment and
     /// corresponding tree are returned together, because the alignment is only meaningful in the context of the tree.
