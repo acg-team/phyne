@@ -737,11 +737,11 @@ mod tests {
         for n in phylo.tree.leaves() {
             let idx = usize::from(n.idx);
             assert_eq!(
-                tmp.extinct_subtree[idx].difference_count(&expected_extinct[idx]),
+                tmp.extinct_subtree[idx].symmetric_difference_count(&expected_extinct[idx]),
                 0,
             );
             assert_eq!(
-                tmp.ancestor_subtree[idx].difference_count(&expected_ancestor[idx]),
+                tmp.ancestor_subtree[idx].symmetric_difference_count(&expected_ancestor[idx]),
                 0,
             );
             assert_relative_eq!(tmp.f[idx], expected_f[idx]);
@@ -858,11 +858,11 @@ mod tests {
             let idx = usize::from(n.idx);
 
             assert_eq!(
-                tmp.extinct_subtree[idx].difference_count(&expected_extinct[idx]),
+                tmp.extinct_subtree[idx].symmetric_difference_count(&expected_extinct[idx]),
                 0,
             );
             assert_eq!(
-                tmp.ancestor_subtree[idx].difference_count(&expected_ancestor[idx]),
+                tmp.ancestor_subtree[idx].symmetric_difference_count(&expected_ancestor[idx]),
                 0,
             );
 
