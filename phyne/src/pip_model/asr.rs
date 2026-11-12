@@ -13,6 +13,24 @@ use crate::record;
 use crate::substitution_models::QMatrix;
 use crate::tree::NodeIdx::{self, Internal, Leaf};
 
+/// Reconstructs ancestral wild card sequences, i.e. instead of the usual reconstruction that
+/// returns sequences with characters of the alphabet, this returns the presence or absence of
+/// any character at a site. These are represented in an [`AncestralAlignment`] as sequences of
+/// [AMB_CHAR](`crate::alphabets::AMB_CHAR`) for presence and [GAP](`crate::alphabets::GAP`)
+/// for absence together with the leaf sequences.
+///
+/// Infers the most likely character homology paths (single insertion location and most likely deletion
+/// locations) per column along the tree under the [PIP model](https://www.pnas.org/doi/abs/10.1073/pnas.1220450110).
+/// Insertions and deletions are associated with specific branches in the tree, which are referred to by the tree node
+/// index the branch leads to.
+///
+/// Detailed formulation of the most likely indel point algorithm can be found in the
+/// [ARPIP publication](https://academic.oup.com/sysbio/article/72/2/307/6648472).
+///
+/// The presences and absences of ancestral characters are inferred according to the most likely indel
+/// event locations, i.e. a character first appears at the node corresponding to the insertion location and is
+/// absent in the whole subtree below the deletion location. The homology paths of characters under the PIP
+/// model follow the Dollo principle, where a character can be gained only once and does not reappear once deleted.
 pub struct PIPIndels<Q, A, AA>
 where
     Q: QMatrix,
