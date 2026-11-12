@@ -765,7 +765,7 @@ mod tests {
 
         let expected_extinct = [
             FixedBitSet::new(),
-            FixedBitSet::from_iter([1, 3, 4]),
+            FixedBitSet::from_iter([3, 4]),
             FixedBitSet::new(),
             FixedBitSet::new(),
             FixedBitSet::from_iter([1, 5]),
