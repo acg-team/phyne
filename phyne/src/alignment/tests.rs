@@ -774,20 +774,23 @@ fn simulate_alignment_matches_discarded_ancestral_alignment() {
 }
 
 #[rstest]
-#[case(align!(b"-0-1--2-"), &[1, 3, 6])]
-#[case(align!(b"-----------"), &[])]
-#[case(align!(b"01"), &[0, 1])]
-#[case(align!(b"0123456789"), &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9])]
-#[case(align!(b"----------01234"), &[10, 11, 12, 13, 14])]
-#[case(align!(b"0---------1"), &[0, 10])]
-fn test_mapping_to_bits(#[case] mapping: Mapping, #[case] expected: &[usize]) {
+#[case(align!(b"-0-1--2-"), &[1, 3, 6], 8)]
+#[case(align!(b"-----------"), &[], 11)]
+#[case(align!(b"01"), &[0, 1], 2)]
+#[case(align!(b"0123456789"), &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], 10)]
+#[case(align!(b"----------01234"), &[10, 11, 12, 13, 14], 15)]
+#[case(align!(b"0---------1"), &[0, 10], 11)]
+fn test_mapping_to_bits(
+    #[case] mapping: Mapping,
+    #[case] expected_bits: &[usize],
+    #[case] expected_len: usize,
+) {
     let bits = mapping_to_bits(&mapping);
 
-    let expected = FixedBitSet::from_iter(expected.iter().copied());
-    assert!(
-        bits.ones().eq(expected.ones()),
-        "Mapping did not match expected bits: expected: {expected} got: {bits}"
-    );
+    let mut expected = FixedBitSet::with_capacity(expected_len);
+    expected.extend(expected_bits.iter().copied());
+
+    assert_eq!(bits, expected);
 }
 
 fn test_phylo_from_aligned() -> PhyloInfo<MSA> {
