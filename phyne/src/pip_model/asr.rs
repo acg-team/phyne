@@ -29,11 +29,8 @@ use crate::tree::NodeIdx::{self, Internal, Leaf};
 /// event locations, i.e. a character first appears at the node corresponding to the insertion location and is
 /// absent in the whole subtree below the deletion location. The homology paths of characters under the PIP
 /// model follow the Dollo principle, where a character can be gained only once and does not reappear once deleted.
-pub struct PIPIndels<Q>
-where
-    Q: QMatrix,
-{
-    model: PIPModel<Q>,
+pub struct PIPIndels {
+    mu: f64,
 }
 
 /// Stores temporary information used during the PIP ancestral sequence reconstruction.
@@ -72,17 +69,14 @@ pub(crate) struct PIPAsrInfo {
 
 /// Log probability of a deletion on the branch above each node, indexed by node v.
 /// ln(delta(v)) = ln(1 - exp(-mu * b(v))) for non-root, -inf for root.
-fn deletion_probabilities(
-    pip: &PIPModel<impl QMatrix>,
-    info: &PhyloInfo<impl Alignment>,
-) -> Vec<f64> {
+fn deletion_probabilities(mu: f64, info: &PhyloInfo<impl Alignment>) -> Vec<f64> {
     info.tree
         .iter()
         .map(|node| {
             if node.idx == info.tree.root {
                 f64::NEG_INFINITY
             } else {
-                (-(-pip.mu() * node.blen).exp_m1()).ln()
+                (-(-mu * node.blen).exp_m1()).ln()
             }
         })
         .collect()
@@ -90,17 +84,14 @@ fn deletion_probabilities(
 
 /// Log probability of pure survival on the branch above each node, indexed by node v.
 /// ln(zeta(v)) = ln(exp(-mu * b(v))) = -mu * b(v) for non-root, 0.0 for root.
-fn pure_survival_probabilities(
-    pip: &PIPModel<impl QMatrix>,
-    info: &PhyloInfo<impl Alignment>,
-) -> Vec<f64> {
+fn pure_survival_probabilities(mu: f64, info: &PhyloInfo<impl Alignment>) -> Vec<f64> {
     info.tree
         .iter()
         .map(|node| {
             if node.idx == info.tree.root {
                 0.0
             } else {
-                -pip.mu() * node.blen
+                -mu * node.blen
             }
         })
         .collect()
@@ -108,18 +99,15 @@ fn pure_survival_probabilities(
 
 /// Combined log probability of insertion and survival on the branch above each node, indexed by node index.
 /// ln(iota(v) * beta(v)) = ln(delta(v)) - ln(||tree|| mu + 1) for non-root, -ln(||tree|| mu + 1) for root.
-fn insert_and_survive_probabilities(
-    pip: &PIPModel<impl QMatrix>,
-    info: &PhyloInfo<impl Alignment>,
-) -> Vec<f64> {
-    let common_factor = (info.tree.length * pip.mu() + 1.0).ln();
+fn insert_and_survive_probabilities(mu: f64, info: &PhyloInfo<impl Alignment>) -> Vec<f64> {
+    let common_factor = (info.tree.length * mu + 1.0).ln();
     info.tree
         .iter()
         .map(|node| {
             let numerator = if node.idx == info.tree.root {
                 0.0
             } else {
-                (-(-pip.mu() * node.blen).exp_m1()).ln()
+                (-(-mu * node.blen).exp_m1()).ln()
             };
             numerator - common_factor
         })
@@ -127,13 +115,13 @@ fn insert_and_survive_probabilities(
 }
 
 impl PIPAsrInfo {
-    pub fn new(model: &PIPModel<impl QMatrix>, info: &PhyloInfo<impl Alignment>) -> Self {
+    pub fn new(mu: f64, info: &PhyloInfo<impl Alignment>) -> Self {
         let node_count = info.tree.len();
         let msa_length = info.msa.len();
         PIPAsrInfo {
-            insert_and_survive_probs: insert_and_survive_probabilities(model, info),
-            deletion_probs: deletion_probabilities(model, info),
-            pure_survival_probs: pure_survival_probabilities(model, info),
+            insert_and_survive_probs: insert_and_survive_probabilities(mu, info),
+            deletion_probs: deletion_probabilities(mu, info),
+            pure_survival_probs: pure_survival_probabilities(mu, info),
             f: vec![DVector::<f64>::zeros(msa_length); node_count],
             p: vec![DVector::<f64>::zeros(msa_length); node_count],
             extinct_subtree: vec![FixedBitSet::with_capacity(msa_length); node_count],
@@ -145,9 +133,7 @@ impl PIPAsrInfo {
     }
 }
 
-impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> AncestralSequenceReconstruction<A, AA>
-    for PIPIndels<Q>
-{
+impl<A: Alignment, AA: AncestralAlignment> AncestralSequenceReconstruction<A, AA> for PIPIndels {
     fn reconstruct_ancestral_seqs_unchecked(&self, phylo: PhyloInfo<A>) -> PhyloInfo<AA> {
         let present = self.reconstruct_presence(&phylo);
 
@@ -170,16 +156,16 @@ impl<Q: QMatrix, A: Alignment, AA: AncestralAlignment> AncestralSequenceReconstr
     }
 }
 
-impl<Q: QMatrix> PIPIndels<Q> {
-    pub fn new(model: PIPModel<Q>) -> Self {
-        Self { model }
+impl PIPIndels {
+    pub fn new(model: &PIPModel<impl QMatrix>) -> Self {
+        Self { mu: model.mu() }
     }
 
     /// Returns for every node (indexed by node index) a bitset over alignment columns that marks
     /// where the character is present at the node. Traverses the tree once in each direction for
     /// all sites.
     fn reconstruct_presence(&self, phylo: &PhyloInfo<impl Alignment>) -> Vec<FixedBitSet> {
-        let mut tmp = PIPAsrInfo::new(&self.model, phylo);
+        let mut tmp = PIPAsrInfo::new(self.mu, phylo);
         // bottom up pass to fill in deletion and insertion sets
         for node_idx in phylo.tree.postorder() {
             match node_idx {
@@ -389,7 +375,7 @@ mod tests {
 
     fn reconstruct_on_single_site(tree: Tree, mu: f64) -> PhyloInfo<MASA> {
         let phylo = setup_test_info(tree);
-        let asr = PIPIndels::<_>::new(pip(mu));
+        let asr = PIPIndels::new(&pip(mu));
 
         asr.reconstruct_ancestral_seqs(phylo).unwrap()
     }
@@ -399,9 +385,8 @@ mod tests {
     #[case(TREE_DELETION_AT_AB.clone(), 1.0, &[0.0, 0.6321205588285577, 0.09516258196404048, 0.6321205588285577, 0.6321205588285577, 0.6321205588285577, 0.6321205588285577])]
     #[case(TREE_DIFF_BLENS.clone(), 1.5, &[0.0, 0.5934303402594008, 0.8347011117784134, 0.5276334472589853, 0.9764822541439909, 0.877543571747018, 0.9994469156298522])]
     fn deletion_probability_correct(#[case] tree: Tree, #[case] mu: f64, #[case] expected: &[f64]) {
-        let pip = pip(mu);
         let phylo = setup_test_info(tree);
-        let deletion_at_node = deletion_probabilities(&pip, &phylo);
+        let deletion_at_node = deletion_probabilities(mu, &phylo);
         let expected = expected.iter().map(|x| x.ln()).collect::<Vec<_>>();
 
         assert_relative_eq!(
@@ -438,8 +423,9 @@ mod tests {
         ]);
         let phylo = MSA::from_aligned_unchecked(sequences, tree.clone());
 
-        let asr = PIPIndels::<_>::new(pip(1.0));
-        let mut tmp = PIPAsrInfo::new(&asr.model, &phylo);
+        let pip = pip(1.0);
+        let asr = PIPIndels::new(&pip);
+        let mut tmp = PIPAsrInfo::new(pip.mu(), &phylo);
 
         for node_idx in tree.postorder() {
             match node_idx {
@@ -474,9 +460,8 @@ mod tests {
     #[case(TREE_DIFF_BLENS.clone(), 1.5, &[0.05617977528089888, 0.0333387831606405, 0.04689332088642773, 0.029642328497695807,
                                            0.05485855360359499, 0.049300200659944844, 0.056148703125272606])]
     fn insert_and_survive_probs(#[case] tree: Tree, #[case] mu: f64, #[case] expected: &[f64]) {
-        let pip = pip(mu);
         let phylo = setup_test_info(tree);
-        let insert_and_survive_probabilities = insert_and_survive_probabilities(&pip, &phylo);
+        let insert_and_survive_probabilities = insert_and_survive_probabilities(mu, &phylo);
         let expected = expected.iter().map(|x| x.ln()).collect::<Vec<_>>();
 
         assert_relative_eq!(
@@ -498,7 +483,7 @@ mod tests {
             record!("L8", b"-"),
         ]);
 
-        let asr = PIPIndels::<_>::new(pip(1.0));
+        let asr = PIPIndels::new(&pip(1.0));
 
         let phylo = asr
             .reconstruct_ancestral_seqs(MSA::from_aligned_unchecked(sequences, tree))
@@ -530,7 +515,7 @@ mod tests {
             record!("L4", b"-"),
         ]);
 
-        let asr = PIPIndels::<_>::new(pip(1.0));
+        let asr = PIPIndels::new(&pip(1.0));
 
         let phylo = asr
             .reconstruct_ancestral_seqs(MSA::from_aligned_unchecked(sequences, tree))
@@ -562,7 +547,7 @@ mod tests {
             record!("L6", b"-"),
         ]);
 
-        let asr = PIPIndels::<_>::new(pip(1.0));
+        let asr = PIPIndels::new(&pip(1.0));
 
         let phylo = asr
             .reconstruct_ancestral_seqs(MSA::from_aligned_unchecked(sequences, tree))
@@ -596,7 +581,7 @@ mod tests {
             record!("L6", b"-"),
         ]);
 
-        let asr = PIPIndels::<_>::new(pip(1.0));
+        let asr = PIPIndels::new(&pip(1.0));
 
         let phylo = asr
             .reconstruct_ancestral_seqs(MSA::from_aligned_unchecked(sequences, tree))
@@ -629,7 +614,7 @@ mod tests {
             record!("C", b"-"),
         ]);
         let phylo = MSA::from_aligned_unchecked(sequences, tree.clone());
-        let asr = PIPIndels::<_>::new(pip(1.0));
+        let asr = PIPIndels::new(&pip(1.0));
         let ancestral: MASA = asr.reconstruct_ancestral_seqs(phylo).unwrap().msa;
 
         assert!(ancestral.leaf_map(&tree.by_id("A").idx)[0].is_some());
@@ -642,7 +627,7 @@ mod tests {
         let tree = tree!("A:0.0;");
         let sequences = Sequences::new_unchecked(vec![record!("A", b"A")]);
         let phylo = MSA::from_aligned_unchecked(sequences, tree.clone());
-        let asr = PIPIndels::<_>::new(pip(1.0));
+        let asr = PIPIndels::new(&pip(1.0));
         let ancestral: MASA = asr.reconstruct_ancestral_seqs(phylo).unwrap().msa;
 
         assert!(ancestral.leaf_map(&tree.root)[0].is_some());
@@ -664,8 +649,8 @@ mod tests {
     fn tmp_start_values() {
         let phylo = setup_test_info_for_tmp_values();
 
-        let asr = PIPIndels::<_>::new(pip(1.0));
-        let tmp = PIPAsrInfo::new(&asr.model, &phylo);
+        let pip = pip(1.0);
+        let tmp = PIPAsrInfo::new(pip.mu(), &phylo);
 
         let delta = (-(-1.0_f64).exp_m1()).ln();
         let beta = delta - (phylo.tree.length + 1.0).ln();
@@ -685,8 +670,9 @@ mod tests {
     fn intermediate_values_at_leaves() {
         let phylo = setup_test_info_for_tmp_values();
 
-        let asr = PIPIndels::<_>::new(pip(1.0));
-        let mut tmp = PIPAsrInfo::new(&asr.model, &phylo);
+        let pip = pip(1.0);
+        let asr = PIPIndels::new(&pip);
+        let mut tmp = PIPAsrInfo::new(pip.mu(), &phylo);
 
         for node in phylo.tree.leaves() {
             asr.set_leaf_values(&phylo, &node.idx, &mut tmp);
@@ -755,8 +741,9 @@ mod tests {
     fn intermediate_values_at_internals() {
         let phylo = setup_test_info_for_tmp_values();
 
-        let asr = PIPIndels::<_>::new(pip(1.0));
-        let mut tmp = PIPAsrInfo::new(&asr.model, &phylo);
+        let pip = pip(1.0);
+        let asr = PIPIndels::new(&pip);
+        let mut tmp = PIPAsrInfo::new(pip.mu(), &phylo);
 
         for node_idx in phylo.tree.postorder() {
             match node_idx {
@@ -882,7 +869,7 @@ mod tests {
             record!("I4", b"X-X-X-"),
         ]);
 
-        let asr = PIPIndels::<_>::new(pip(1.0));
+        let asr = PIPIndels::new(&pip(1.0));
         let reconstruction: PhyloInfo<MASA> =
             asr.reconstruct_ancestral_seqs_unchecked(phylo.clone());
 
@@ -904,7 +891,7 @@ mod tests {
         ]);
 
         let phylo = MSA::from_aligned_unchecked(seqs, tree.clone());
-        let asr = PIPIndels::<_>::new(pip(1.0));
+        let asr = PIPIndels::new(&pip(1.0));
         let reconstruction: PhyloInfo<MASA> = asr.reconstruct_ancestral_seqs_unchecked(phylo);
 
         // The probability of insertion at I is 632 times lower than insertion at R, thus the

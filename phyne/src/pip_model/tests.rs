@@ -1274,7 +1274,7 @@ fn reconstruct_ancestral_seqs_arpip() {
         record!("C", b"AAAAA-A"),
     ]);
     let phylo = MSA::from_aligned(seqs, tree).unwrap();
-    let asr = PIPIndels::<JC69>::new(PIPModel::<JC69>::default());
+    let asr = PIPIndels::new(&PIPModel::<JC69>::default());
 
     let phylo: PhyloInfo<MASA> = asr.reconstruct_ancestral_seqs(phylo).unwrap();
 
