@@ -829,7 +829,6 @@ impl AncestralAlignment for MASA {
         let tree = &phylo.tree;
 
         let mut ancestral_maps = HashMap::<NodeIdx, Mapping>::with_capacity(tree.len() - tree.n);
-        let mut ancestral_records = Vec::with_capacity(tree.len() - tree.n);
         let mut idx_to_id = vec![String::new(); tree.len()];
 
         for node_idx in tree.postorder() {
@@ -840,16 +839,12 @@ impl AncestralAlignment for MASA {
                     let record = ancestral_seqs.record_by_id(id);
                     let mapping = align!(record.seq());
                     ancestral_maps.insert(*node_idx, mapping);
-
-                    ancestral_records.push(record.clone());
                 }
                 Leaf(_) => {}
             };
         }
 
-        let ancestral_seqs =
-            Sequences::with_alphabet_unchecked(ancestral_records, phylo.msa.alphabet())
-                .into_gapless();
+        let ancestral_seqs = ancestral_seqs.into_gapless();
 
         let masa = MASA {
             leaf_seqs: phylo.msa.seqs().clone(),
