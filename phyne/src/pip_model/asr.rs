@@ -117,16 +117,16 @@ fn insert_and_survive_probabilities<Q: QMatrix>(
     pip: &PIPModel<Q>,
     info: &PhyloInfo<impl Alignment>,
 ) -> Vec<f64> {
-    let common_factor = 1.0 / (info.tree.length + 1.0 / pip.mu());
+    let common_factor = (info.tree.length * pip.mu() + 1.0).ln();
     info.tree
         .iter()
         .map(|node| {
             let numerator = if node.idx == info.tree.root {
-                1.0 / pip.mu()
+                0.0
             } else {
-                -(-pip.mu() * node.blen).exp_m1() / pip.mu()
+                (-(-pip.mu() * node.blen).exp_m1()).ln()
             };
-            numerator.ln() + common_factor.ln()
+            numerator - common_factor
         })
         .collect()
 }
