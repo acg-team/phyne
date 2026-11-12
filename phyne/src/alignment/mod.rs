@@ -204,10 +204,9 @@ pub trait AncestralAlignment: Alignment {
         }
         validate_ancestor_ids(&phylo.tree, &ancestral_seqs)?;
 
-        Ok(Self::from_msa_with_ancestral_unchecked(
-            phylo,
-            ancestral_seqs,
-        ))
+        let ancestral_phylo = Self::from_msa_with_ancestral_unchecked(phylo, ancestral_seqs);
+        warn_on_extinct_columns(&ancestral_phylo.msa);
+        Ok(ancestral_phylo)
     }
 
     /// Constructs a [`PhyloInfo`] with ancestral sequences from a [`PhyloInfo`] with an [`Alignment`] and
@@ -854,8 +853,6 @@ impl AncestralAlignment for MASA {
             idx_to_id,
             internal_alignments: HashMap::<NodeIdx, PairwiseAlignment>::new(),
         };
-
-        warn_on_extinct_columns(&masa);
 
         PhyloInfo {
             msa: masa,
