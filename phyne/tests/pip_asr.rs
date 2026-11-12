@@ -23,11 +23,9 @@ fn homology_against_arpip() {
         .build()
         .unwrap();
 
-    let asr = PIPIndels::<_, MSA, MASA>::new(
-        PIPModel::<JC69>::with_default_substitution(&[1.0, 0.1]).unwrap(),
-    );
+    let asr = PIPIndels::new(&PIPModel::<JC69>::with_default_substitution(&[1.0, 0.1]).unwrap());
 
-    let reconstruction = asr.reconstruct_ancestral_seqs(info).unwrap();
+    let reconstruction: PhyloInfo<MASA> = asr.reconstruct_ancestral_seqs(info).unwrap();
 
     let reconstruction_arpip = PhyloInfoBuilder::with_attrs(inferred_file, &tree_file)
         .build_with_ancestors()
