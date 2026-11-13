@@ -157,6 +157,9 @@ impl<A: Alignment, AA: AncestralAlignment> AncestralSequenceReconstruction<A, AA
 }
 
 impl PIPIndels {
+    /// Creates a new `PIPIndels` instance from the given `PIPModel<Q>`.
+    /// Only the mu is relevant for indel point inference, other parameters of the model are ignored
+    /// (see the [ARPIP paper](https://academic.oup.com/sysbio/article/72/2/307/6648472) for details).
     pub fn new(model: &PIPModel<impl QMatrix>) -> Self {
         Self { mu: model.mu() }
     }
