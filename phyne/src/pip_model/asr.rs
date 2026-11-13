@@ -330,6 +330,7 @@ mod tests {
     use rstest::rstest;
 
     use approx::assert_relative_eq;
+    use assert_matches::assert_matches;
     use fixedbitset::FixedBitSet;
     use lazy_static::lazy_static;
     use nalgebra::dvector;
@@ -343,7 +344,7 @@ mod tests {
     };
     use crate::substitution_models::JC69;
     use crate::tree::{NodeIdx::*, Tree};
-    use crate::{record_wo_desc as record, tree};
+    use crate::{record_wo_desc as record, tree, Error};
 
     lazy_static! {
         static ref TREE_DELETION_AT_I2: Tree =
@@ -618,15 +619,16 @@ mod tests {
     }
 
     #[test]
-    fn single_leaf_tree_reconstructs_presence() {
+    fn single_leaf_tree_not_reconstructable() {
         let tree = tree!("A:0.0;");
         let sequences = Sequences::new_unchecked(vec![record!("A", b"A")]);
         let phylo = MSA::from_aligned_unchecked(sequences, tree.clone());
         let asr = PIPIndels::new(&pip(1.0));
-        let ancestral: MASA = asr.reconstruct_ancestral_seqs(phylo).unwrap().msa;
-
-        assert!(ancestral.leaf_map(&tree.root)[0].is_some());
-        assert!(matches!(tree.root, Leaf(_)));
+        let err: Result<PhyloInfo<MASA>, Error> = asr.reconstruct_ancestral_seqs(phylo);
+        assert_matches!(
+            err,
+            Err(Error::AncestralAlignment(msg)) if msg.contains("cannot reconstruct ancestral sequences for a tree with only one node.")
+        );
     }
 
     fn setup_test_info_for_tmp_values() -> PhyloInfo<MSA> {
