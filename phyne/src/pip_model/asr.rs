@@ -503,6 +503,43 @@ mod tests {
     }
 
     #[test]
+    fn insertion_at_root() {
+        let tree = tree!("(((L3:0.01,L4:1.0)I2:0.01,L5:1.0)I1:0.01,(L6:1.0,L7:1.0)I3:1.0)I0:0.0;");
+        let sequences = Sequences::new_unchecked(vec![
+            record!("L3", b"A"),
+            record!("L4", b"-"),
+            record!("L5", b"-"),
+            record!("L6", b"-"),
+            record!("L7", b"-"),
+        ]);
+
+        let asr = PIPIndels::new(&pip(1.0));
+
+        let phylo = asr
+            .reconstruct_ancestral_seqs(MSA::from_aligned_unchecked(sequences, tree))
+            .unwrap();
+        let ancestral: MASA = phylo.msa;
+        let tree = &phylo.tree;
+
+        // inserted at I0 (root)
+        assert!(ancestral.ancestral_map(&tree.by_id("I0").idx)[0].is_some());
+        // present at I1 (inherited)
+        assert!(ancestral.ancestral_map(&tree.by_id("I1").idx)[0].is_some());
+        // present at I2 (inherited)
+        assert!(ancestral.ancestral_map(&tree.by_id("I2").idx)[0].is_some());
+        // absent at I3 (deleted)
+        assert!(ancestral.ancestral_map(&tree.by_id("I3").idx)[0].is_none());
+        // present at L3 (inherited, observed)
+        assert!(ancestral.leaf_map(&tree.by_id("L3").idx)[0].is_some());
+
+        // not present at L4, L5, L6, L7 (deleted, observed)
+        for id in ["L4", "L5", "L6", "L7"] {
+            let leaf = tree.by_id(id);
+            assert!(ancestral.leaf_map(&leaf.idx)[0].is_none());
+        }
+    }
+
+    #[test]
     fn insertion_higher_than_leaf() {
         let tree = tree!("((L2:0.001,L3:1.0)I1:10.0,L4:5.0)I0:0.0;");
         let sequences = Sequences::new_unchecked(vec![
