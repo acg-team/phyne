@@ -328,9 +328,9 @@ impl<A: Alignment, AA: AncestralAlignment> PhyloInfoBuilder<A, AA> {
 ///
 /// # fn main() -> Result<()> {
 /// // the internal node ids are not set
-/// let mut tree = tree!("((A1:1.0,B1:1.0):1.0,C2:1.0):1.0;");
+/// let mut tree = tree!("((A0:1.0,B1:1.0):1.0,C2:1.0):1.0;");
 /// let root = &tree.root.clone();
-/// let internal_node = &tree.by_id("A1").parent.unwrap().clone();
+/// let internal_node = &tree.by_id("A0").parent.unwrap().clone();
 /// assert_eq!(tree.node_id(root), "");
 /// assert_eq!(tree.node_id(internal_node), "");
 ///
@@ -379,9 +379,9 @@ pub fn set_missing_tree_node_ids(tree: &mut Tree) -> Result<()> {
 /// # use phyne::Result;
 ///
 /// # fn main() -> Result<()> {
-///   let tree = tree!("((A1:1.0,B1:1.0)I1:1.0,C2:1.0)I0:1.0;");
+///   let tree = tree!("((A0:1.0,B1:1.0)I1:1.0,C2:1.0)I0:1.0;");
 ///   let sequences = Sequences::new(vec![
-///       record!("A1", Some("A1 record"), b"X"),
+///       record!("A0", Some("A0 record"), b"X"),
 ///       record!("B1", Some("B1 record"), b"X"),
 ///       record!("C2", Some("C2 record"), b"X"),
 ///       record!("I1", Some("I1 record"), b"X"),
@@ -401,9 +401,9 @@ pub fn set_missing_tree_node_ids(tree: &mut Tree) -> Result<()> {
 /// # use phyne::Result;
 ///
 /// # fn main() -> Result<()> {
-///   let tree = tree!("((A1:1.0,B1:1.0)I1:1.0,C2:1.0)I0:1.0;");
+///   let tree = tree!("((A0:1.0,B1:1.0)I1:1.0,C2:1.0)I0:1.0;");
 ///   let sequences = Sequences::new(vec![
-///       record!("A1", Some("A1 record"), b"X"),
+///       record!("A0", Some("A0 record"), b"X"),
 ///       record!("B1", Some("B1 record"), b"X"),
 ///       record!("C2", Some("C2 record"), b"X"),
 ///       record!("I1", Some("I1 record"), b"X"),
@@ -467,7 +467,7 @@ pub fn validate_taxa_ids(tree: &Tree, sequences: &Sequences) -> Result<()> {
 /// # use phyne::Result;
 ///
 /// # fn main() -> Result<()> {
-///   let tree = tree!("((A1:1.0,B1:1.0)I1:1.0,C2:1.0)I0:1.0;");
+///   let tree = tree!("((A0:1.0,B1:1.0)I1:1.0,C2:1.0)I0:1.0;");
 ///   let sequences = Sequences::new(vec![
 ///       record!("I1", Some("I1 record"), b"X"),
 ///       record!("I0", Some("I0 record"), b"X"),
@@ -607,7 +607,7 @@ mod private_tests {
     #[test]
     fn test_set_missing_tree_node_ids() {
         // arrange
-        let mut tree = tree!("((A1:1.0, B1:1.0) I1:1.0,(C2:1.0,(D3:1.0, E4:1.0) I9:1.0):1.0):1.0;");
+        let mut tree = tree!("((A0:1.0, B1:1.0) I1:1.0,(C2:1.0,(D3:1.0, E4:1.0) I9:1.0):1.0):1.0;");
 
         // act
         set_missing_tree_node_ids(&mut tree).unwrap();
@@ -624,7 +624,7 @@ mod private_tests {
 
     #[test]
     fn set_missing_tree_node_ids_finds_duplicate() {
-        let mut tree = tree!("((A1:1.0, B1:1.0) I1:1.0,(C2:1.0,(D3:1.0, E4:1.0) I1:1.0):1.0):1.0;");
+        let mut tree = tree!("((A0:1.0, B1:1.0) I1:1.0,(C2:1.0,(D3:1.0, E4:1.0) I1:1.0):1.0):1.0;");
 
         let error = set_missing_tree_node_ids(&mut tree);
 
@@ -637,9 +637,9 @@ mod private_tests {
     #[test]
     fn not_valid_ids_with_ancestors() {
         let tree =
-            tree!("((A1:1.0, B1:1.0) I1:1.0,(C2:1.0,(D3:1.0, E4:1.0) I9:1.0)I10:1.0)root:1.0;");
+            tree!("((A0:1.0, B1:1.0) I1:1.0,(C2:1.0,(D3:1.0, E4:1.0) I9:1.0)I10:1.0)root:1.0;");
         let seqs = Sequences::new_unchecked(vec![
-            record!("A1", b"X"),
+            record!("A0", b"X"),
             record!("B1", b"X"),
             record!("D3", b"X"),
             record!("E4", b"X"),
@@ -661,9 +661,9 @@ mod private_tests {
     fn valid_ids_with_ancestors() {
         // arrange
         let tree =
-            tree!("((A1:1.0, B1:1.0) I1:1.0,(C2:1.0,(D3:1.0, E4:1.0) I9:1.0)I10:1.0)root:1.0;");
+            tree!("((A0:1.0, B1:1.0) I1:1.0,(C2:1.0,(D3:1.0, E4:1.0) I9:1.0)I10:1.0)root:1.0;");
         let seqs = Sequences::new_unchecked(vec![
-            record!("A1", b"X"),
+            record!("A0", b"X"),
             record!("B1", b"X"),
             record!("C2", b"X"),
             record!("D3", b"X"),
@@ -683,9 +683,9 @@ mod private_tests {
 
     #[test]
     fn missing_ancestor_id() {
-        let tree = tree!("((A1:1.0, B1:1.0)I1:1.0,(C2:1.0,D3:1.0):1.0)I2:1.0;");
+        let tree = tree!("((A0:1.0, B1:1.0)I1:1.0,(C2:1.0,D3:1.0):1.0)I2:1.0;");
         let seqs = Sequences::new_unchecked(vec![
-            record!("A1", b"X"),
+            record!("A0", b"X"),
             record!("B1", b"X"),
             record!("C2", b"X"),
             record!("D3", b"X"),
@@ -789,7 +789,7 @@ mod private_tests {
 
     #[test]
     fn validate_ancestor_ids_correct() {
-        let tree = tree!("((A1:1.0,B1:1.0)I1:1.0,C2:1.0)I0:1.0;");
+        let tree = tree!("((A0:1.0,B1:1.0)I1:1.0,C2:1.0)I0:1.0;");
         let sequences = Sequences::new_unchecked(vec![record!("I1", b"X"), record!("I0", b"X")]);
         assert!(validate_ancestor_ids(&tree, &sequences).is_ok());
     }
