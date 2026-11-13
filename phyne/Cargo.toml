@@ -101,3 +101,6 @@ harness = false
 [[bench]]
 name = "helpers"
 harness = false
+[[bench]]
+name = "pip_asr"
+harness = false
