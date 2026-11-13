@@ -753,6 +753,23 @@ mod private_tests {
     }
 
     #[test]
+    fn validate_ids_duplicates() {
+        let tree = tree!("((A0:1.0,B1:1.0)I1:1.0,C2:1.0)I1:1.0;");
+        let sequences = Sequences::new_unchecked(vec![
+            record!("A0", b"X"),
+            record!("B1", b"X"),
+            record!("C2", b"X"),
+            record!("I1", b"X"),
+        ]);
+
+        let result = validate_ids_with_ancestors(&tree, &sequences);
+        assert_matches!(
+            result,
+            Err(Error::Tree(msg)) if msg.contains("duplicate node id (I1) found in the tree")
+        );
+    }
+
+    #[test]
     fn validate_ids_mismatched_internals() {
         let tree = tree!("((A0:1.0,B1:1.0)I1:1.0,C2:1.0)I0:1.0;");
         let seqs = Sequences::new_unchecked(vec![
