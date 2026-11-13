@@ -53,10 +53,8 @@ pub(crate) struct PIPAsrInfo {
     p: Vec<DVector<f64>>,
     /// Set G: the set of nodes where the character is extinct in the whole subtree below the node, stored per
     /// node and site.
+    /// Any node not in set G could be in set A (potential insertion locations).
     extinct_subtree: Vec<FixedBitSet>,
-    /// Set A: the set of nodes where the character could be an insertion, used to propagate insertion information up
-    /// the tree, stored per node and site.
-    ancestor_subtree: Vec<FixedBitSet>,
     /// Current most likely deletion location sets for each character in the alignment, stored per node and site.
     deletion_locations: Vec<FixedBitSet>,
     /// Current best insertion location for each character in the alignment (only one insertion is allowed per site),
@@ -125,7 +123,6 @@ impl PIPAsrInfo {
             f: vec![DVector::<f64>::zeros(msa_length); node_count],
             p: vec![DVector::<f64>::zeros(msa_length); node_count],
             extinct_subtree: vec![FixedBitSet::with_capacity(msa_length); node_count],
-            ancestor_subtree: vec![FixedBitSet::with_capacity(msa_length); node_count],
             deletion_locations: vec![FixedBitSet::with_capacity(node_count); msa_length],
             insertion_location: vec![usize::from(info.tree.root); msa_length],
             presence: vec![FixedBitSet::with_capacity(msa_length); node_count],
@@ -189,7 +186,8 @@ impl PIPIndels {
                 }
                 Leaf(idx) => {
                     // Leaf node character presence is defined by the observations
-                    tmp.presence[*idx] = tmp.ancestor_subtree[*idx].clone();
+                    tmp.presence[*idx] = tmp.extinct_subtree[*idx].clone();
+                    tmp.presence[*idx].toggle_range(..);
                 }
             };
         }
@@ -209,8 +207,6 @@ impl PIPIndels {
         tmp.extinct_subtree[idx] = has_character.clone();
         tmp.extinct_subtree[idx].toggle_range(..);
 
-        tmp.ancestor_subtree[idx] = has_character;
-
         tmp.f[idx].fill(tmp.pure_survival_probs[idx]);
         tmp.p[idx].fill(tmp.insert_and_survive_probs[idx]);
 
@@ -221,7 +217,7 @@ impl PIPIndels {
             tmp.deletion_locations[col].set(idx, true);
         }
 
-        for col in tmp.ancestor_subtree[idx].ones() {
+        for col in tmp.extinct_subtree[idx].zeroes() {
             // present at leaf means potential insertion set (A)
             tmp.insertion_location[col] = idx;
         }
@@ -271,17 +267,14 @@ impl PIPIndels {
     }
 
     fn potential_insertion_at_node(&self, idx: usize, children: &[usize], tmp: &mut PIPAsrInfo) {
-        let ch1 = tmp.ancestor_subtree[children[0]].clone();
-        let ch2 = tmp.ancestor_subtree[children[1]].clone();
+        let ch1 = tmp.extinct_subtree[children[0]].clone();
+        let ch2 = tmp.extinct_subtree[children[1]].clone();
 
-        tmp.ancestor_subtree[idx] = ch1.clone();
-        tmp.ancestor_subtree[idx].union_with(&ch2);
-
-        for col in tmp.ancestor_subtree[idx].ones() {
-            if ch1[col] && ch2[col] {
+        for col in tmp.extinct_subtree[idx].zeroes() {
+            if !ch1[col] && !ch2[col] {
                 // both children potentially in set A, therefore neither can be an insertion
                 tmp.insertion_location[col] = idx;
-            } else if ch1[col] {
+            } else if !ch1[col] {
                 // only child 1 is in set A (potential insertion locations)
                 if tmp.p[children[0]][col] >= tmp.p[idx][col] {
                     // insertion in child 1 is more likely
@@ -289,7 +282,7 @@ impl PIPIndels {
                 } else {
                     tmp.insertion_location[col] = idx;
                 }
-            } else if ch2[col] {
+            } else if !ch2[col] {
                 // only child 2 is in set A (potential insertion locations)
                 if tmp.p[children[1]][col] >= tmp.p[idx][col] {
                     // insertion in child 2 is more likely
@@ -316,7 +309,7 @@ impl PIPIndels {
         }
 
         // mark columns as present if the insertion occurred at this node
-        for col in tmp.ancestor_subtree[idx].ones() {
+        for col in tmp.extinct_subtree[idx].zeroes() {
             if tmp.insertion_location[col] == idx {
                 tmp.presence[idx].set(col, true);
             }
@@ -690,16 +683,6 @@ mod tests {
             FixedBitSet::from_iter([0, 1, 5]),
         ];
 
-        let expected_ancestor = [
-            FixedBitSet::new(),
-            FixedBitSet::new(),
-            FixedBitSet::from_iter([0, 1, 2, 5]),
-            FixedBitSet::from_iter([0, 2, 5]),
-            FixedBitSet::new(),
-            FixedBitSet::from_iter([0, 4]),
-            FixedBitSet::from_iter([2, 3, 4]),
-        ];
-
         let delta = (-(-1.0_f64).exp_m1()).ln();
         let zeta = -1.0;
         let iota_beta = delta - (phylo.tree.length + 1.0).ln();
@@ -730,10 +713,6 @@ mod tests {
                 tmp.extinct_subtree[idx].symmetric_difference_count(&expected_extinct[idx]),
                 0,
             );
-            assert_eq!(
-                tmp.ancestor_subtree[idx].symmetric_difference_count(&expected_ancestor[idx]),
-                0,
-            );
             assert_relative_eq!(tmp.f[idx], expected_f[idx]);
             assert_relative_eq!(tmp.p[idx], expected_p[idx]);
         }
@@ -760,16 +739,6 @@ mod tests {
             FixedBitSet::new(),
             FixedBitSet::new(),
             FixedBitSet::from_iter([1, 5]),
-            FixedBitSet::new(),
-            FixedBitSet::new(),
-        ];
-
-        let expected_ancestor = [
-            FixedBitSet::from_iter([0, 1, 2, 3, 4, 5]),
-            FixedBitSet::from_iter([0, 1, 2, 5]),
-            FixedBitSet::new(),
-            FixedBitSet::new(),
-            FixedBitSet::from_iter([0, 2, 3, 4]),
             FixedBitSet::new(),
             FixedBitSet::new(),
         ];
@@ -852,11 +821,6 @@ mod tests {
                 tmp.extinct_subtree[idx].symmetric_difference_count(&expected_extinct[idx]),
                 0,
             );
-            assert_eq!(
-                tmp.ancestor_subtree[idx].symmetric_difference_count(&expected_ancestor[idx]),
-                0,
-            );
-
             assert_relative_eq!(tmp.f[idx], expected_f[idx]);
             assert_relative_eq!(tmp.p[idx], expected_p[idx]);
         }
