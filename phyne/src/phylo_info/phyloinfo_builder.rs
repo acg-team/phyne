@@ -493,7 +493,7 @@ pub fn validate_ancestor_ids(tree: &Tree, ancestral_seqs: &Sequences) -> Result<
     check_node_sequence_ids_match(internal_ids, sequence_ids, "tree internal node")
 }
 
-// Checks that all internal node IDs are not empty and returns an error if any are missing
+/// Checks that all internal node IDs are not empty and returns an error if any are missing.
 fn ensure_ancestral_ids_set(tree: &Tree) -> Result<()> {
     info!("Checking that all internal nodes have IDs set");
     for node_idx in tree.preorder().iter() {
@@ -505,10 +505,11 @@ fn ensure_ancestral_ids_set(tree: &Tree) -> Result<()> {
     Ok(())
 }
 
-// Helper function for error reporting, checks that the node IDs and sequence IDs match, returns an error if
-// there are missing IDs.
-//
-// `tree_node_context` is a string describing the context of the tree nodes, used in error messages (e.g., "tree internal node").
+/// Helper function for error reporting, checks that the node IDs and sequence IDs match, returns an error if
+/// there are missing IDs.
+///
+/// `tree_node_context` is a string describing the context of the tree nodes, used in error messages
+/// (e.g., "tree internal node").
 fn check_node_sequence_ids_match(
     node_ids: HashSet<String>,
     sequence_ids: HashSet<String>,
