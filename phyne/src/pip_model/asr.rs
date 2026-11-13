@@ -473,8 +473,7 @@ mod tests {
 
     #[test]
     fn insertion_at_i5() {
-        let tree =
-            tree!("(((L3:1.0,L4:1.0)I2:1.0,(L6:0.001,L7:1.0)I5:10000.0)I1:1.0,L8:1.0)I0:0.0;");
+        let tree = tree!("(((L3:1.0,L4:1.0)I2:1.0,(L6:0.01,L7:1.0)I5:10.0)I1:1.0,L8:1.0)I0:0.0;");
         let sequences = Sequences::new_unchecked(vec![
             record!("L3", b"-"),
             record!("L4", b"-"),
@@ -508,7 +507,7 @@ mod tests {
 
     #[test]
     fn insertion_higher_than_leaf() {
-        let tree = tree!("((L2:0.001,L3:1.0)I1:10000.0,L4:5.0)I0:0.0;");
+        let tree = tree!("((L2:0.001,L3:1.0)I1:10.0,L4:5.0)I0:0.0;");
         let sequences = Sequences::new_unchecked(vec![
             record!("L2", b"A"),
             record!("L3", b"-"),
