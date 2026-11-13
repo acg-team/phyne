@@ -415,6 +415,7 @@ pub fn set_missing_tree_node_ids(tree: &mut Tree) -> Result<()> {
 pub fn validate_ids_with_ancestors(tree: &Tree, sequences: &Sequences) -> Result<()> {
     info!("Checking that tree node (internal and leaf) and sequence IDs match");
     ensure_ancestral_ids_set(tree)?;
+    tree.node_ids_are_unique()?;
 
     let node_ids = HashSet::<String>::from_iter(
         tree.preorder()
