@@ -11,6 +11,7 @@ use phyne::pip_model::PIPCost;
 use phyne::random::FakeRng;
 use phyne::substitution_models::{QMatrix, HKY, WAG};
 use phyne::tree::NodeIdx;
+use phyne::Result;
 
 mod helpers;
 use helpers::{
