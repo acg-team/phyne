@@ -204,9 +204,11 @@ pub trait AncestralAlignment: Alignment {
         }
         validate_ancestor_ids(&phylo.tree, &ancestral_seqs)?;
 
-        let ancestral_phylo = Self::from_msa_with_ancestral_unchecked(phylo, ancestral_seqs);
-        warn_on_extinct_columns(&ancestral_phylo.msa);
-        Ok(ancestral_phylo)
+        // No extinct leaf columns are allowed in the MSA, so no warning is necessary
+        Ok(Self::from_msa_with_ancestral_unchecked(
+            phylo,
+            ancestral_seqs,
+        ))
     }
 
     /// Constructs a [`PhyloInfo`] with ancestral sequences from a [`PhyloInfo`] with an [`Alignment`] and
