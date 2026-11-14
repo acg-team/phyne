@@ -326,7 +326,9 @@ impl<T: TKFModel, AA: AncestralAlignment> TKFIndelCost<T, AA> {
         }
         let mut model_info = self.model_info.borrow_mut();
         if let Some(parent_idx) = self.phylo.tree.parent(node_idx) {
-            model_info.valid.set(usize::from(parent_idx), false);
+            let idx = usize::from(parent_idx);
+            model_info.valid.set(idx, false);
+            model_info.valid_for_reestimation.set(idx, false);
         }
         model_info.valid.set(node_id, true);
         model_info.valid_for_reestimation.set(node_id, true);
@@ -568,6 +570,21 @@ impl<T: TKFModel, AA: AncestralAlignment> TreeSearchCost for TKFIndelCost<T, AA>
         self.phylo.tree = tree;
         if update_due_to_nni {
             let v2 = self.tree().nodes[dirty_nodes[0]].idx;
+
+            // Since the topology changed we must also mark the children of affected nodes as dirty,
+            // because their parent changed and thus their tkf event may have changed.
+            let mut nodes_to_invalidate = self.phylo.tree.node(&v2).children.clone();
+            if let Some(sibling) = self.phylo.tree.sibling(&v2) {
+                nodes_to_invalidate.push(sibling);
+            }
+            let mut model_info = self.model_info.borrow_mut();
+            for node_idx in nodes_to_invalidate {
+                let idx = usize::from(node_idx);
+                model_info.valid.set(idx, false);
+                model_info.valid_for_reestimation.set(idx, false);
+            }
+            drop(model_info);
+
             // TODO: For now we use the FakeGenerator to have deterministic behavior, but in the future
             // we should use a proper RNG here. But pass the RNG from outside and not
             // create a new one each time, see issue #142 https://github.com/acg-team/phyne/issues/142
