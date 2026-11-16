@@ -249,7 +249,8 @@ where
             )
         }
 
-        // When this reestimator is created the ancestral seqs might be in a non Dollo state.
+        // When this reestimator is created the ancestral seqs might be in a non-Dollo state,
+        // which can happen after an NNI move is applied to the tree.
         // Then the re-estimation will update the mappings to be Dollo and this logl will never
         // be read.
         let logl = cost.cost();
