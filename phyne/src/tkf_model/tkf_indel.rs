@@ -572,7 +572,7 @@ impl<T: TKFModel, AA: AncestralAlignment> TreeSearchCost for TKFIndelCost<T, AA>
             let v2 = self.tree().nodes[dirty_nodes[0]].idx;
 
             // Since the topology changed we must also mark the children of affected nodes as dirty,
-            // because their parent changed and thus their tkf event may have changed.
+            // because their parent changed and thus their TKF events may have changed.
             let mut nodes_to_invalidate = self.phylo.tree.node(&v2).children.clone();
             if let Some(sibling) = self.phylo.tree.sibling(&v2) {
                 nodes_to_invalidate.push(sibling);
