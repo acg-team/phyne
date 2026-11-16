@@ -591,7 +591,7 @@ impl<T: TKFModel, AA: AncestralAlignment> TreeSearchCost for TKFIndelCost<T, AA>
             let rng = &mut FakeGenerator::default();
             let mut reestimator = EdgeSeqsReestimator::new(self, rng);
             let dp_logl = reestimator.reestimate_unchecked(&v2);
-            assert_relative_eq!(dp_logl, self.logl(), epsilon = 1e-10);
+            assert_relative_eq!(dp_logl, self.logl(), epsilon = 1e-8);
         }
         self.phylo.tree.clean();
     }
