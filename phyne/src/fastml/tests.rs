@@ -1,7 +1,12 @@
+//! FastML-specific inference and integration tests.
+//! Binary-event coding and rate-model tests belong in indels.rs.
+//! Uses with_indels(model, indel_first) and Option<&IndelReconstruction>
+//! arguments on calc_joint, selected_states, and marginal_posteriors.
+//! Assumes masked marginal columns are zero (no letter distribution).
 use super::*;
 use crate::alphabets::Alphabet;
-use crate::substitution_models::{HKY, JC69, WAG};
-use crate::tree::NodeIdx::*;
+use crate::substitution_models::{HKY, JC69};
+use crate::tree::NodeIdx::{Internal, Leaf};
 use crate::{record_wo_desc, tree};
 
 fn example(a: &[u8], b: &[u8], c: &[u8]) -> PhyloInfo<MSA> {
@@ -16,437 +21,299 @@ fn example(a: &[u8], b: &[u8], c: &[u8]) -> PhyloInfo<MSA> {
     MSA::from_aligned(seqs, tree!("((A:0.11,B:0.23)I:0.17,C:0.31)R;")).unwrap()
 }
 
-// Independent oracle: enumerate every internal-state assignment and multiply
-// probabilities directly, rather than using the dynamic-programming recurrence.
+fn node_index(phylo: &PhyloInfo<MSA>, id: &str) -> usize {
+    usize::from(phylo.tree.iter().find(|node| node.id == id).unwrap().idx)
+}
+
+fn close(actual: f64, expected: f64) {
+    assert!(
+        (actual - expected).abs() < 1e-10,
+        "expected {expected}, got {actual}"
+    );
+}
+
+// Construct a fixed mask to isolate character inference from event inference.
+// Leaf gaps match the input; only ancestral gaps are assigned by the test.
+fn fixed_mask(phylo: &PhyloInfo<MSA>, ancestral_gaps: &[(&str, usize)]) -> IndelReconstruction {
+    let mut gaps = vec![vec![false; phylo.msa.len()]; phylo.tree.len()];
+    for leaf in phylo.tree.leaves() {
+        gaps[usize::from(leaf.idx)] = phylo
+            .msa
+            .leaf_map(&leaf.idx)
+            .iter()
+            .map(Option::is_none)
+            .collect();
+    }
+    for &(id, site) in ancestral_gaps {
+        gaps[node_index(phylo, id)][site] = true;
+    }
+    IndelReconstruction {
+        events: Vec::new(),
+        gap_probabilities: vec![Vec::new(); phylo.tree.len()],
+        gaps,
+        log_likelihood: 0.0,
+    }
+}
+
+// Independent oracle: multiply ordinary probabilities for one assignment.
+// A present node below a gap starts with the prior, without an incoming branch.
+// Absent nodes have no character factor. Leaf uncertainty is summed, not maximized.
 fn assignment_probability<Q: QMatrix>(
     phylo: &PhyloInfo<MSA>,
     model: &SubstModel<Q>,
     states: &[usize],
     site: usize,
+    mask: Option<&IndelReconstruction>,
 ) -> f64 {
-    let mut probability = model.freqs()[states[usize::from(phylo.tree.root)]];
+    let is_gap = |idx: usize| mask.is_some_and(|m| m.gaps[idx][site]);
+    let mut probability = 1.0;
     for node in phylo.tree.iter() {
-        if node.idx == phylo.tree.root {
+        let idx = usize::from(node.idx);
+        if is_gap(idx) {
             continue;
         }
-        let parent = usize::from(phylo.tree.parent(&node.idx).unwrap());
+        let parent = phylo.tree.parent(&node.idx).map(usize::from);
+        let starts_component = parent.map_or(true, |p| is_gap(p));
         let p = model.p(node.blen);
+        let weight = |state: usize| {
+            if starts_component {
+                model.freqs()[state]
+            } else {
+                p[(states[parent.unwrap()], state)]
+            }
+        };
         match node.idx {
-            Internal(_) => probability *= p[(states[parent], states[usize::from(node.idx)])],
+            Internal(_) => probability *= weight(states[idx]),
             Leaf(_) => {
-                let encoding = match phylo.msa.leaf_map(&node.idx)[site] {
-                    Some(pos) => phylo
-                        .msa
-                        .alphabet()
-                        .char_encoding(phylo.msa.seqs().record_by_id(&node.id).seq()[pos]),
-                    None => phylo.msa.alphabet().missing_char_encoding(),
+                probability *= match phylo.msa.leaf_map(&node.idx)[site] {
+                    Some(pos) => {
+                        let symbol = phylo.msa.seqs().record_by_id(&node.id).seq()[pos];
+                        let encoding = phylo.msa.alphabet().char_encoding(symbol);
+                        (0..model.n()).map(|s| weight(s) * encoding[s]).sum::<f64>()
+                    }
+                    None => 1.0,
                 };
-                probability *= (0..model.n())
-                    .map(|s| p[(states[parent], s)] * encoding[s])
-                    .sum::<f64>();
             }
         }
     }
     probability
 }
 
-#[test]
-fn agrees_with_exhaustive_search_including_ambiguity_and_gaps() {
-    let phylo = example(b"ACGR-N", b"ATGYCT", b"GCGTNA");
+// Enumerate only PRESENT internal states: summing assignments to absent nodes
+// would incorrectly count the same character assignment more than once.
+fn check_against_enumeration(phylo: &PhyloInfo<MSA>, mask: Option<&IndelReconstruction>) {
     let model = SubstModel::<HKY>::new(&[0.1, 0.2, 0.3, 0.4], &[2.0]).unwrap();
-    let fastml = FastML::new(model.clone());
-    let (actual, score) = fastml.calc_joint(&phylo);
-    let internals = phylo.tree.internals();
-    let mut expected_score = 0.0;
+    let asr = FastML::new(model.clone());
+    let (joint_states, joint_score) = asr.calc_joint(phylo, mask);
+    let marginal = asr.marginal_posteriors(phylo, mask).unwrap();
+    let mut expected_joint = 0.0;
+    let mut expected_marginal = 0.0;
     for site in 0..phylo.msa.len() {
+        let active: Vec<usize> = phylo
+            .tree
+            .internals()
+            .iter()
+            .map(|node| usize::from(node.idx))
+            .filter(|&idx| !mask.is_some_and(|m| m.gaps[idx][site]))
+            .collect();
+        let mut masses = vec![vec![0.0; model.n()]; phylo.tree.len()];
+        let mut total = 0.0;
         let mut best = 0.0_f64;
-        for assignment in 0..4usize.pow(internals.len() as u32) {
+        for assignment in 0..model.n().pow(active.len() as u32) {
             let mut digits = assignment;
             let mut states = vec![0; phylo.tree.len()];
-            for node in &internals {
-                states[usize::from(node.idx)] = digits % 4;
-                digits /= 4;
+            for &idx in &active {
+                states[idx] = digits % model.n();
+                digits /= model.n();
             }
-            best = best.max(assignment_probability(&phylo, &model, &states, site));
+            let weight = assignment_probability(phylo, &model, &states, site, mask);
+            total += weight;
+            best = best.max(weight);
+            for &idx in &active {
+                masses[idx][states[idx]] += weight;
+            }
         }
-        let actual_states: Vec<_> = actual.iter().map(|seq| seq[site]).collect();
-        let actual_probability = assignment_probability(&phylo, &model, &actual_states, site);
-        assert!((actual_probability - best).abs() < 1e-12);
-        expected_score += best.ln();
-    }
-    assert!((score - expected_score).abs() < 1e-10);
-}
-
-#[test]
-fn roots_are_chosen_per_site_and_indices_become_letters() {
-    let phylo = example(b"ACGTAC", b"ACGTAC", b"ACGTAC");
-    let output = FastML::new(SubstModel::<JC69>::default())
-        .reconstruct_ancestral_seqs(phylo)
-        .unwrap();
-    for node in output.tree.internals() {
-        assert_eq!(
-            output.msa.ancestral_seqs().record_by_id(&node.id).seq(),
-            b"ACGTAC"
+        let actual: Vec<usize> = joint_states.iter().map(|seq| seq[site]).collect();
+        close(
+            assignment_probability(phylo, &model, &actual, site, mask),
+            best,
         );
+        expected_joint += best.ln();
+        expected_marginal += total.ln();
+        for &idx in &active {
+            for state in 0..model.n() {
+                close(
+                    marginal.probabilities[idx][(state, site)],
+                    masses[idx][state] / total,
+                );
+            }
+        }
+        for idx in 0..phylo.tree.len() {
+            let column = marginal.probabilities[idx].column(site);
+            assert!(column.iter().all(|p| p.is_finite() && *p >= 0.0));
+            if mask.is_some_and(|m| m.gaps[idx][site]) {
+                // Convention: an absent position has no letter distribution.
+                assert!(column.iter().all(|p| *p == 0.0));
+            } else {
+                close(column.iter().sum(), 1.0);
+            }
+        }
     }
+    close(joint_score, expected_joint);
+    close(marginal.log_likelihood, expected_marginal);
 }
 
 #[test]
-fn preserves_leaf_sequences_gaps_and_descriptions() {
-    let phylo = example(b"A-RN", b"ACGT", b"ACGT");
-    let output = FastML::new(SubstModel::<JC69>::default())
-        .reconstruct_ancestral_seqs(phylo.clone())
-        .unwrap();
-    for leaf in phylo.tree.leaves() {
-        let before = phylo.msa.seqs().record_by_id(&leaf.id);
-        let after = output.msa.seqs().record_by_id(&leaf.id);
-        assert_eq!(after.desc(), before.desc());
-        assert_eq!(
-            aligned_seq!(output.msa.leaf_map(&leaf.idx), after.seq()),
-            aligned_seq!(phylo.msa.leaf_map(&leaf.idx), before.seq())
-        );
-    }
+fn ordinary_joint_and_marginal_match_exhaustive_assignments() {
+    check_against_enumeration(&example(b"ACGR-N", b"ATGYCT", b"GCGTNA"), None);
 }
 
 #[test]
-fn rejects_mismatched_alphabet() {
-    let result = FastML::new(SubstModel::<WAG>::default())
-        .reconstruct_ancestral_seqs(example(b"A", b"A", b"A"));
-    assert!(matches!(result, Err(Error::Alphabet(_))));
-}
-
-#[test]
-fn impossible_zero_length_branches_return_error() {
-    let phylo = MSA::from_aligned(
-        Sequences::new_unchecked(vec![record_wo_desc!("A", b"A"), record_wo_desc!("B", b"C")]),
-        tree!("(A:0.0,B:0.0)R;"),
-    )
-    .unwrap();
-    let fastml = FastML::new(SubstModel::<JC69>::default());
-    assert_eq!(fastml.calc_joint(&phylo).1, f64::NEG_INFINITY);
-    assert!(matches!(
-        fastml.reconstruct_ancestral_seqs(phylo),
-        Err(Error::AncestralAlignment(_))
-    ));
-}
-
-#[test]
-fn checked_entry_assigns_missing_ids_and_rejects_duplicates() {
-    for (newick, should_succeed) in [
-        ("((A:0.1,B:0.1):0.1,C:0.1);", true),
-        ("((A:0.1,B:0.1)I:0.1,C:0.1)I;", false),
-    ] {
-        let seqs = Sequences::new_unchecked(vec![
-            record_wo_desc!("A", b"A"),
-            record_wo_desc!("B", b"A"),
-            record_wo_desc!("C", b"A"),
-        ]);
-        let phylo = MSA::from_aligned(seqs, tree!(newick)).unwrap();
-        let result = FastML::new(SubstModel::<JC69>::default()).reconstruct_ancestral_seqs(phylo);
-        assert_eq!(result.is_ok(), should_succeed);
-    }
-}
-
-#[test]
-fn protein_reconstruction_uses_protein_symbols() {
-    let seqs = Sequences::with_alphabet_unchecked(
-        vec![record_wo_desc!("A", b"WREL"), record_wo_desc!("B", b"WREL")],
-        Alphabet::protein(),
+fn indel_first_components_match_exhaustive_assignments() {
+    let phylo = example(b"ACGR-N", b"ATGYCT", b"GCGTNA");
+    // Different boundaries per site: internal gap, root gap, both absent,
+    // a present leaf below a gap, and a completely uncut site (site 5).
+    let mask = fixed_mask(
+        &phylo,
+        &[("I", 0), ("R", 1), ("R", 2), ("I", 2), ("I", 3), ("R", 4)],
     );
-    let phylo = MSA::from_aligned(seqs, tree!("(A:0.001,B:0.001)R;")).unwrap();
-    let result = FastML::new(SubstModel::<WAG>::default())
-        .reconstruct_ancestral_seqs(phylo)
-        .unwrap();
-    assert_eq!(result.msa.ancestral_seqs().record_by_id("R").seq(), b"WREL");
+    check_against_enumeration(&phylo, Some(&mask));
 }
 
 #[test]
-fn one_site_zero_length_branches_have_finite_score_when_consistent() {
-    let phylo = MSA::from_aligned(
-        Sequences::new_unchecked(vec![record_wo_desc!("A", b"G"), record_wo_desc!("B", b"G")]),
-        tree!("(A:0.0,B:0.0)R;"),
-    )
-    .unwrap();
-    let fastml = FastML::new(SubstModel::<JC69>::default());
-    let (states, score) = fastml.calc_joint(&phylo);
-    assert_eq!(
-        states[usize::from(phylo.tree.root)],
-        vec![Alphabet::dna().index(&b'G')]
-    );
-    assert!((score - 0.25_f64.ln()).abs() < 1e-12);
+fn all_present_mask_matches_no_mask() {
+    let phylo = example(b"ACGN", b"ATGR", b"GCGT");
+    let mask = fixed_mask(&phylo, &[]);
+    let asr = FastML::new(SubstModel::<JC69>::default());
+    let (plain, plain_score) = asr.calc_joint(&phylo, None);
+    let (masked, masked_score) = asr.calc_joint(&phylo, Some(&mask));
+    assert_eq!(plain, masked);
+    close(plain_score, masked_score);
+    let plain = asr.marginal_posteriors(&phylo, None).unwrap();
+    let masked = asr.marginal_posteriors(&phylo, Some(&mask)).unwrap();
+    close(plain.log_likelihood, masked.log_likelihood);
+    for (a, b) in plain.probabilities.iter().zip(&masked.probabilities) {
+        for (&a, &b) in a.iter().zip(b.iter()) {
+            close(a, b);
+        }
+    }
 }
 
 #[test]
-fn completely_ambiguous_observations_choose_first_state_on_ties() {
+fn gap_boundary_blocks_outside_evidence() {
+    let phylo = example(b"N", b"N", b"A");
+    let mask = fixed_mask(&phylo, &[("R", 0)]);
+    let asr = FastML::new(SubstModel::<JC69>::default());
+    let plain = asr.marginal_posteriors(&phylo, None).unwrap();
+    let cut = asr.marginal_posteriors(&phylo, Some(&mask)).unwrap();
+    let idx = node_index(&phylo, "I");
+    let a = Alphabet::dna().index(&b'A');
+    assert!(plain.probabilities[idx][(a, 0)] > 0.25);
+    for state in 0..4 {
+        close(cut.probabilities[idx][(state, 0)], 0.25);
+    }
+    // The unknown component contributes 1; the isolated A leaf contributes 0.25.
+    close(cut.log_likelihood, 0.25_f64.ln());
+
+    let model = SubstModel::<HKY>::new(&[0.1, 0.2, 0.3, 0.4], &[2.0]).unwrap();
+    let asr = FastML::new(model);
+    let (states, _) = asr.calc_joint(&phylo, Some(&mask));
+    // I's descendants are unknown; its restarted component chooses the
+    // largest prior, independently of the observed A in the other component.
+    // The restarted component chooses state 3, whose prior is largest (0.4).
+    assert_eq!(states[idx][0], 3);
+}
+
+#[test]
+fn zero_length_conflict_is_impossible_until_gap_separates_components() {
     let phylo = MSA::from_aligned(
         Sequences::with_alphabet_unchecked(
-            vec![record_wo_desc!("A", b"N"), record_wo_desc!("B", b"N")],
+            vec![record_wo_desc!("A", b"A"), record_wo_desc!("B", b"C")],
             Alphabet::dna(),
         ),
         tree!("(A:0.0,B:0.0)R;"),
     )
     .unwrap();
-    let (states, score) = FastML::new(SubstModel::<JC69>::default()).calc_joint(&phylo);
-    assert_eq!(states[usize::from(phylo.tree.root)], vec![0]);
-    assert!((score - 0.25_f64.ln()).abs() < 1e-12);
+    let asr = FastML::new(SubstModel::<JC69>::default());
+    assert_eq!(asr.calc_joint(&phylo, None).1, f64::NEG_INFINITY);
+    assert!(asr.marginal_posteriors(&phylo, None).is_err());
+    let mask = fixed_mask(&phylo, &[("R", 0)]);
+    // Two isolated observed leaves, each with prior probability 0.25.
+    let expected = (0.25_f64 * 0.25).ln();
+    close(asr.calc_joint(&phylo, Some(&mask)).1, expected);
+    close(
+        asr.marginal_posteriors(&phylo, Some(&mask))
+            .unwrap()
+            .log_likelihood,
+        expected,
+    );
 }
 
 #[test]
-fn marginal_probabilities_and_likelihood_match_exhaustive_sum() {
-    let phylo = example(b"ACGR-N", b"ATGYCT", b"GCGTNA");
-    let model = SubstModel::<HKY>::new(&[0.1, 0.2, 0.3, 0.4], &[2.0]).unwrap();
-    let fastml = FastML::new(model.clone()).with_mode(ReconstructionMode::Marginal);
-    let result = fastml.marginal_posteriors(&phylo).unwrap();
-    let selected = fastml.selected_states(&phylo).unwrap();
-    let internals = phylo.tree.internals();
-    let mut expected_log_likelihood = 0.0;
-    for site in 0..phylo.msa.len() {
-        let mut total = 0.0;
-        let mut masses = vec![vec![0.0; 4]; phylo.tree.len()];
-        for assignment in 0..4usize.pow(internals.len() as u32) {
-            let mut digits = assignment;
-            let mut states = vec![0; phylo.tree.len()];
-            for node in &internals {
-                states[usize::from(node.idx)] = digits % 4;
-                digits /= 4;
-            }
-            let weight = assignment_probability(&phylo, &model, &states, site);
-            total += weight;
-            for node in &internals {
-                let idx = usize::from(node.idx);
-                masses[idx][states[idx]] += weight;
-            }
-        }
-        expected_log_likelihood += total.ln();
-        for node in &internals {
-            let idx = usize::from(node.idx);
-            for state in 0..4 {
-                assert!(
-                    (result.probabilities[idx][(state, site)] - masses[idx][state] / total).abs()
-                        < 1e-10
-                );
-            }
-            let best = masses[idx].iter().copied().fold(0.0_f64, f64::max);
-            assert!((masses[idx][selected[idx][site]] - best).abs() < 1e-12);
-        }
-        for probabilities in &result.probabilities {
-            assert!((probabilities.column(site).iter().sum::<f64>() - 1.0).abs() < 1e-12);
-        }
-    }
-    assert!((result.log_likelihood - expected_log_likelihood).abs() < 1e-10);
-}
-
-#[test]
-fn marginal_nonroot_uses_evidence_outside_its_subtree() {
-    // I's own descendants are completely unknown. C must nevertheless affect I.
-    // Treating a normalized inside vector as the posterior would give a uniform result.
-    let phylo = example(b"N", b"N", b"A");
-    let result = FastML::new(SubstModel::<JC69>::default())
-        .marginal_posteriors(&phylo)
-        .unwrap();
-    let node = phylo
-        .tree
-        .internals()
-        .into_iter()
-        .find(|n| n.id == "I")
-        .unwrap();
-    let idx = usize::from(node.idx);
-    let a = Alphabet::dna().index(&b'A');
-    assert!(result.probabilities[idx][(a, 0)] > 0.25);
-    for state in 0..4 {
-        if state != a {
-            assert!(result.probabilities[idx][(a, 0)] > result.probabilities[idx][(state, 0)]);
-        }
-    }
-}
-
-#[test]
-fn marginal_handles_zero_branches_without_nan_and_rejects_impossible_data() {
-    for (b, valid) in [(b'A', true), (b'C', false)] {
-        let phylo = MSA::from_aligned(
-            Sequences::new_unchecked(vec![record_wo_desc!("A", b"A"), record_wo_desc!("B", &[b])]),
-            tree!("(A:0.0,B:0.0)R;"),
-        )
-        .unwrap();
-        let asr =
-            FastML::new(SubstModel::<JC69>::default()).with_mode(ReconstructionMode::Marginal);
-        let result = asr.marginal_posteriors(&phylo);
-        assert_eq!(result.is_ok(), valid);
-        if let Ok(result) = result {
-            for p in result.probabilities {
-                assert!(p.iter().all(|x| x.is_finite()));
-            }
-        }
-        assert_eq!(asr.reconstruct_ancestral_seqs(phylo).is_ok(), valid);
-    }
-}
-
-#[test]
-fn marginal_output_preserves_leaves_and_outputs_selected_letters() {
-    let phylo = example(b"ACGR-N", b"ATGYCT", b"GCGTNA");
-    let asr = FastML::new(SubstModel::<JC69>::default()).with_mode(ReconstructionMode::Marginal);
-    let states = asr.selected_states(&phylo).unwrap();
-    let output = asr.reconstruct_ancestral_seqs(phylo.clone()).unwrap();
-    for node in output.tree.internals() {
-        let expected: Vec<u8> = states[usize::from(node.idx)]
-            .iter()
-            .map(|&s| Alphabet::dna().symbols()[s])
-            .collect();
-        assert_eq!(
-            output.msa.ancestral_seqs().record_by_id(&node.id).seq(),
-            expected.as_slice()
-        );
-    }
-    for leaf in output.tree.leaves() {
-        assert_eq!(
-            aligned_seq!(
-                output.msa.leaf_map(&leaf.idx),
-                output.msa.seqs().record_by_id(&leaf.id).seq()
-            ),
-            aligned_seq!(
-                phylo.msa.leaf_map(&leaf.idx),
-                phylo.msa.seqs().record_by_id(&leaf.id).seq()
-            )
-        );
-    }
-}
-
-#[test]
-fn indels_reconstruct_a_block_and_preserve_leaf_gaps_in_both_modes() {
+fn indel_first_flag_routes_mask_and_preserves_output() {
     let phylo = example(b"A--A", b"A--A", b"AAAA");
     for mode in [ReconstructionMode::Joint, ReconstructionMode::Marginal] {
-        let asr = FastML::new(SubstModel::<JC69>::default())
-            .with_mode(mode)
-            .with_indels(IndelModel::new(0.1, 0.1).unwrap());
-        let indels = asr.reconstruct_indels(&phylo).unwrap().unwrap();
-        assert_eq!(indels.events, vec![GapEvent { start: 1, end: 3 }]);
-        let node = phylo
-            .tree
-            .internals()
-            .into_iter()
-            .find(|n| n.id == "I")
-            .unwrap();
-        let idx = usize::from(node.idx);
-        assert!(indels.gap_probabilities[idx][0] > 0.5);
-        assert_eq!(indels.gaps[idx], vec![false, true, true, false]);
-        let output = asr.reconstruct_ancestral_seqs(phylo.clone()).unwrap();
-        let record = output.msa.ancestral_seqs().record_by_id("I");
-        let aligned = aligned_seq!(output.msa.ancestral_map(&node.idx), record.seq());
-        assert_eq!(aligned.as_slice(), b"A--A");
-        for leaf in phylo.tree.leaves() {
-            assert_eq!(
-                aligned_seq!(
-                    output.msa.leaf_map(&leaf.idx),
-                    output.msa.seqs().record_by_id(&leaf.id).seq()
-                ),
-                aligned_seq!(
-                    phylo.msa.leaf_map(&leaf.idx),
-                    phylo.msa.seqs().record_by_id(&leaf.id).seq()
-                )
-            );
+        for indel_first in [false, true] {
+            let asr = FastML::new(SubstModel::<JC69>::default())
+                .with_mode(mode)
+                .with_indels(IndelModel::new(0.1, 0.1).unwrap(), indel_first);
+            let mask = asr.reconstruct_indels(&phylo).unwrap().unwrap();
+            assert!(mask.gaps[node_index(&phylo, "I")][1]);
+            let forward = if indel_first { Some(&mask) } else { None };
+            // Independently verify the inference used by this public route.
+            check_against_enumeration(&phylo, forward);
+            let states = asr.selected_states(&phylo, forward).unwrap();
+            let output = asr.reconstruct_ancestral_seqs(phylo.clone()).unwrap();
+            let unchecked = asr.reconstruct_ancestral_seqs_unchecked(phylo.clone());
+            for node in phylo.tree.internals() {
+                let idx = usize::from(node.idx);
+                let expected: Vec<u8> = (0..phylo.msa.len())
+                    .map(|site| {
+                        if mask.gaps[idx][site] {
+                            GAP
+                        } else {
+                            phylo.msa.alphabet().symbols()[states[idx][site]]
+                        }
+                    })
+                    .collect();
+                for result in [&output, &unchecked] {
+                    let record = result.msa.ancestral_seqs().record_by_id(&node.id);
+                    assert_eq!(
+                        aligned_seq!(result.msa.ancestral_map(&node.idx), record.seq()),
+                        expected
+                    );
+                }
+            }
+            for leaf in phylo.tree.leaves() {
+                let before = phylo.msa.seqs().record_by_id(&leaf.id);
+                let after = output.msa.seqs().record_by_id(&leaf.id);
+                assert_eq!(before.desc(), after.desc());
+                assert_eq!(
+                    aligned_seq!(output.msa.leaf_map(&leaf.idx), after.seq()),
+                    aligned_seq!(phylo.msa.leaf_map(&leaf.idx), before.seq())
+                );
+            }
         }
     }
 }
 
 #[test]
-fn enabling_indels_on_ungapped_input_does_not_change_output() {
+fn no_gap_events_leave_both_indel_settings_unchanged() {
     let phylo = example(b"ACGT", b"ACGT", b"ACGT");
-    let asr =
-        FastML::new(SubstModel::<JC69>::default()).with_indels(IndelModel::new(0.1, 0.2).unwrap());
-    let result = asr.reconstruct_indels(&phylo).unwrap().unwrap();
-    assert!(result.events.is_empty());
-    assert_eq!(result.log_likelihood, 0.0);
-    let output = asr.reconstruct_ancestral_seqs(phylo).unwrap();
-    for node in output.tree.internals() {
-        assert_eq!(
-            output.msa.ancestral_seqs().record_by_id(&node.id).seq(),
-            b"ACGT"
-        );
-    }
-}
-
-#[test]
-fn marginal_protein_posteriors_work_with_twenty_states() {
-    let phylo = MSA::from_aligned(
-        Sequences::with_alphabet_unchecked(
-            vec![record_wo_desc!("A", b"W"), record_wo_desc!("B", b"W")],
-            Alphabet::protein(),
-        ),
-        tree!("(A:0.01,B:0.01)R;"),
-    )
-    .unwrap();
-    let asr = FastML::new(SubstModel::<WAG>::default()).with_mode(ReconstructionMode::Marginal);
-    let result = asr.marginal_posteriors(&phylo).unwrap();
-    let root = usize::from(phylo.tree.root);
-    let w = Alphabet::protein().index(&b'W');
-    assert!(result.probabilities[root][(w, 0)] > 0.99);
-    let output = asr.reconstruct_ancestral_seqs(phylo).unwrap();
-    assert_eq!(output.msa.ancestral_seqs().record_by_id("R").seq(), b"W");
-}
-// Add this test to src/fastml/tests.rs, declared with `mod tests;`
-// inside the fastml module so it can access the private calc_joint method.
-// Expected values are calculated by hand, not using assignment_probability.
-// This checks the root calculation; keep the multi-internal-node exhaustive
-// test to check the non-root recurrence and traceback as well.
-
-#[test]
-fn fastml_matches_hand_calculated_probability() {
-    use crate::alignment::{Alignment, Sequences, MSA};
-    use crate::fastml::FastML;
-    use crate::substitution_models::{SubstModel, JC69};
-
-    // For Phyne's normalized JC69 model:
-    // P(same)      = 0.25 + 0.75 * exp(-4t/3)
-    // P(different) = 0.25 - 0.25 * exp(-4t/3)
-    // Choosing exp(-4t/3) = 0.6 gives 0.7 and 0.1 respectively.
-    let branch_length = -0.75 * 0.6_f64.ln();
-    let newick = format!("(L1:{branch_length:.17},L2:{branch_length:.17})R;");
-    let tree = crate::tree!(&newick);
-
-    let sequences = Sequences::new_unchecked(vec![
-        crate::record_wo_desc!("L1", b"A"),
-        crate::record_wo_desc!("L2", b"C"),
-    ]);
-    let phylo = MSA::from_aligned(sequences, tree).unwrap();
-    let fastml = FastML::new(SubstModel::<JC69>::default());
-
-    let (states, log_score) = fastml.calc_joint(&phylo);
-
-    // Root A: 0.25 * 0.7 * 0.1 = 0.0175
-    // Root C: 0.25 * 0.1 * 0.7 = 0.0175
-    // Root G: 0.25 * 0.1 * 0.1 = 0.0025
-    // Root T: 0.25 * 0.1 * 0.1 = 0.0025
-    let expected_probability = 0.0175_f64;
-    assert!(
-        (log_score - expected_probability.ln()).abs() < 1e-10,
-        "Expected log score {}, got {}",
-        expected_probability.ln(),
-        log_score,
-    );
-
-    // A and C tie: either is an optimal root state.
-    let root_index = usize::from(phylo.tree.root);
-    let root_state = states[root_index][0];
-    let root_letter = phylo.msa.alphabet().symbols()[root_state];
-    assert!(
-        matches!(root_letter, b'A' | b'C'),
-        "Expected root A or C, got {}",
-        root_letter as char,
-    );
-}
-
-#[test]
-fn shared_pass_sums_leaf_uncertainty_even_in_joint_mode() {
-    let phylo = example(b"N", b"N", b"N");
-    let asr = FastML::new(SubstModel::<JC69>::default());
-    // Only the internal branch R -> I is maximized. Unknown leaves contribute 1.
-    // The fixture has branch length 0.17 for I; JC69 P(same) is known analytically.
-    let same = 0.25 + 0.75 * (-4.0_f64 * 0.17 / 3.0).exp();
-    let (_, joint_score) = asr.calc_joint(&phylo);
-    assert!((joint_score - (0.25 * same).ln()).abs() < 1e-12);
-    let marginal = asr.marginal_posteriors(&phylo).unwrap();
-    assert!(marginal.log_likelihood.abs() < 1e-12);
-    for probabilities in marginal.probabilities {
-        assert!(probabilities.iter().all(|p| (*p - 0.25).abs() < 1e-12));
+    for mode in [ReconstructionMode::Joint, ReconstructionMode::Marginal] {
+        for indel_first in [false, true] {
+            let asr = FastML::new(SubstModel::<JC69>::default())
+                .with_mode(mode)
+                .with_indels(IndelModel::new(0.1, 0.2).unwrap(), indel_first);
+            let mask = asr.reconstruct_indels(&phylo).unwrap().unwrap();
+            assert!(mask.events.is_empty());
+            let output = asr.reconstruct_ancestral_seqs(phylo.clone()).unwrap();
+            for node in output.tree.internals() {
+                assert_eq!(
+                    output.msa.ancestral_seqs().record_by_id(&node.id).seq(),
+                    b"ACGT"
+                );
+            }
+        }
     }
 }

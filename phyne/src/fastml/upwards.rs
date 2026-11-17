@@ -1,6 +1,7 @@
 //! Shared node-first upward traversal for joint and marginal reconstruction.
 use super::ReconstructionMode;
 use crate::evolutionary_models::ProbabilityMatrix;
+use crate::fastml::IndelReconstruction;
 use crate::tree::{NodeIdx::Leaf, Tree};
 use nalgebra::DMatrix;
 
@@ -17,6 +18,7 @@ pub(super) fn upward(
     observations: Vec<DMatrix<f64>>,
     transitions: &[ProbabilityMatrix],
     mode: ReconstructionMode,
+    indels_forward: Option<&IndelReconstruction>,
 ) -> Upward {
     let root = usize::from(tree.root);
     let k = observations[root].nrows();
@@ -49,10 +51,16 @@ pub(super) fn upward(
         let p = &transitions[idx];
         conditioned_scores[idx] = DMatrix::from_element(k, sites, f64::NEG_INFINITY);
         for site in 0..sites {
+            if indels_forward.is_some_and(|indels| indels.gaps[idx][site]) {
+                // Log(1): this subtree contributes no character evidence
+                // to the parent at this site.
+                conditioned_scores[idx].column_mut(site).fill(0.0);
+                continue;
+            }
             for parent in 0..k {
                 let scores =
                     (0..k).map(|state| p[(parent, state)] + subtree_scores[idx][(state, site)]);
-                // Even joint mode sums uncertain LEAF states: only ancestral
+                // Even joint mode sums uncertain leaf states: only ancestral
                 // states are maximized. This preserves ambiguity handling.
                 if mode == ReconstructionMode::Marginal || matches!(node, Leaf(_)) {
                     conditioned_scores[idx][(parent, site)] = log_sum_exp(scores);
@@ -68,7 +76,7 @@ pub(super) fn upward(
         }
         // Joint traceback only needs choices and the root's inside scores.
         // Releasing other inside matrices keeps the shared pass memory-efficient.
-        if mode == ReconstructionMode::Joint {
+        if mode == ReconstructionMode::Joint && indels_forward.is_none() {
             subtree_scores[idx] = DMatrix::zeros(0, 0);
         }
     }

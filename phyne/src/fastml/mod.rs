@@ -19,8 +19,8 @@ use crate::{aligned_seq, record, Error, Result};
 mod joint;
 mod marginal;
 use marginal::MarginalReconstruction;
-mod pruning;
-use pruning::{log_sum_exp, upward, Upward};
+mod upwards;
+use upwards::{log_sum_exp, upward, Upward};
 mod indels;
 pub use indels::{GapEvent, IndelModel, IndelReconstruction};
 
@@ -36,6 +36,7 @@ pub enum ReconstructionMode {
 pub struct FastML<Q: QMatrix> {
     model: SubstModel<Q>,
     mode: ReconstructionMode,
+    condition_on_gaps: bool,
     indel_model: Option<IndelModel>,
 }
 
@@ -44,6 +45,7 @@ impl<Q: QMatrix> FastML<Q> {
         Self {
             model,
             mode: ReconstructionMode::Joint,
+            condition_on_gaps: false,
             indel_model: None,
         }
     }
@@ -53,8 +55,9 @@ impl<Q: QMatrix> FastML<Q> {
         self
     }
 
-    pub fn with_indels(mut self, model: IndelModel) -> Self {
+    pub fn with_indels(mut self, model: IndelModel, condition_on_gaps: bool) -> Self {
         self.indel_model = Some(model);
+        self.condition_on_gaps = condition_on_gaps;
         self
     }
 
@@ -74,22 +77,32 @@ impl<Q: QMatrix> FastML<Q> {
         Ok(())
     }
 
-    fn calc_joint(&self, phylo: &PhyloInfo<MSA>) -> (Vec<Vec<usize>>, f64) {
+    fn calc_joint(
+        &self,
+        phylo: &PhyloInfo<MSA>,
+        indels_forward: Option<&IndelReconstruction>,
+    ) -> (Vec<Vec<usize>>, f64) {
         joint::infer(
             &phylo.tree,
             self.observations(phylo),
             &self.precompute_log_transitions(&phylo.tree),
             self.model.freqs().as_slice(),
+            indels_forward,
         )
     }
 
-    pub fn marginal_posteriors(&self, phylo: &PhyloInfo<MSA>) -> Result<MarginalReconstruction> {
+    pub fn marginal_posteriors(
+        &self,
+        phylo: &PhyloInfo<MSA>,
+        indels_forward: Option<&IndelReconstruction>,
+    ) -> Result<MarginalReconstruction> {
         self.validate_input(phylo)?;
         marginal::infer(
             &phylo.tree,
             self.observations(phylo),
             &self.precompute_log_transitions(&phylo.tree),
             self.model.freqs().as_slice(),
+            indels_forward,
         )
     }
 
@@ -115,7 +128,6 @@ impl<Q: QMatrix> FastML<Q> {
         &self,
         phylo: &PhyloInfo<MSA>,
     ) -> Result<Option<IndelReconstruction>> {
-        self.validate_input(phylo)?;
         self.indel_model
             .map(|model| indels::reconstruct(phylo, model))
             .transpose()
@@ -123,25 +135,28 @@ impl<Q: QMatrix> FastML<Q> {
 
     // One probability transition matrix per node; pruning converts these to logs.
     fn precompute_log_transitions(&self, tree: &Tree) -> Vec<ProbabilityMatrix> {
-        let mut transitions =
-            vec![DMatrix::from_element(self.model.freqs().len(), tree.len(), 0.0); tree.len()];
+        let mut transitions = vec![DMatrix::zeros(0, 0); tree.len()];
         for node in tree.iter() {
             transitions[usize::from(node.idx)] = self.model.p(node.blen).map(|p| p.ln());
         }
         transitions
     }
 
-    fn selected_states(&self, phylo: &PhyloInfo<MSA>) -> Result<Vec<Vec<usize>>> {
+    fn selected_states(
+        &self,
+        phylo: &PhyloInfo<MSA>,
+        indels_forward: Option<&IndelReconstruction>,
+    ) -> Result<Vec<Vec<usize>>> {
         match self.mode {
             ReconstructionMode::Joint => {
-                let (states, score) = self.calc_joint(phylo);
+                let (states, score) = self.calc_joint(phylo, indels_forward);
                 if !score.is_finite() {
                     return Err(Error::AncestralAlignment("No finite FastML reconstruction score; check observations and branch lengths".into()));
                 }
                 Ok(states)
             }
             ReconstructionMode::Marginal => {
-                let result = self.marginal_posteriors(phylo)?;
+                let result = self.marginal_posteriors(phylo, indels_forward)?;
                 Ok(result
                     .probabilities
                     .iter()
@@ -163,15 +178,19 @@ impl<Q: QMatrix> FastML<Q> {
         }
     }
 
-    fn finish(&self, phylo: PhyloInfo<MSA>, states: Vec<Vec<usize>>) -> Result<PhyloInfo<MASA>> {
-        let indels = self.reconstruct_indels(&phylo)?;
-        Ok(self.build_alignment(
+    fn finish(
+        &self,
+        phylo: PhyloInfo<MSA>,
+        states: Vec<Vec<usize>>,
+        indels: Option<IndelReconstruction>,
+    ) -> PhyloInfo<MASA> {
+        self.build_alignment(
             phylo,
             states,
             indels
                 .as_ref()
                 .map(|r: &IndelReconstruction| r.gaps.as_slice()),
-        ))
+        )
     }
 
     fn build_alignment(
@@ -210,21 +229,40 @@ impl<Q: QMatrix> FastML<Q> {
 impl<Q: QMatrix> AncestralSequenceReconstruction<MSA, MASA> for FastML<Q> {
     fn reconstruct_ancestral_seqs(&self, mut phylo: PhyloInfo<MSA>) -> Result<PhyloInfo<MASA>> {
         self.validate_input(&phylo)?;
+        let indels = self.reconstruct_indels(&phylo)?;
         set_missing_tree_node_ids(&mut phylo.tree)?;
-        let states = self.selected_states(&phylo)?;
-        self.finish(phylo, states)
+
+        let states = self.selected_states(
+            &phylo,
+            if self.condition_on_gaps {
+                indels.as_ref()
+            } else {
+                None
+            },
+        )?;
+        Ok(self.finish(phylo, states, indels))
     }
 
     /// Requires matching alphabets, unique node IDs, finite nonnegative branches,
     /// and a positive-probability reconstruction. Panics if inference fails.
     fn reconstruct_ancestral_seqs_unchecked(&self, phylo: PhyloInfo<MSA>) -> PhyloInfo<MASA> {
-        let states = self
-            .selected_states(&phylo)
+        let indels = self
+            .reconstruct_indels(&phylo)
             .expect("FastML unchecked preconditions");
-        self.finish(phylo, states)
-            .expect("FastML unchecked preconditions")
+        let states = self
+            .selected_states(
+                &phylo,
+                if self.condition_on_gaps {
+                    indels.as_ref()
+                } else {
+                    None
+                },
+            )
+            .expect("FastML unchecked preconditions");
+        self.finish(phylo, states, indels)
     }
 }
 
+mod fastml_large_tree_tests;
 #[cfg(test)]
 mod tests;

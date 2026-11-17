@@ -151,7 +151,7 @@ pub(super) fn reconstruct(
     for node in tree.iter() {
         transitions[usize::from(node.idx)] = model.transition(node.blen).map(|p| p.ln());
     }
-    let posterior = marginal::infer(tree, observations, &transitions, &model.prior())?;
+    let posterior = marginal::infer(tree, observations, &transitions, &model.prior(), None)?;
     let gap_probabilities: Vec<Vec<f64>> = posterior
         .probabilities
         .iter()
