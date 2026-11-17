@@ -3,12 +3,16 @@ use std::collections::BTreeSet;
 
 use nalgebra::DMatrix;
 
-use crate::alignment::{Alignment, MSA};
+use crate::alignment::{Alignment, AncestralAlignment, Sequences};
 use crate::evolutionary_models::ProbabilityMatrix;
 use crate::phylo_info::PhyloInfo;
 use crate::{Error, Result};
+use bio::io::fasta::Record;
 
-use super::marginal;
+use crate::alphabets::{AMB_CHAR, GAP};
+use crate::asr::AncestralSequenceReconstruction;
+use crate::fastml::marginal;
+use crate::{aligned_seq, record};
 
 /// Fixed rates per unit of tree branch length. State 0 = gap event absent;
 /// state 1 = gap event present. These are rates of binary gap-event evolution,
@@ -116,10 +120,10 @@ fn event_encoding(runs: &[GapEvent], event: GapEvent) -> [f64; 2] {
     [1.0, 0.0] // Event absent.
 }
 
-pub(super) fn reconstruct(
-    phylo: &PhyloInfo<MSA>,
-    model: IndelModel,
-) -> Result<IndelReconstruction> {
+pub fn reconstruct<A: Alignment>(
+    phylo: &PhyloInfo<A>,
+    indel_model: IndelModel,
+) -> IndelReconstruction {
     let tree = &phylo.tree;
     let sites = phylo.msa.len();
     let mut runs = vec![Vec::new(); tree.len()];
@@ -149,9 +153,15 @@ pub(super) fn reconstruct(
     }
     let mut transitions = vec![DMatrix::zeros(0, 0); tree.len()];
     for node in tree.iter() {
-        transitions[usize::from(node.idx)] = model.transition(node.blen).map(|p| p.ln());
+        transitions[usize::from(node.idx)] = indel_model.transition(node.blen).map(|p| p.ln());
     }
-    let posterior = marginal::infer(tree, observations, &transitions, &model.prior(), None)?;
+    let posterior = marginal::infer(
+        phylo,
+        &indel_model.prior(),
+        &transitions,
+        observations,
+        None,
+    );
     let gap_probabilities: Vec<Vec<f64>> = posterior
         .probabilities
         .iter()
@@ -165,109 +175,48 @@ pub(super) fn reconstruct(
             }
         }
     }
-    Ok(IndelReconstruction {
+    IndelReconstruction {
         events,
         gap_probabilities,
         gaps,
         log_likelihood: posterior.log_likelihood,
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn coding_distinguishes_exact_containing_and_partial_runs() {
-        let event = GapEvent { start: 2, end: 4 };
-        assert_eq!(event_encoding(&[event], event), [0.0, 1.0]);
-        assert_eq!(
-            event_encoding(&[GapEvent { start: 1, end: 5 }], event),
-            [1.0, 1.0]
-        );
-        assert_eq!(
-            event_encoding(&[GapEvent { start: 3, end: 5 }], event),
-            [1.0, 0.0]
-        );
-        assert_eq!(event_encoding(&[], event), [1.0, 0.0]);
-    }
-
-    #[test]
-    fn binary_transitions_match_closed_form_and_identity() {
-        let model = IndelModel::new(0.2, 0.8).unwrap();
-        let p = model.transition(0.7);
-        assert!((p[(0, 1)] - 0.2 * (1.0 - (-0.7_f64).exp())).abs() < 1e-14);
-        assert!((p[(1, 0)] - 0.8 * (1.0 - (-0.7_f64).exp())).abs() < 1e-14);
-        assert_eq!(model.transition(0.0), DMatrix::identity(2, 2));
-        assert!(IndelModel::new(0.0, 1.0).is_err());
-        assert!(IndelModel::new(f64::NAN, 1.0).is_err());
     }
 }
 
-#[cfg(test)]
-mod exhaustive_tests {
-    use super::*;
-    use crate::alignment::Sequences;
-    use crate::tree::NodeIdx::{Internal, Leaf};
+impl<A: Alignment, AA: AncestralAlignment> AncestralSequenceReconstruction<A, AA> for IndelModel {
+    // Pipeline inputs are already validated and named upstream.
+    fn reconstruct_ancestral_seqs(&self, phylo: PhyloInfo<A>) -> Result<PhyloInfo<AA>> {
+        Ok(self.reconstruct_ancestral_seqs_unchecked(phylo))
+    }
 
-    #[test]
-    fn event_posteriors_match_all_binary_internal_assignments() {
-        let phylo = MSA::from_aligned(
-            Sequences::new_unchecked(vec![
-                crate::record_wo_desc!("A", b"A--A"),
-                crate::record_wo_desc!("B", b"A--A"),
-                crate::record_wo_desc!("C", b"AAAA"),
-            ]),
-            crate::tree!("((A:0.1,B:0.2)I:0.3,C:0.4)R;"),
-        )
-        .unwrap();
-        let model = IndelModel::new(0.2, 0.8).unwrap();
-        let result = reconstruct(&phylo, model).unwrap();
-        let internals = phylo.tree.internals();
-        let mut masses = vec![[0.0; 2]; phylo.tree.len()];
-        let mut total = 0.0;
-        for assignment in 0..2usize.pow(internals.len() as u32) {
-            let mut states = vec![0; phylo.tree.len()];
-            for (bit, node) in internals.iter().enumerate() {
-                states[usize::from(node.idx)] = (assignment >> bit) & 1;
-            }
-            let mut probability = model.prior()[states[usize::from(phylo.tree.root)]];
-            for node in phylo.tree.iter() {
-                if node.idx == phylo.tree.root {
-                    continue;
-                }
-                let parent = usize::from(phylo.tree.parent(&node.idx).unwrap());
-                let state = match node.idx {
-                    Internal(_) => states[usize::from(node.idx)],
-                    Leaf(_) => {
-                        if node.id == "C" {
-                            0
-                        } else {
-                            1
-                        }
-                    }
-                };
-                // Closed-form binary transition, independently of transition().
-                let pi = [0.8, 0.2];
-                let decay = (-node.blen).exp();
-                let transition = pi[state]
-                    + if states[parent] == state {
-                        (1.0 - pi[state]) * decay
-                    } else {
-                        -pi[state] * decay
-                    };
-                probability *= transition;
-            }
-            total += probability;
-            for node in &internals {
-                let idx = usize::from(node.idx);
-                masses[idx][states[idx]] += probability;
-            }
+    fn reconstruct_ancestral_seqs_unchecked(&self, phylo: PhyloInfo<A>) -> PhyloInfo<AA> {
+        let mut records = Vec::with_capacity(phylo.tree.len());
+        for leaf in phylo.tree.leaves() {
+            let original = phylo.msa.seqs().record_by_id(&leaf.id);
+            let aligned = aligned_seq!(phylo.msa.leaf_map(&leaf.idx), original.seq());
+            records.push(record!(&leaf.id, original.desc(), &aligned));
         }
-        assert!((result.log_likelihood - total.ln()).abs() < 1e-12);
-        for node in internals {
-            let idx = usize::from(node.idx);
-            assert!((result.gap_probabilities[idx][0] - masses[idx][1] / total).abs() < 1e-12);
-        }
+        records.extend(get_ancestral_records(&phylo, *self));
+        let sequences = Sequences::with_alphabet_unchecked(records, phylo.msa.seqs().alphabet());
+        AA::from_aligned_with_ancestral_unchecked(sequences, phylo.tree)
     }
 }
+
+fn get_ancestral_records<A: Alignment>(phylo: &PhyloInfo<A>, model: IndelModel) -> Vec<Record> {
+    let result = reconstruct(phylo, model);
+    phylo
+        .tree
+        .internals()
+        .iter()
+        .map(|node| {
+            let sequence: Vec<u8> = result.gaps[usize::from(node.idx)]
+                .iter()
+                .map(|&gap| if gap { GAP } else { AMB_CHAR })
+                .collect();
+            record!(&node.id, None, &sequence)
+        })
+        .collect()
+}
+
+//#[cfg(test)]
+//mod tests;

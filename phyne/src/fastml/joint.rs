@@ -1,18 +1,21 @@
 //! Joint reconstruction: maximize ancestral assignments and trace choices back.
 
+use crate::alignment::Alignment;
 use crate::evolutionary_models::ProbabilityMatrix;
-use crate::fastml::IndelReconstruction;
-use crate::tree::{NodeIdx::Leaf, Tree};
+use crate::phylo_info::PhyloInfo;
+use crate::tree::NodeIdx::Leaf;
+use nalgebra::DMatrix;
 
 use super::{log_sum_exp, upward, ReconstructionMode};
 
-pub(super) fn infer(
-    tree: &Tree,
-    observations: Vec<ProbabilityMatrix>,
+pub(super) fn infer<A: Alignment>(
+    phylo: &PhyloInfo<A>,
+    prior: &[f64],
     transitions: &[ProbabilityMatrix],
-    prior: &[f64], //character frequences at the root
-    indels_forward: Option<&IndelReconstruction>,
+    observations: Vec<DMatrix<f64>>,
+    gaps: Option<&[Vec<bool>]>,
 ) -> (Vec<Vec<usize>>, f64) {
+    let tree = &phylo.tree;
     let root = usize::from(tree.root);
     let n_char = prior.len();
     let n_sites = observations[root].ncols();
@@ -23,7 +26,7 @@ pub(super) fn infer(
         observations,
         transitions,
         ReconstructionMode::Joint,
-        indels_forward,
+        gaps,
     );
     let choices = upward.choices.as_ref().expect("Joint pass stores choices");
 
@@ -35,9 +38,7 @@ pub(super) fn infer(
         let parent = tree.parent(node_idx).map(usize::from);
 
         for site in 0..n_sites {
-            let is_gap = |node: usize| indels_forward.is_some_and(|indels| indels.gaps[node][site]);
-
-            // An absent character has no letter to reconstruct.
+            let is_gap = |node: usize| gaps.is_some_and(|g| g[node][site]); // An absent character has no letter to reconstruct.
             if is_gap(idx) {
                 continue;
             }

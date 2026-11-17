@@ -36,17 +36,18 @@ pub enum ReconstructionMode {
 pub struct FastML<Q: QMatrix> {
     model: SubstModel<Q>,
     mode: ReconstructionMode,
-    condition_on_gaps: bool,
-    indel_model: Option<IndelModel>,
 }
 
-impl<Q: QMatrix> FastML<Q> {
+pub struct FastMLNoIndelsDuringInference<Q: QMatrix> {
+    model: SubstModel<Q>,
+    mode: ReconstructionMode,
+}
+
+impl<Q: QMatrix> FastMLNoIndelsDuringInference<Q> {
     pub fn new(model: SubstModel<Q>) -> Self {
         Self {
             model,
             mode: ReconstructionMode::Joint,
-            condition_on_gaps: false,
-            indel_model: None,
         }
     }
 
@@ -54,215 +55,163 @@ impl<Q: QMatrix> FastML<Q> {
         self.mode = mode;
         self
     }
+}
 
-    pub fn with_indels(mut self, model: IndelModel, condition_on_gaps: bool) -> Self {
-        self.indel_model = Some(model);
-        self.condition_on_gaps = condition_on_gaps;
+impl<Q: QMatrix> FastML<Q> {
+    pub fn new(model: SubstModel<Q>) -> Self {
+        Self {
+            model,
+            mode: ReconstructionMode::Joint,
+        }
+    }
+
+    pub fn with_mode(mut self, mode: ReconstructionMode) -> Self {
+        self.mode = mode;
         self
     }
-
-    fn validate_input(&self, phylo: &PhyloInfo<MSA>) -> Result<()> {
-        if phylo.msa.alphabet() != SubstModel::<Q>::alphabet() {
-            return Err(Error::Alphabet(
-                "FastML model and alignment alphabets differ".into(),
-            ));
-        }
-        for node in phylo.tree.iter() {
-            if node.idx != phylo.tree.root && (!node.blen.is_finite() || node.blen < 0.0) {
-                return Err(Error::AncestralAlignment(
-                    "FastML branch lengths must be finite and nonnegative".into(),
-                ));
-            }
-        }
-        Ok(())
-    }
-
-    fn calc_joint(
-        &self,
-        phylo: &PhyloInfo<MSA>,
-        indels_forward: Option<&IndelReconstruction>,
-    ) -> (Vec<Vec<usize>>, f64) {
-        joint::infer(
-            &phylo.tree,
-            self.observations(phylo),
-            &self.precompute_log_transitions(&phylo.tree),
-            self.model.freqs().as_slice(),
-            indels_forward,
-        )
-    }
-
-    pub fn marginal_posteriors(
-        &self,
-        phylo: &PhyloInfo<MSA>,
-        indels_forward: Option<&IndelReconstruction>,
-    ) -> Result<MarginalReconstruction> {
-        self.validate_input(phylo)?;
-        marginal::infer(
-            &phylo.tree,
-            self.observations(phylo),
-            &self.precompute_log_transitions(&phylo.tree),
-            self.model.freqs().as_slice(),
-            indels_forward,
-        )
-    }
-
-    fn observations(&self, phylo: &PhyloInfo<MSA>) -> Vec<ProbabilityMatrix> {
-        let k = phylo.msa.alphabet().len();
-        let mut observations =
-            vec![DMatrix::from_element(k, phylo.msa.len(), 1.0); phylo.tree.len()];
-        for leaf in phylo.tree.leaves() {
-            let idx = usize::from(leaf.idx);
-            let record = phylo.msa.seqs().record_by_id(&leaf.id);
-            for (site, position) in phylo.msa.leaf_map(&leaf.idx).iter().enumerate() {
-                if let Some(position) = position {
-                    observations[idx]
-                        .column_mut(site)
-                        .copy_from(phylo.msa.alphabet().char_encoding(record.seq()[*position]));
-                }
-            }
-        }
-        observations
-    }
-
-    pub fn reconstruct_indels(
-        &self,
-        phylo: &PhyloInfo<MSA>,
-    ) -> Result<Option<IndelReconstruction>> {
-        self.indel_model
-            .map(|model| indels::reconstruct(phylo, model))
-            .transpose()
-    }
-
-    // One probability transition matrix per node; pruning converts these to logs.
-    fn precompute_log_transitions(&self, tree: &Tree) -> Vec<ProbabilityMatrix> {
-        let mut transitions = vec![DMatrix::zeros(0, 0); tree.len()];
-        for node in tree.iter() {
-            transitions[usize::from(node.idx)] = self.model.p(node.blen).map(|p| p.ln());
-        }
-        transitions
-    }
-
-    fn selected_states(
-        &self,
-        phylo: &PhyloInfo<MSA>,
-        indels_forward: Option<&IndelReconstruction>,
-    ) -> Result<Vec<Vec<usize>>> {
-        match self.mode {
-            ReconstructionMode::Joint => {
-                let (states, score) = self.calc_joint(phylo, indels_forward);
-                if !score.is_finite() {
-                    return Err(Error::AncestralAlignment("No finite FastML reconstruction score; check observations and branch lengths".into()));
-                }
-                Ok(states)
-            }
-            ReconstructionMode::Marginal => {
-                let result = self.marginal_posteriors(phylo, indels_forward)?;
-                Ok(result
-                    .probabilities
-                    .iter()
-                    .map(|p| {
-                        (0..p.ncols())
-                            .map(|site| {
-                                let mut best = 0;
-                                for state in 1..p.nrows() {
-                                    if p[(state, site)] > p[(best, site)] {
-                                        best = state;
-                                    }
-                                }
-                                best
-                            })
-                            .collect()
-                    })
-                    .collect())
-            }
-        }
-    }
-
-    fn finish(
-        &self,
-        phylo: PhyloInfo<MSA>,
-        states: Vec<Vec<usize>>,
-        indels: Option<IndelReconstruction>,
-    ) -> PhyloInfo<MASA> {
-        self.build_alignment(
-            phylo,
-            states,
-            indels
-                .as_ref()
-                .map(|r: &IndelReconstruction| r.gaps.as_slice()),
-        )
-    }
-
-    fn build_alignment(
-        &self,
-        phylo: PhyloInfo<MSA>,
-        ideal_chars: Vec<Vec<usize>>,
-        gaps: Option<&[Vec<bool>]>,
-    ) -> PhyloInfo<MASA> {
-        let mut all_records = Vec::with_capacity(phylo.tree.len());
-        for leaf in phylo.tree.leaves() {
-            let original = phylo.msa.seqs().record_by_id(&leaf.id);
-            let aligned = aligned_seq!(phylo.msa.leaf_map(&leaf.idx), original.seq());
-            all_records.push(record!(&leaf.id, original.desc(), &aligned));
-        }
-        let alphabet = phylo.msa.seqs().alphabet();
-        //transform into letters
-        for node in phylo.tree.internals() {
-            let sequence: Vec<u8> = ideal_chars[usize::from(node.idx)]
-                .iter()
-                .enumerate()
-                .map(|(site, &state)| {
-                    if gaps.is_some_and(|g| g[usize::from(node.idx)][site]) {
-                        GAP
-                    } else {
-                        alphabet.symbols()[state]
-                    }
-                })
-                .collect();
-            all_records.push(record!(&node.id, None, &sequence));
-        }
-        let all_seqs = Sequences::with_alphabet_unchecked(all_records, alphabet);
-        MASA::from_aligned_with_ancestral_unchecked(all_seqs, phylo.tree)
-    }
 }
 
-impl<Q: QMatrix> AncestralSequenceReconstruction<MSA, MASA> for FastML<Q> {
-    fn reconstruct_ancestral_seqs(&self, mut phylo: PhyloInfo<MSA>) -> Result<PhyloInfo<MASA>> {
-        self.validate_input(&phylo)?;
-        let indels = self.reconstruct_indels(&phylo)?;
-        set_missing_tree_node_ids(&mut phylo.tree)?;
-
-        let states = self.selected_states(
-            &phylo,
-            if self.condition_on_gaps {
-                indels.as_ref()
-            } else {
-                None
-            },
-        )?;
-        Ok(self.finish(phylo, states, indels))
-    }
-
-    /// Requires matching alphabets, unique node IDs, finite nonnegative branches,
-    /// and a positive-probability reconstruction. Panics if inference fails.
-    fn reconstruct_ancestral_seqs_unchecked(&self, phylo: PhyloInfo<MSA>) -> PhyloInfo<MASA> {
-        let indels = self
-            .reconstruct_indels(&phylo)
-            .expect("FastML unchecked preconditions");
-        let states = self
-            .selected_states(
-                &phylo,
-                if self.condition_on_gaps {
-                    indels.as_ref()
-                } else {
-                    None
-                },
+fn selected_states<Q: QMatrix, AA: AncestralAlignment>(
+    model: &SubstModel<Q>,
+    mode: ReconstructionMode,
+    phylo: &PhyloInfo<AA>,
+    gaps: Option<&[Vec<bool>]>,
+) -> Vec<Vec<usize>> {
+    match mode {
+        ReconstructionMode::Joint => {
+            joint::infer(
+                phylo,
+                model.freqs().as_slice(),
+                &precompute_log_transitions(&model, &phylo.tree),
+                observations(phylo),
+                gaps,
             )
-            .expect("FastML unchecked preconditions");
-        self.finish(phylo, states, indels)
+            .0
+        }
+        ReconstructionMode::Marginal => marginal::infer(
+            phylo,
+            model.freqs().as_slice(),
+            &precompute_log_transitions(&model, &phylo.tree),
+            observations(phylo),
+            gaps,
+        )
+        .probabilities
+        .iter()
+        .map(|p| {
+            p.column_iter()
+                .map(|column| {
+                    let mut best = 0;
+                    for state in 1..column.len() {
+                        if column[state] > column[best] {
+                            best = state;
+                        }
+                    }
+                    best
+                })
+                .collect()
+        })
+        .collect(),
     }
 }
 
-mod fastml_large_tree_tests;
-#[cfg(test)]
+fn gap_mask<AA: AncestralAlignment>(phylo: &PhyloInfo<AA>) -> Vec<Vec<bool>> {
+    let mut gaps = vec![Vec::new(); phylo.tree.len()];
+    for node in phylo.tree.iter() {
+        let mapping = match node.idx {
+            crate::tree::NodeIdx::Leaf(_) => phylo.msa.leaf_map(&node.idx),
+            crate::tree::NodeIdx::Internal(_) => phylo.msa.ancestral_map(&node.idx),
+        };
+        gaps[usize::from(node.idx)] = mapping.iter().map(Option::is_none).collect();
+    }
+    gaps
+}
+
+fn build_alignment<AA: AncestralAlignment>(
+    phylo: PhyloInfo<AA>,
+    states: Vec<Vec<usize>>,
+) -> PhyloInfo<AA> {
+    let mut records = Vec::with_capacity(phylo.tree.len());
+    for leaf in phylo.tree.leaves() {
+        let original = phylo.msa.seqs().record_by_id(&leaf.id);
+        let aligned = aligned_seq!(phylo.msa.leaf_map(&leaf.idx), original.seq());
+        records.push(record!(&leaf.id, original.desc(), &aligned));
+    }
+    let alphabet = phylo.msa.seqs().alphabet();
+    for node in phylo.tree.internals() {
+        let idx = usize::from(node.idx);
+        let sequence: Vec<u8> = phylo
+            .msa
+            .ancestral_map(&node.idx)
+            .iter()
+            .enumerate()
+            .map(|(site, position)| {
+                if position.is_none() {
+                    GAP
+                } else {
+                    alphabet.symbols()[states[idx][site]]
+                }
+            })
+            .collect();
+        let original = phylo.msa.ancestral_seqs().record_by_id(&node.id);
+        records.push(record!(&node.id, original.desc(), &sequence));
+    }
+    let sequences = Sequences::with_alphabet_unchecked(records, alphabet);
+    AA::from_aligned_with_ancestral_unchecked(sequences, phylo.tree)
+}
+
+fn precompute_log_transitions<Q: QMatrix>(
+    model: &SubstModel<Q>,
+    tree: &Tree,
+) -> Vec<ProbabilityMatrix> {
+    let mut transitions = vec![DMatrix::zeros(0, 0); tree.len()];
+    for node in tree.iter() {
+        transitions[usize::from(node.idx)] = model.p(node.blen).map(|p| p.ln());
+    }
+    transitions
+}
+
+fn observations<A: Alignment>(phylo: &PhyloInfo<A>) -> Vec<ProbabilityMatrix> {
+    let k = phylo.msa.alphabet().len();
+    let mut observations = vec![DMatrix::from_element(k, phylo.msa.len(), 1.0); phylo.tree.len()];
+    for leaf in phylo.tree.leaves() {
+        let idx = usize::from(leaf.idx);
+        let record = phylo.msa.seqs().record_by_id(&leaf.id);
+        for (site, position) in phylo.msa.leaf_map(&leaf.idx).iter().enumerate() {
+            if let Some(position) = position {
+                observations[idx]
+                    .column_mut(site)
+                    .copy_from(phylo.msa.alphabet().char_encoding(record.seq()[*position]));
+            }
+        }
+    }
+    observations
+}
+
+impl<Q: QMatrix, AA: AncestralAlignment> AncestralSequenceReconstruction<AA, AA> for FastML<Q> {
+    // Validation belongs to the preceding pipeline stage for both entry points.
+    fn reconstruct_ancestral_seqs(&self, phylo: PhyloInfo<AA>) -> Result<PhyloInfo<AA>> {
+        Ok(self.reconstruct_ancestral_seqs_unchecked(phylo))
+    }
+
+    fn reconstruct_ancestral_seqs_unchecked(&self, phylo: PhyloInfo<AA>) -> PhyloInfo<AA> {
+        let gaps = gap_mask(&phylo);
+        let states = selected_states(&self.model, self.mode, &phylo, Some(&gaps));
+        build_alignment(phylo, states)
+    }
+}
+
+//will still apply gaps if there exist in AncestralALignment
+impl<Q: QMatrix, AA: AncestralAlignment> AncestralSequenceReconstruction<AA, AA>
+    for FastMLNoIndelsDuringInference<Q>
+{
+    // Validation belongs to the preceding pipeline stage for both entry points.
+    fn reconstruct_ancestral_seqs(&self, phylo: PhyloInfo<AA>) -> Result<PhyloInfo<AA>> {
+        Ok(self.reconstruct_ancestral_seqs_unchecked(phylo))
+    }
+
+    fn reconstruct_ancestral_seqs_unchecked(&self, phylo: PhyloInfo<AA>) -> PhyloInfo<AA> {
+        let states = selected_states(&self.model, self.mode, &phylo, None);
+        build_alignment(phylo, states)
+    }
+}
 mod tests;

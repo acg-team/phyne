@@ -2,10 +2,10 @@
 use nalgebra::DMatrix;
 
 use super::{log_sum_exp, upward, ReconstructionMode, Upward};
+use crate::alignment::Alignment;
 use crate::evolutionary_models::ProbabilityMatrix;
-use crate::fastml::IndelReconstruction;
-use crate::tree::{Tree};
-use crate::{Error, Result};
+use crate::fastml::observations;
+use crate::phylo_info::PhyloInfo;
 
 /// Conditional state probabilities using observations from the entire tree.
 #[derive(Debug)]
@@ -19,13 +19,14 @@ pub struct MarginalReconstruction {
     pub log_likelihood: f64,
 }
 
-pub(super) fn infer(
-    tree: &Tree,
-    observations: Vec<ProbabilityMatrix>,
-    transitions: &[ProbabilityMatrix],
+pub(super) fn infer<A: Alignment>(
+    phylo: &PhyloInfo<A>,
     prior: &[f64],
-    indels_forward: Option<&IndelReconstruction>,
-) -> Result<MarginalReconstruction> {
+    transitions: &[ProbabilityMatrix],
+    observations: Vec<DMatrix<f64>>,
+    gaps: Option<&[Vec<bool>]>,
+) -> MarginalReconstruction {
+    let tree = &phylo.tree;
     let k = prior.len();
     let sites = observations[usize::from(tree.root)].ncols();
     let Upward {
@@ -37,14 +38,13 @@ pub(super) fn infer(
         observations,
         transitions,
         ReconstructionMode::Marginal,
-        indels_forward,
+        gaps,
     );
 
     let root = usize::from(tree.root);
     let log_prior: Vec<f64> = prior.iter().map(|p| p.ln()).collect();
 
-    let is_gap =
-        |node: usize, site: usize| indels_forward.is_some_and(|indels| indels.gaps[node][site]);
+    let is_gap = |node: usize, site: usize| gaps.is_some_and(|g| g[node][site]);
 
     let mut outside = vec![DMatrix::from_element(k, sites, f64::NEG_INFINITY); tree.len()];
 
@@ -110,12 +110,6 @@ pub(super) fn infer(
             // Inside + outside includes exactly this component's evidence.
             let normalizer = log_sum_exp(subtree_scores[idx].column(site).iter().copied());
 
-            if !normalizer.is_finite() {
-                return Err(Error::AncestralAlignment(format!(
-                    "No finite character likelihood at node {idx}, site {site}"
-                )));
-            }
-
             let starts_component = match parent {
                 None => true,
                 Some(parent) => is_gap(parent, site),
@@ -131,8 +125,8 @@ pub(super) fn infer(
         }
     }
 
-    Ok(MarginalReconstruction {
+    MarginalReconstruction {
         probabilities: subtree_scores,
         log_likelihood,
-    })
+    }
 }

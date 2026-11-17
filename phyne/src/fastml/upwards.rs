@@ -18,7 +18,7 @@ pub(super) fn upward(
     observations: Vec<DMatrix<f64>>,
     transitions: &[ProbabilityMatrix],
     mode: ReconstructionMode,
-    indels_forward: Option<&IndelReconstruction>,
+    gaps: Option<&[Vec<bool>]>,
 ) -> Upward {
     let root = usize::from(tree.root);
     let k = observations[root].nrows();
@@ -51,7 +51,7 @@ pub(super) fn upward(
         let p = &transitions[idx];
         conditioned_scores[idx] = DMatrix::from_element(k, sites, f64::NEG_INFINITY);
         for site in 0..sites {
-            if indels_forward.is_some_and(|indels| indels.gaps[idx][site]) {
+            if gaps.is_some_and(|g| g[idx][site]) {
                 // Log(1): this subtree contributes no character evidence
                 // to the parent at this site.
                 conditioned_scores[idx].column_mut(site).fill(0.0);
@@ -76,7 +76,7 @@ pub(super) fn upward(
         }
         // Joint traceback only needs choices and the root's inside scores.
         // Releasing other inside matrices keeps the shared pass memory-efficient.
-        if mode == ReconstructionMode::Joint && indels_forward.is_none() {
+        if mode == ReconstructionMode::Joint && gaps.is_none() {
             subtree_scores[idx] = DMatrix::zeros(0, 0);
         }
     }
