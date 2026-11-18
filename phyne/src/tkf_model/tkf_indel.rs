@@ -689,106 +689,99 @@ pub(super) fn eta(l: f64, m: f64, ln_beta: f64, t: f64) -> f64 {
 
 /// Returns ln(1 - e^{-m*t} - m*beta).
 ///
+/// Is only used in [`crate::tkf_model::tkf_indel::eta`] and was just extracted to make the code cleaner.
+///
 /// Split as `u = term1 + term2 + term3` with `term1 = (l-m)*t`,
 /// `term2 = ln(B)` and `term3 = -ln(D)`, where
 /// `B = m*(1-e^{-l*t}) - l*(1-e^{-m*t})` and `D = m - l*e^{(l-m)*t}`.
-/// `ln(D)` is well conditioned for `l < m`. `ln(B)` needs three cases because
-/// `B` is a difference of the two nearly equal contributions `A` and `C`.
-/// Is only used in [`crate::tkf_model::tkf_indel::eta`] and was just extracted to make the code cleaner.
+/// `ln(D)` is well conditioned for `l < m`. `ln(B)` needs two cases because
+/// `B` can be a difference of the two nearly equal contributions `A` and `C`.
 pub(super) fn u(l: f64, m: f64, t: f64) -> f64 {
     // See https://github.com/MattesMrzik/tkf_mathematica for how this was found.
-    let (a, c, b) = bracket_terms(l, m, t);
-
-    let term2 = if relative_separation(a, b, c) >= MIN_REL_SEPARATION {
-        // Case 1: B is well separated from the rounding noise of A and C.
-        ln_b_direct(b)
-    } else if ln_b_short_time_truncation(l, m, t) <= TAU_U {
-        // Case 2: B is at rounding-noise level, but t is small enough for the t-series.
-        ln_b_short_time(l, m, t)
-    } else {
-        // Case 3: B is at rounding-noise level and the t-series is invalid, so l ~ m.
-        ln_b_close_rates(l, m, t)
-    };
-
-    term1(l, m, t) + term2 + term3(l, m, t)
-}
-
-/// Returns `term1 = (l - m) * t`.
-fn term1(l: f64, m: f64, t: f64) -> f64 {
-    (l - m) * t
-}
-
-/// Returns `term3 = -ln(D)` with `D = m - l*e^{(l-m)*t}`.
-///
-/// Uses `D = (m-l) - l*expm1((l-m)*t)`, which for `l < m` is a sum of
-/// two non-negative terms and hence has no cancellation.
-fn term3(l: f64, m: f64, t: f64) -> f64 {
-    -((m - l) - l * ((l - m) * t).exp_m1()).ln()
-}
-
-/// Returns `(A, C, B)` with `A = m*(1-e^{-l*t})`, `C = l*(1-e^{-m*t})`, `B = A - C`.
-pub(super) fn bracket_terms(l: f64, m: f64, t: f64) -> (f64, f64, f64) {
     let a = m * (-(-l * t).exp_m1());
     let c = l * (-(-m * t).exp_m1());
-    (a, c, a - c)
+
+    let term1 = (l - m) * t;
+    let term2 = if relative_separation(a, c) >= MIN_REL_SEPARATION {
+        // Case 1: B is well separated from the rounding noise of A and C.
+        (a - c).ln()
+    } else {
+        // Case 2: B is at the rounding-noise level; avoid forming it by subtraction.
+        ln_b_stable(l, m, t)
+    };
+
+    // m - l*e^{(l-m)*t}
+    let term3 = -((m - l) - l * ((l - m) * t).exp_m1()).ln();
+
+    term1 + term2 + term3
 }
 
 /// Returns `R = |B| / (A + C)`. `1/R` is the relative condition number of
 /// the subtraction `A - C`, so the relative error of `B` is about `eps / R`.
-pub(super) fn relative_separation(a: f64, b: f64, c: f64) -> f64 {
-    b.abs() / (a + c)
+pub(super) fn relative_separation(a: f64, c: f64) -> f64 {
+    (a - c).abs() / (a + c)
 }
 
-/// Case 1: `B` is well separated from the rounding noise, so `ln(B)` is accurate.
-pub(super) fn ln_b_direct(b: f64) -> f64 {
-    b.ln()
+/// Case 2: `B` is at the rounding-noise level, so it must not be formed by the
+/// subtraction. With `delta = m - l`, `x = l*t` and `y = delta*t`:
+/// `B = delta*h(x) + l*e^{-x}*(expm1(-y) + y)` with `h(x) = 1 - (1+x)e^{-x}`,
+/// hence `ln B = ln(delta) + ln(h) + ln1p(correction)` where
+/// `correction = l*e^{-x}*(expm1(-y)+y) / (delta*h)`.
+///
+/// The helpers below are evaluated in log space, so that `h ~ x^2/2` and
+/// `expm1(-y)+y ~ y^2/2` do not underflow for very small `x` or `y`.
+pub(super) fn ln_b_stable(l: f64, m: f64, t: f64) -> f64 {
+    let delta = m - l;
+    let ln_delta = delta.ln();
+    let ln_h = ln_h(l, t);
+    let ln_g = ln_g(delta, t);
+    let ln_correction = l.ln() - l * t + ln_g - ln_delta - ln_h;
+    // TODO: if we keep blens to at least epsilon then we could also use ln(delta h + l e^{-x} e)
+    ln_delta
+        + ln_h
+        + ln_1p_exp(ln_correction)
 }
 
-/// Case 2: first omitted term of the t-series of `ln(B)`, namely `(l^2 + l*m + m^2)*t^2/12`.
-pub(super) fn ln_b_short_time_truncation(l: f64, m: f64, t: f64) -> f64 {
-    (l * l + l * m + m * m) * t * t / 12.0
-}
-
-/// Case 2: small-time series for `ln(B)`:
-/// `ln B = ln(l*m*(m-l)*t^2/2) + ln1p(-(l+m)*t/3) + O(t^2)`.
-pub(super) fn ln_b_short_time(l: f64, m: f64, t: f64) -> f64 {
-    l.ln() + m.ln() + (m - l).ln() + 2.0 * t.ln() - std::f64::consts::LN_2
-        + (-(l + m) * t / 3.0).ln_1p()
-}
-
-/// Returns `h(x) = 1 - (1+x)*e^{-x} = x^2/2 - x^3/3 + x^4/8 - x^5/30 + O(x^6)`.
-pub(super) fn h_of_x(x: f64) -> f64 {
+/// Returns `ln(h(x))` with `h(x) = 1 - (1+x)*e^{-x}` and `x = l*t`.
+///
+/// `h(x) = x^2 * (1/2 - x/3 + x^2/8 - x^3/30 + x^4/144 + O(x^5))`.
+/// The series is evaluated in log space so that `x^2` cannot underflow.
+fn ln_h(l: f64, t: f64) -> f64 {
+    let x = l * t;
     if x < 1e-2 {
         // The direct expression would cancel for small x.
         let x2 = x * x;
-        x2 * (0.5 - x / 3.0 + x2 / 8.0 - x2 * x / 30.0)
+        let series = 0.5 - x / 3.0 + x2 / 8.0 - x2 * x / 30.0 + x2 * x2 / 144.0;
+        2.0 * (l.ln() + t.ln()) + series.ln()
     } else {
-        1.0 - (1.0 + x) * (-x).exp()
+        (1.0 - (1.0 + x) * (-x).exp()).ln()
     }
 }
 
-/// Returns `expm1(-y) + y = y^2/2 - y^3/6 + O(y^4)`, which is positive for `y > 0`.
-pub(super) fn expm1_neg_plus_y(y: f64) -> f64 {
+/// Returns `ln(g(y))` with `g(y) = expm1(-y) + y` and `y = delta*t`.
+///
+/// `g(y) = y^2 * (1/2 - y/6 + y^2/24 - y^3/120 + y^4/720 + O(y^5))`.
+/// Again in log space, to avoid underflow of `y^2`.
+fn ln_g(delta: f64, t: f64) -> f64 {
+    let y = delta * t;
     if y < 1e-2 {
         // expm1(-y) + y would cancel for small y.
-        y * y * (0.5 - y / 6.0)
+        let y2 = y * y;
+        let series = 0.5 - y / 6.0 + y2 / 24.0 - y2 * y / 120.0 + y2 * y2 / 720.0;
+        2.0 * (delta.ln() + t.ln()) + series.ln()
     } else {
-        (-y).exp_m1() + y
+        ((-y).exp_m1() + y).ln()
     }
 }
 
-/// Case 3: `l ~ m`. With `delta = m - l`, `x = l*t` and `y = delta*t`:
-/// `B = delta*h(x) + l*e^{-x}*(expm1(-y) + y)`, hence
-/// `ln B = ln(delta) + ln(h) + ln1p(correction)` with
-/// `correction = l*e^{-x}*(expm1(-y)+y) / (delta*h)`.
-pub(super) fn ln_b_close_rates(l: f64, m: f64, t: f64) -> f64 {
-    let delta = m - l;
-    let x = l * t;
-    let h = h_of_x(x);
-    let y = delta * t;
-    let e = expm1_neg_plus_y(y);
-    let correction = l * (-x).exp() * e / (delta * h);
-    delta.ln() + h.ln() + correction.ln_1p()
+/// Returns `ln(1 + e^ln_c)` without overflow.
+/// Underflow only causes absolute error smaller than epsilon in the additive space, so it is not a problem.
+fn ln_1p_exp(ln_c: f64) -> f64 {
+    if ln_c > 0.0 {
+        ln_c + (-ln_c).exp().ln_1p()
+    } else {
+        ln_c.exp().ln_1p()
+    }
 }
 
 /// Given the right exclusive block borders, returns the lengths of the blocks.
