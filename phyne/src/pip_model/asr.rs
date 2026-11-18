@@ -237,6 +237,10 @@ impl PIPIndels {
             .map(usize::from)
             .collect();
 
+        let mut both_children_extinct = tmp.extinct_subtree[children[0]].clone();
+        both_children_extinct.intersect_with(&tmp.extinct_subtree[children[1]]);
+        tmp.extinct_subtree[idx] = both_children_extinct;
+
         // Precompute potential values for f and p which might be overwritten by deletion and insertion processing
         // Assigning p first to avoid cloning child f values
         tmp.p[idx] += &tmp.f[children[0]] + &tmp.f[children[1]];
@@ -250,10 +254,6 @@ impl PIPIndels {
     }
 
     fn deletion_at_node_or_children(&self, idx: usize, children: &[usize], tmp: &mut PIPAsrInfo) {
-        let mut both_children_extinct = tmp.extinct_subtree[children[0]].clone();
-        both_children_extinct.intersect_with(&tmp.extinct_subtree[children[1]]);
-        tmp.extinct_subtree[idx] = both_children_extinct;
-
         for col in tmp.extinct_subtree[idx].ones() {
             // this subtree is extinct, so no insertion can occur here
             tmp.p[idx][col] = f64::NEG_INFINITY;
