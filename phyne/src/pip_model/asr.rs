@@ -166,7 +166,7 @@ impl PIPIndels {
     /// all sites.
     fn reconstruct_presence(&self, phylo: &PhyloInfo<impl Alignment>) -> Vec<FixedBitSet> {
         let mut tmp = PIPAsrInfo::new(self.mu, phylo);
-        // bottom up pass to fill in deletion and insertion sets
+        // Bottom up pass to fill in deletion and insertion sets
         for node_idx in phylo.tree.postorder() {
             match node_idx {
                 Internal(_) => {
@@ -178,7 +178,7 @@ impl PIPIndels {
             };
         }
 
-        // top down pass to determine character presence at each node
+        // Top down pass to determine character presence at each node
         for node_idx in phylo.tree.preorder() {
             match node_idx {
                 Internal(_) => {
@@ -211,14 +211,14 @@ impl PIPIndels {
         tmp.p[idx].fill(tmp.insert_and_survive_probs[idx]);
 
         for col in tmp.extinct_subtree[idx].ones() {
-            // extinct at leaf means potential deletion set
+            // Extinct at leaf means potential deletion set
             tmp.p[idx][col] = f64::NEG_INFINITY;
             tmp.f[idx][col] = tmp.deletion_probs[idx];
             tmp.deletion_locations[col].set(idx, true);
         }
 
         for col in tmp.extinct_subtree[idx].zeroes() {
-            // present at leaf means potential insertion set (A)
+            // Present at leaf means potential insertion set (A)
             tmp.insertion_location[col] = idx;
         }
     }
@@ -255,7 +255,7 @@ impl PIPIndels {
 
     fn deletion_at_node_or_children(&self, idx: usize, children: &[usize], tmp: &mut PIPAsrInfo) {
         for col in tmp.extinct_subtree[idx].ones() {
-            // this subtree is extinct, so no insertion can occur here
+            // This subtree is extinct, so no insertion can occur here
             tmp.p[idx][col] = f64::NEG_INFINITY;
             if tmp.f[idx][col] < tmp.deletion_probs[idx] {
                 // deletion at node is more probable than deletion in children
@@ -273,20 +273,20 @@ impl PIPIndels {
 
         for col in tmp.extinct_subtree[idx].zeroes() {
             if !ch1[col] && !ch2[col] {
-                // both children potentially in set A, therefore neither can be an insertion
+                // Both children potentially in set A, therefore neither can be an insertion
                 tmp.insertion_location[col] = idx;
             } else if !ch1[col] {
-                // only child 1 is in set A (potential insertion locations)
+                // Only child 1 is in set A (potential insertion locations)
                 if tmp.p[children[0]][col] >= tmp.p[idx][col] {
-                    // insertion in child 1 is more likely
+                    // Insertion in child 1 is more likely
                     tmp.p[idx][col] = tmp.p[children[0]][col];
                 } else {
                     tmp.insertion_location[col] = idx;
                 }
             } else if !ch2[col] {
-                // only child 2 is in set A (potential insertion locations)
+                // Only child 2 is in set A (potential insertion locations)
                 if tmp.p[children[1]][col] >= tmp.p[idx][col] {
-                    // insertion in child 2 is more likely
+                    // Insertion in child 2 is more likely
                     tmp.p[idx][col] = tmp.p[children[1]][col];
                 } else {
                     tmp.insertion_location[col] = idx;
@@ -303,20 +303,20 @@ impl PIPIndels {
     ) {
         let idx = usize::from(node_idx);
 
-        // mark columns as present if they are inherited from the parent
+        // Mark columns as present if they are inherited from the parent
         if let Some(parent_idx) = phylo.tree.node(node_idx).parent {
             let present_in_parent = tmp.presence[usize::from(parent_idx)].clone();
             tmp.presence[idx].union_with(&present_in_parent);
         }
 
-        // mark columns as present if the insertion occurred at this node
+        // Mark columns as present if the insertion occurred at this node
         for col in tmp.extinct_subtree[idx].zeroes() {
             if tmp.insertion_location[col] == idx {
                 tmp.presence[idx].set(col, true);
             }
         }
 
-        // mark columns as absent if the deletion occurred at this node
+        // Mark columns as absent if the deletion occurred at this node
         for col in tmp.extinct_subtree[idx].ones() {
             if tmp.deletion_locations[col][idx] {
                 tmp.presence[idx].set(col, false);
