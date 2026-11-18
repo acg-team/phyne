@@ -237,12 +237,13 @@ impl PIPIndels {
             .map(usize::from)
             .collect();
 
-        // Precompute potential values for f and p. They might be overwritten by deletion and insertion processing
-        tmp.f[idx] = tmp.f[children[0]].clone() + tmp.f[children[1]].clone();
-        tmp.f[idx].add_scalar_mut(tmp.pure_survival_probs[idx]);
+        // Precompute potential values for f and p which might be overwritten by deletion and insertion processing
+        // Assigning p first to avoid cloning child f values
+        tmp.p[idx] += &tmp.f[children[0]] + &tmp.f[children[1]];
+        tmp.f[idx] += &tmp.p[idx];
 
-        tmp.p[idx] = tmp.f[children[0]].clone() + tmp.f[children[1]].clone();
         tmp.p[idx].add_scalar_mut(tmp.insert_and_survive_probs[idx]);
+        tmp.f[idx].add_scalar_mut(tmp.pure_survival_probs[idx]);
 
         self.deletion_at_node_or_children(idx, &children, tmp);
         self.potential_insertion_at_node(idx, &children, tmp);
