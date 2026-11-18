@@ -249,7 +249,11 @@ impl PIPIndels {
         tmp.p[idx].add_scalar_mut(tmp.insert_and_survive_probs[idx]);
         tmp.f[idx].add_scalar_mut(tmp.pure_survival_probs[idx]);
 
+        // Determine if a deletion is more likely at this node or in its children,
+        // overwrites potential `f` and `p` values and deletion locations based on deletion likelihood.
         self.deletion_at_node_or_children(idx, &children, tmp);
+        // Determine if an insertion at this node is more likely than any previous potential insertion location,
+        // overwrites potential insertion likelihood `p` and insertion location if necessary.
         self.potential_insertion_at_node(idx, &children, tmp);
     }
 
