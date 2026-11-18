@@ -11,6 +11,8 @@ use crate::record;
 use crate::substitution_models::QMatrix;
 use crate::tree::NodeIdx::{self, Internal, Leaf};
 
+/// Most likely homology path (insertion and deletion location) inference under the PIP model.
+///
 /// Reconstructs ancestral wild card sequences, i.e. instead of the usual reconstruction that
 /// returns sequences with characters of the alphabet, this returns the presence or absence of
 /// any character at a site. These are represented in an [`AncestralAlignment`] as sequences of
