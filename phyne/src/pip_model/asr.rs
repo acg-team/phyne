@@ -35,7 +35,7 @@ pub struct PIPIndels {
 
 /// Stores temporary information used during the PIP ancestral sequence reconstruction.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct PIPAsrInfo {
+struct PIPAsrInfo {
     /// Log deletion probabilities ln(delta(v)) per node v (single value per branch), computed as
     /// ln(1 - exp(-mu * b(v))) for non-root nodes and -inf for the root node.
     deletion_probs: Vec<f64>,
@@ -113,7 +113,7 @@ fn insert_and_survive_probabilities(mu: f64, info: &PhyloInfo<impl Alignment>) -
 }
 
 impl PIPAsrInfo {
-    pub fn new(mu: f64, info: &PhyloInfo<impl Alignment>) -> Self {
+    fn new(mu: f64, info: &PhyloInfo<impl Alignment>) -> Self {
         let node_count = info.tree.len();
         let msa_length = info.msa.len();
         PIPAsrInfo {
