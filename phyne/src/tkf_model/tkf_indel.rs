@@ -737,9 +737,7 @@ pub(super) fn ln_b_stable(l: f64, m: f64, t: f64) -> f64 {
     let ln_g = ln_g(delta, t);
     let ln_correction = l.ln() - l * t + ln_g - ln_delta - ln_h;
     // TODO: if we keep blens to at least epsilon then we could also use ln(delta h + l e^{-x} e)
-    ln_delta
-        + ln_h
-        + ln_1p_exp(ln_correction)
+    ln_delta + ln_h + ln_1p_exp(ln_correction)
 }
 
 /// Returns `ln(h(x))` with `h(x) = 1 - (1+x)*e^{-x}` and `x = l*t`.
