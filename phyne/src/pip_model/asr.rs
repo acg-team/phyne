@@ -272,14 +272,11 @@ impl PIPIndels {
     }
 
     fn potential_insertion_at_node(&self, idx: usize, children: &[usize], tmp: &mut PIPAsrInfo) {
-        let ch1 = tmp.extinct_subtree[children[0]].clone();
-        let ch2 = tmp.extinct_subtree[children[1]].clone();
-
         for col in tmp.extinct_subtree[idx].zeroes() {
-            if !ch1[col] && !ch2[col] {
+            if !tmp.extinct_subtree[children[0]][col] && !tmp.extinct_subtree[children[1]][col] {
                 // Both children potentially in set A, therefore neither can be an insertion
                 tmp.insertion_location[col] = idx;
-            } else if !ch1[col] {
+            } else if !tmp.extinct_subtree[children[0]][col] {
                 // Only child 1 is in set A (potential insertion locations)
                 if tmp.p[children[0]][col] >= tmp.p[idx][col] {
                     // Insertion in child 1 is more likely
@@ -287,7 +284,7 @@ impl PIPIndels {
                 } else {
                     tmp.insertion_location[col] = idx;
                 }
-            } else if !ch2[col] {
+            } else if !tmp.extinct_subtree[children[1]][col] {
                 // Only child 2 is in set A (potential insertion locations)
                 if tmp.p[children[1]][col] >= tmp.p[idx][col] {
                     // Insertion in child 2 is more likely
