@@ -31,6 +31,32 @@ use crate::tree::NodeIdx::{self, Internal, Leaf};
 /// event locations, i.e. a character first appears at the node corresponding to the insertion location and is
 /// absent in the whole subtree below the deletion location. The homology paths of characters under the PIP
 /// model follow the Dollo principle, where a character can be gained only once and does not reappear once deleted.
+///
+/// Example:
+/// ```
+/// use phyne::alignment::{Alignment, AncestralAlignment, MASA, MSA, Sequences};
+/// use phyne::asr::AncestralSequenceReconstruction;
+/// use phyne::phylo_info::{PhyloInfo, PhyloInfoBuilder};
+/// use phyne::pip_model::{PIPIndels, PIPModel};
+/// use phyne::substitution_models::JC69;
+/// use phyne::{record, tree};
+/// # use phyne::Result;
+///
+/// # fn main() -> Result<()> {
+///     let tree = tree!("(((L3:0.01,L4:1.0)I2:1.0,L5:0.01)I1:1.0,L6:1.0)I0:0.0;");
+///     let sequences = Sequences::new(vec![
+///         record!("L3", Some("L3 sequence"), b"A"),
+///         record!("L4", Some("L4 sequence"), b"-"),
+///         record!("L5", Some("L5 sequence"), b"-"),
+///         record!("L6", Some("L6 sequence"), b"-"),
+///     ])?;
+///     let info = MSA::from_aligned(sequences, tree)?;
+///     let asr = PIPIndels::new(&PIPModel::<JC69>::with_default_substitution(&[1.0, 0.1])?);
+///     let reconstruction: PhyloInfo<MASA> = asr.reconstruct_ancestral_seqs(info)?;
+///     assert_eq!(reconstruction.msa.ancestral_seqs().len(), 3);
+/// # Ok(())
+/// # }
+/// ```
 pub struct PIPIndels {
     /// Deletion rate parameter of the PIP model.
     mu: f64,
