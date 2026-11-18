@@ -30,6 +30,7 @@ use crate::tree::NodeIdx::{self, Internal, Leaf};
 /// absent in the whole subtree below the deletion location. The homology paths of characters under the PIP
 /// model follow the Dollo principle, where a character can be gained only once and does not reappear once deleted.
 pub struct PIPIndels {
+    /// Deletion rate parameter of the PIP model.
     mu: f64,
 }
 
@@ -113,6 +114,8 @@ fn insert_and_survive_probabilities(mu: f64, info: &PhyloInfo<impl Alignment>) -
 }
 
 impl PIPAsrInfo {
+    /// Constructs a new `PIPAsrInfo` instance with precomputed column-independent probabilities.
+    /// All potential insertion locations are initialised to the root of the tree.
     fn new(mu: f64, info: &PhyloInfo<impl Alignment>) -> Self {
         let node_count = info.tree.len();
         let msa_length = info.msa.len();
@@ -195,6 +198,10 @@ impl PIPIndels {
         tmp.presence
     }
 
+    /// Sets the values for a leaf node based on its observed character states and the model parameters.
+    /// Computes the potential values for `f` and `p` at the leaf.
+    /// Sets the potential insertion node and deletion node set given the observed characters (potential insertion
+    /// if a character is present, potential deletion if absent).
     fn set_leaf_values(
         &self,
         phylo: &PhyloInfo<impl Alignment>,
@@ -223,6 +230,9 @@ impl PIPIndels {
         }
     }
 
+    /// Sets the values for an internal node based on its children's states and the model parameters.
+    /// Computes the potential values for `f` and `p` at this node before considering deletions and insertions.
+    /// Computes the potential insertion node and deletion node set for the current best homology path per column.
     fn set_internal_values(
         &self,
         phylo: &PhyloInfo<impl Alignment>,
@@ -257,6 +267,17 @@ impl PIPIndels {
         self.potential_insertion_at_node(idx, &children, tmp);
     }
 
+    /// At the current node in the tree, determines if an deletion is more likely at this node or in both of
+    /// its children.
+    ///
+    /// Dependent on:
+    /// - tmp.extinct_subtree
+    /// - tmp.f
+    ///
+    /// For each extinct column `col` at node `idx` modifies:
+    /// - tmp.p[idx][col]
+    /// - tmp.f[idx][col]
+    /// - tmp.deletion_locations[col]
     fn deletion_at_node_or_children(&self, idx: usize, children: &[usize], tmp: &mut PIPAsrInfo) {
         for col in tmp.extinct_subtree[idx].ones() {
             // This subtree is extinct, so no insertion can occur here
@@ -271,6 +292,21 @@ impl PIPIndels {
         }
     }
 
+    /// At the current node in the tree, determines if an insertion is more likely at this node or in either of
+    /// its children.
+    /// If both children were considered as potential insertion locations, neither can be chosen and the
+    /// current node becomes the best candidate for insertion.
+    /// If only one child is considered as a potential insertion location, the insertion is placed there if it has a
+    /// higher probability than the current node, the insertion location is kept and the insertion probability at
+    /// this node is replaced with the probability of the insertion in the child.
+    ///
+    /// Dependent on:
+    /// - tmp.extinct_subtree
+    /// - tmp.p
+    ///
+    /// For each non-extinct column `col` at node `idx` modifies:
+    /// - tmp.p[idx][col]
+    /// - tmp.insertion_location[col]
     fn potential_insertion_at_node(&self, idx: usize, children: &[usize], tmp: &mut PIPAsrInfo) {
         for col in tmp.extinct_subtree[idx].zeroes() {
             if !tmp.extinct_subtree[children[0]][col] && !tmp.extinct_subtree[children[1]][col] {
@@ -296,6 +332,8 @@ impl PIPIndels {
         }
     }
 
+    /// Sets the presence of columns at an internal node based on inheritance from the parent,
+    /// insertions at this node, and deletions at this node.
     fn set_internal_presence(
         &self,
         phylo: &PhyloInfo<impl Alignment>,
