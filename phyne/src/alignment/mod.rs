@@ -901,6 +901,7 @@ impl MASA {
     }
 }
 
+/// For a given ancestral alignment, prints a warning if there are columns that go extinct in all leaf sequences.
 fn warn_on_extinct_columns(masa: &impl AncestralAlignment) {
     let surviving = surviving_columns_mask(masa);
     if !surviving.is_full() {
