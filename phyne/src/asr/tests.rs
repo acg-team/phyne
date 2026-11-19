@@ -24,3 +24,18 @@ fn reconstruct_ancestral_seqs_invalid_internal_ids() {
         Err(Error::Tree(msg)) if msg.contains("duplicate node id (I)")
     );
 }
+
+#[test]
+fn reconstruct_ancestral_seqs_single_node() {
+    let tree = tree!("(A:1.0);");
+    let seqs = Sequences::new_unchecked(vec![record!("A", b"AA--AAA")]);
+    let phylo = MSA::from_aligned_unchecked(seqs, tree);
+    let asr = ParsimonyPresenceAbsence {};
+
+    let err: Result<PhyloInfo<MASA>> = asr.reconstruct_ancestral_seqs(phylo);
+
+    assert_matches!(
+        err,
+        Err(Error::AncestralAlignment(msg)) if msg.contains("cannot reconstruct ancestral sequences for a tree with only one node.")
+    );
+}

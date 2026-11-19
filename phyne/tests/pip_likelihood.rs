@@ -6,7 +6,7 @@ use phyne::pip_model::{PIPCostBuilder, PIPModel};
 use phyne::substitution_models::GTR;
 
 #[test]
-
+#[cfg_attr(feature = "ci_coverage", ignore)]
 fn hiv_subset_valid_pip_likelihood() {
     let fldr = Path::new("./data/real_examples/");
     let alignment = fldr.join("HIV-1_env_DNA_mafft_alignment_subset.fasta");

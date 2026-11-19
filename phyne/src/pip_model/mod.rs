@@ -21,6 +21,11 @@ use crate::tree::{
 };
 use crate::{bail, Result};
 
+#[doc(hidden)]
+pub mod asr;
+#[doc(inline)]
+pub use asr::PIPIndels;
+
 /// (2.0 * PI).ln() / 2.0 = 0.9189385332046727;
 pub static SHIFT: f64 = 0.9189385332046727;
 

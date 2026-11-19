@@ -124,4 +124,5 @@ fn non_empty_clades<A: Alignment>(phylo: &PhyloInfo<A>, site: usize) -> Vec<bool
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage, coverage(off))]
 mod tests;

@@ -197,6 +197,7 @@ impl ExpectedRootLength for TKF91IndelModel {
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage, coverage(off))]
 mod private_tests {
     use assert_matches::assert_matches;
     use rstest::rstest;

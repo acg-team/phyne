@@ -245,4 +245,5 @@ mod tkf92_fixed_fragmentation;
 pub use tkf92_fixed_fragmentation::*;
 
 #[cfg(test)]
+#[cfg_attr(coverage, coverage(off))]
 mod tkf_numerical_tests;

@@ -5,6 +5,7 @@ use phyne::phylo_info::PhyloInfoBuilder;
 use phyne::substitution_models::{SubstModel, SubstitutionCostBuilder, GTR};
 
 #[test]
+#[cfg_attr(feature = "ci_coverage", ignore)]
 fn hiv_subset_valid_subst_likelihood() {
     let fldr = Path::new("./data/real_examples/");
     let alignment = fldr.join("HIV-1_env_DNA_mafft_alignment_subset.fasta");

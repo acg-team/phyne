@@ -499,4 +499,5 @@ impl<'a> ParsimonyAlignmentMatrices<'a> {
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage, coverage(off))]
 mod tests;
