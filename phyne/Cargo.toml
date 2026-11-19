@@ -54,7 +54,6 @@ cfg-if = "1.0.0"
 clap = { version = "4.5.28", features = ["derive"] }
 dyn-clone = "1.0.18"
 fixedbitset = "0.5.7"
-ftail = "0.2.0"
 hashbrown = "0.15.2"
 itertools = "0.14.0"
 lazy_static = "1.4.0"
