@@ -39,6 +39,8 @@ pub struct PairwiseAlignment {
     pub(crate) map_y: Mapping,
 }
 
+/// Translates a `Mapping` to a `FixedBitSet` where positions that are `Some` are set to `true`.
+/// E.g. for the mapping `[Some(0), None, Some(1)]`, the resulting `FixedBitSet` will have bits `101`.
 pub(crate) fn mapping_to_bits(mapping: &Mapping) -> FixedBitSet {
     let mut bits = FixedBitSet::with_capacity(mapping.len());
     for (i, pos) in mapping.iter().enumerate() {
