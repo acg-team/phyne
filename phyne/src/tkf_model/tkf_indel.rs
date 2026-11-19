@@ -555,36 +555,16 @@ impl<T: TKFModel, AA: AncestralAlignment> TreeSearchCost for TKFIndelCost<T, AA>
         }
         drop(model_info);
 
-        let update_due_to_nni = dirty_nodes.len() == 1 && {
-            // check if children of the dirty node are different than before
-            let mut previous_children = self.phylo.tree.nodes[dirty_nodes[0]]
-                .children
-                .iter()
-                .collect_vec();
-            let mut new_children = tree.nodes[dirty_nodes[0]].children.iter().collect_vec();
-            previous_children.sort();
-            new_children.sort();
-
-            previous_children != new_children
-        };
+        // We have to call this before setting the new tree.
+        let update_reason = update_reason(&self.phylo.tree, &tree, &dirty_nodes);
         self.phylo.tree = tree;
-        if update_due_to_nni {
-            let v2 = self.tree().nodes[dirty_nodes[0]].idx;
 
-            // Since the topology changed we must also mark the children of affected nodes as dirty,
-            // because their parent changed and thus their TKF events may have changed.
-            let mut nodes_to_invalidate = self.phylo.tree.node(&v2).children.clone();
-            if let Some(sibling) = self.phylo.tree.sibling(&v2) {
-                nodes_to_invalidate.push(sibling);
-            }
-            let mut model_info = self.model_info.borrow_mut();
-            for node_idx in nodes_to_invalidate {
-                let idx = usize::from(node_idx);
-                model_info.valid.set(idx, false);
-                model_info.valid_for_reestimation.set(idx, false);
-            }
-            drop(model_info);
-
+        if let TreeUpdateReason::NNI(v2) = update_reason {
+            // The tree movers mark nodes as dirty assuming the cost is marginalized over the
+            // ancestral sequences, but for the TKF indel cost we include a specific ancestral alignment
+            // and therefore after a tree move the direct children of affected nodes by the move
+            // are also dirty, because their events may have changed.
+            invalidate_nodes_after_nni(&self.phylo.tree, &mut self.model_info.borrow_mut(), &v2);
             // TODO: For now we use the FakeGenerator to have deterministic behavior, but in the future
             // we should use a proper RNG here. But pass the RNG from outside and not
             // create a new one each time, see issue #142 https://github.com/acg-team/phyne/issues/142
@@ -598,6 +578,49 @@ impl<T: TKFModel, AA: AncestralAlignment> TreeSearchCost for TKFIndelCost<T, AA>
 
     fn tree(&self) -> &Tree {
         &self.phylo.tree
+    }
+}
+
+enum TreeUpdateReason {
+    /// The tree was updated and topology changed due to a NNI move; contains the child node of the NNI edge.
+    /// Other topology changes are not supported yet, see [`crate::optimisers::Compatible`].
+    #[allow(clippy::upper_case_acronyms)]
+    NNI(NodeIdx),
+    /// The tree was updated, but topology did not change (e.g., branch length update).
+    Other,
+}
+
+fn update_reason(prev_tree: &Tree, new_tree: &Tree, dirty_nodes: &[usize]) -> TreeUpdateReason {
+    if dirty_nodes.len() != 1 {
+        return TreeUpdateReason::Other;
+    }
+    let dirty_node_id = dirty_nodes[0];
+    let dirty_node_idx = prev_tree.nodes[dirty_node_id].idx;
+    let mut previous_children = prev_tree.children(&dirty_node_idx).iter().collect_vec();
+    let mut new_children = new_tree.children(&dirty_node_idx).iter().collect_vec();
+    previous_children.sort();
+    new_children.sort();
+
+    if previous_children != new_children {
+        TreeUpdateReason::NNI(dirty_node_idx)
+    } else {
+        TreeUpdateReason::Other
+    }
+}
+
+fn invalidate_nodes_after_nni(tree: &Tree, model_info: &mut TKFIndelModelInfo, v2: &NodeIdx) {
+    // The tree movers mark nodes as dirty assuming the cost is marginalized over the
+    // ancestral sequences, but for TKF indel cost we include a specific ancestral alignment
+    // and therefore after a tree move direct child nodes of the nodes affected by the move
+    // are also dirty, because their events may have changed.
+    let mut nodes_to_invalidate = tree.node(v2).children.clone();
+    if let Some(sibling) = tree.sibling(v2) {
+        nodes_to_invalidate.push(sibling);
+    }
+    for node_idx in nodes_to_invalidate {
+        let idx = usize::from(node_idx);
+        model_info.valid.set(idx, false);
+        model_info.valid_for_reestimation.set(idx, false);
     }
 }
 

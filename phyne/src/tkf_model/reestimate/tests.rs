@@ -4,6 +4,9 @@ use fixedbitset::FixedBitSet;
 
 use crate::alignment::{AncestralAlignment, Sequences, MASA};
 use crate::alphabets::Alphabet;
+use crate::likelihood::TreeSearchCost;
+use crate::optimisers::rooted_nni;
+use crate::phylo_info::PhyloInfo;
 use crate::random::FakeGenerator;
 use crate::tkf_model::reestimate::mapping_from_node_seq;
 use crate::tkf_model::tests::setup_test_phylo;
@@ -43,6 +46,65 @@ fn tkf_reestimate_without_choice() {
         .borrow()
         .valid_for_reestimation
         .is_full());
+}
+
+/// Reproduces the stale-logl bug: after an NNI move the parent of `A1` and `C4` changes,
+/// so their TKF events change, but their tmp values are not invalidated in
+/// `TKFIndelCost::update_tree`. If the re-estimation leaves the ancestral mappings unchanged,
+/// `reestimate_unchecked` returns the stale logl that was computed before the re-estimation.
+#[test]
+fn tkf_nni_with_unchanged_mappings_does_not_return_stale_logl() {
+    let tree = tree!("(((A1:0.5,B2:1e-6)I3:1.0,C4:2.0)R5:1.0);");
+    // Before the NNI (A1 is a child of I3 which has a char at this column):
+    //   I3 -> A1 is a deletion, I3 -> B2 a homolog, R5 -> C4 nothing.
+    // After the NNI (A1 becomes a child of R5 which has a gap):
+    //   R5 -> A1 is nothing and I3 -> C4 is a deletion, so the events changed, but the
+    //   ancestral mapping is still Dollo compatible and therefore unchanged.
+    // The branches of A1 and C4 differ on purpose, otherwise their swapped event factors
+    // would cancel out and mask the stale logl.
+    let phylo = MASA::from_aligned_with_ancestral(
+        Sequences::new_unchecked(vec![
+            record!("A1", b"-"),
+            record!("B2", b"A"),
+            record!("C4", b"-"),
+            record!("I3", b"N"),
+            record!("R5", b"-"),
+        ]),
+        tree,
+    )
+    .unwrap();
+    let tkf_indel_model = TKF92IndelModel::new(&[0.4, 0.5, 0.8]).unwrap();
+    let mut cost = TKFIndelCostBuilder::new(tkf_indel_model.clone(), phylo.clone()).build();
+    let original_masa = cost.phylo.msa.clone();
+    assert!(TreeSearchCost::cost(&cost).is_finite());
+
+    let node_idx = phylo.tree.by_id("I3").idx;
+    let child_idx = phylo.tree.by_id("A1").idx;
+    let new_tree = rooted_nni(&phylo.tree, &node_idx, &child_idx).unwrap();
+    cost.update_tree(new_tree);
+
+    // The mappings should not have changed, i.e. we exercise the stale-logl branch.
+    let i3_idx = cost.phylo.tree.by_id("I3").idx;
+    let r5_idx = cost.phylo.tree.by_id("R5").idx;
+    assert_eq!(
+        cost.phylo.msa.ancestral_map(&i3_idx),
+        original_masa.ancestral_map(&i3_idx)
+    );
+    assert_eq!(
+        cost.phylo.msa.ancestral_map(&r5_idx),
+        original_masa.ancestral_map(&r5_idx)
+    );
+
+    let new_phylo = PhyloInfo {
+        msa: cost.phylo.msa.clone(),
+        tree: cost.tree().clone(),
+    };
+    let clean_cost = TKFIndelCostBuilder::new(tkf_indel_model, new_phylo).build();
+    assert_relative_eq!(
+        TreeSearchCost::cost(&cost),
+        TreeSearchCost::cost(&clean_cost),
+        epsilon = 1e-10
+    );
 }
 
 #[test]
