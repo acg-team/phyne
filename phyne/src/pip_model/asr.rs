@@ -639,6 +639,99 @@ mod tests {
     }
 
     #[test]
+    fn insertion_higher_than_leaf_other_child() {
+        let tree = tree!("((L2:1.0,L3:0.1)I1:10.0,L4:5.0)I0:0.0;");
+        let sequences = Sequences::new_unchecked(vec![
+            record!("L2", b"-"),
+            record!("L3", b"A"),
+            record!("L4", b"-"),
+        ]);
+
+        let asr = PIPIndels::new(&pip(1.0));
+
+        let phylo = asr
+            .reconstruct_ancestral_seqs(MSA::from_aligned_unchecked(sequences, tree))
+            .unwrap();
+        let ancestral: MASA = phylo.msa;
+        let tree = &phylo.tree;
+
+        // not present at I0 (root)
+        assert!(ancestral.ancestral_map(&tree.by_id("I0").idx)[0].is_none());
+        // present at I1 (inserted)
+        assert!(ancestral.ancestral_map(&tree.by_id("I1").idx)[0].is_some());
+        // present at L3 (inherited, observed)
+        assert!(ancestral.leaf_map(&tree.by_id("L3").idx)[0].is_some());
+
+        // not present at L2, L4 (deleted, observed)
+        for id in ["L2", "L4"] {
+            let leaf = tree.by_id(id);
+            assert!(ancestral.leaf_map(&leaf.idx)[0].is_none());
+        }
+    }
+
+    #[test]
+    fn insertion_above_clade() {
+        let tree = tree!("((L2:0.001,L3:1.0)I1:10.0,(L4:5.0,L5:1.0)I2:1.0)I0:0.0;");
+        let sequences = Sequences::new_unchecked(vec![
+            record!("L2", b"A"),
+            record!("L3", b"A"),
+            record!("L4", b"-"),
+            record!("L5", b"-"),
+        ]);
+
+        let asr = PIPIndels::new(&pip(1.0));
+
+        let phylo = asr
+            .reconstruct_ancestral_seqs(MSA::from_aligned_unchecked(sequences, tree))
+            .unwrap();
+        let ancestral: MASA = phylo.msa;
+        let tree = &phylo.tree;
+
+        // not present at I0 (root)
+        assert!(ancestral.ancestral_map(&tree.by_id("I0").idx)[0].is_none());
+        // present at I1 (inserted)
+        assert!(ancestral.ancestral_map(&tree.by_id("I1").idx)[0].is_some());
+        // present at L2 (inherited, observed)
+        assert!(ancestral.leaf_map(&tree.by_id("L2").idx)[0].is_some());
+        // present at L3 (inherited, observed)
+        assert!(ancestral.leaf_map(&tree.by_id("L3").idx)[0].is_some());
+        // absent at L4 (non-existant, observed)
+        assert!(ancestral.leaf_map(&tree.by_id("L4").idx)[0].is_none());
+        // absent at L5 (non-existant, observed)
+        assert!(ancestral.leaf_map(&tree.by_id("L5").idx)[0].is_none());
+    }
+
+    #[test]
+    fn insertion_at_root_all_chars_extant() {
+        let tree = tree!("((L2:0.001,L3:1.0)I1:10.0,(L4:5.0,L5:1.0)I2:1.0)I0:0.0;");
+        let sequences = Sequences::new_unchecked(vec![
+            record!("L2", b"A"),
+            record!("L3", b"A"),
+            record!("L4", b"A"),
+            record!("L5", b"A"),
+        ]);
+
+        let asr = PIPIndels::new(&pip(1.0));
+
+        let phylo = asr
+            .reconstruct_ancestral_seqs(MSA::from_aligned_unchecked(sequences, tree))
+            .unwrap();
+        let ancestral: MASA = phylo.msa;
+        let tree = &phylo.tree;
+
+        // present at I0 (root)
+        assert!(ancestral.ancestral_map(&tree.by_id("I0").idx)[0].is_some());
+        // present at I1 (inserted)
+        assert!(ancestral.ancestral_map(&tree.by_id("I1").idx)[0].is_some());
+
+        // present at all leaves (inherited, observed)
+        for id in ["L2", "L3", "L4", "L5"] {
+            let leaf = tree.by_id(id);
+            assert!(ancestral.leaf_map(&leaf.idx)[0].is_some());
+        }
+    }
+
+    #[test]
     fn insertion_at_i2() {
         let tree = tree!("(((L3:0.01,L4:1.0)I2:1.0,L5:0.01)I1:1.0,L6:1.0)I0:0.0;");
         let sequences = Sequences::new_unchecked(vec![
