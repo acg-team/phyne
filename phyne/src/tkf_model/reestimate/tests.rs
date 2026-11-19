@@ -7,7 +7,7 @@ use crate::alphabets::Alphabet;
 use crate::random::FakeGenerator;
 use crate::tkf_model::reestimate::mapping_from_node_seq;
 use crate::tkf_model::tests::setup_test_phylo;
-use crate::tkf_model::{EdgeSeqsReestimator, TKF92IndelCostBuilder};
+use crate::tkf_model::{EdgeSeqsReestimator, TKF92IndelModel, TKFIndelCostBuilder};
 use crate::{record_wo_desc as record, tree, Error};
 
 #[test]
@@ -28,9 +28,8 @@ fn tkf_reestimate_without_choice() {
         tree,
     )
     .unwrap();
-    let mut cost = TKF92IndelCostBuilder::new(&[0.4, 0.5, 0.8], phylo)
-        .build()
-        .unwrap();
+    let tkf_indel_model = TKF92IndelModel::new(&[0.4, 0.5, 0.8]).unwrap();
+    let mut cost = TKFIndelCostBuilder::new(tkf_indel_model, phylo).build();
     let logl = cost.clone().logl();
     let rng = &mut FakeGenerator::default();
     let v2_idx = cost.phylo.tree.by_id("I4").idx;
@@ -49,9 +48,8 @@ fn tkf_reestimate_without_choice() {
 #[test]
 fn tkf_reestimation_fails_for_root() {
     let phylo = setup_test_phylo(Alphabet::dna());
-    let mut cost = TKF92IndelCostBuilder::new(&[0.4, 0.5, 0.8], phylo)
-        .build()
-        .unwrap();
+    let tkf_indel_model = TKF92IndelModel::new(&[0.4, 0.5, 0.8]).unwrap();
+    let mut cost = TKFIndelCostBuilder::new(tkf_indel_model, phylo).build();
     let rng = &mut FakeGenerator::default();
     let mut reestimator = EdgeSeqsReestimator::new(&mut cost, rng);
     let root_idx = reestimator.cost.phylo.tree.root;
@@ -63,9 +61,8 @@ fn tkf_reestimation_fails_for_root() {
 #[test]
 fn tkf_reestimation_fails_for_leaf() {
     let phylo = setup_test_phylo(Alphabet::dna());
-    let mut cost = TKF92IndelCostBuilder::new(&[0.4, 0.5, 0.8], phylo)
-        .build()
-        .unwrap();
+    let tkf_indel_model = TKF92IndelModel::new(&[0.4, 0.5, 0.8]).unwrap();
+    let mut cost = TKFIndelCostBuilder::new(tkf_indel_model, phylo).build();
     let rng = &mut FakeGenerator::default();
     let mut reestimator = EdgeSeqsReestimator::new(&mut cost, rng);
     let leaf_idx = reestimator.cost.phylo.tree.by_id("A1").idx;

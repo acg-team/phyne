@@ -1,23 +1,21 @@
-use std::cell::RefCell;
 use std::fmt::Display;
 
-use hashbrown::HashSet;
-use log::warn;
 use num_enum::{FromPrimitive, IntoPrimitive};
 use rand::{Rng, SeedableRng};
 use rand_distr::Geometric;
 
-use crate::alignment::AncestralAlignment;
+use crate::alignment::{blocks_of_ancestral_alignment, AncestralAlignment};
 use crate::likelihood::{ParamRange, PARAM_RANGE_UNIT_INTERVAL_EXCLUSIVE};
-use crate::phylo_info::PhyloInfo;
 use crate::random::RandomGenerator;
-use crate::substitution_models::{QMatrix, SubstModel, SubstitutionCostBuilder as SCB};
 use crate::tkf_model::simulate_msa::{ExpectedRootLength, FragmentSampler};
 use crate::tkf_model::{
-    validate_lambda_mu, TKFCost, TKFIndelCost, TKFIndelModelInfo, TKFModel, DEFAULT_LAMBDA,
-    DEFAULT_MU, DEFAULT_R,
+    valid_lambda_mu, valid_number_tkf_params, valid_r, TKFModel, DEFAULT_LAMBDA, DEFAULT_MU,
+    DEFAULT_R,
 };
 use crate::Result;
+
+/// Number of parameters in the TKF92 model: lambda, mu, and r.
+pub const TKF92_PARAM_COUNT: usize = 3;
 
 #[derive(Debug, Eq, PartialEq, FromPrimitive, IntoPrimitive)]
 #[repr(usize)]
@@ -29,6 +27,42 @@ pub(crate) enum TKF92Parameters {
     Invalid(usize),
 }
 
+/// Number of leading parameters (axes) of [`TKF92SearchParameters`] that are optimized directly.
+/// Parameters beyond this limit are not optimized directly, but they may still change
+/// implicitly as a consequence of the optimized ones.
+///
+/// This is currently set to 3, but changing it allows ad hoc testing.
+/// For example, a value of 2 optimizes only the ratio and the rate of
+/// `lambda` and `mu` but not the parameter `r`.
+/// In preliminary experiments, optimizing over the ratio, rate and `r`
+/// performed much better than optimizing over `lambda`, `mu` and `r` directly.
+const TKF92_SEARCH_PARAM_COUNT: usize = 3;
+
+/// Defined parameters/axes for the [`TKF92IndelModel`] where the parameter optimisation is
+/// performed on. Can be limited by setting [`TKF92_SEARCH_PARAM_COUNT`] to a value smaller than the
+/// number of parameters in this enum.
+///
+/// Searching over derived parameters can be useful for optimisation in case of constraints like lambda < mu,
+/// which is assumed so that the equilibrium root length distribution is well-defined.
+///
+/// Code and tests are set up in a way that allows for changing the order. In combination with the
+/// [`TKF92_SEARCH_PARAM_COUNT`] constant, this allows for ad hoc testing of different search strategies.
+#[derive(Debug, Eq, PartialEq, FromPrimitive, IntoPrimitive)]
+#[repr(usize)]
+enum TKF92SearchParameters {
+    Ratio = 0,
+    Rate = 1,
+    R = 2,
+    Lambda = 3,
+    Mu = 4,
+    #[num_enum(catch_all)]
+    Invalid(usize),
+}
+
+/// Number of parameters stored internally. That is, both the [usual parameters](`TKF92Parameters`)
+/// and [derived parameters](`TKF92SearchParameters`).
+const TKF92_INTERNAL_PARAM_COUNT: usize = 5;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct TKF92IndelModel {
     params: Vec<f64>,
@@ -39,28 +73,68 @@ pub struct TKF92IndelModel {
 }
 
 impl TKF92IndelModel {
-    pub fn r(&self) -> f64 {
-        self.params[usize::from(TKF92Parameters::R)]
-    }
-
-    pub fn new(lambda: f64, mu: f64, r: f64) -> Self {
-        let mut params = vec![lambda, mu, r];
-        validate_lambda_mu(&mut params);
-        validate_r(&mut params);
+    /// Creates a new TKF92 model given parameters: lambda, mu, r.
+    /// Validates the parameters and returns an error if they are invalid:
+    /// 0 < lambda < mu < infinity, 0 < r < 1.
+    pub fn new(params: &[f64]) -> Result<Self> {
+        valid_number_tkf_params("TKF92", "lambda, mu, r", params, TKF92_PARAM_COUNT)?;
+        let lambda = params[usize::from(TKF92Parameters::Lambda)];
+        let mu = params[usize::from(TKF92Parameters::Mu)];
         let r = params[usize::from(TKF92Parameters::R)];
-        Self {
+        valid_lambda_mu(lambda, mu)?;
+        valid_r(r)?;
+        let r = params[usize::from(TKF92Parameters::R)];
+
+        let mut params = vec![0.0; TKF92_INTERNAL_PARAM_COUNT];
+        params[usize::from(TKF92SearchParameters::Lambda)] = lambda;
+        params[usize::from(TKF92SearchParameters::Mu)] = mu;
+        params[usize::from(TKF92SearchParameters::R)] = r;
+        params[usize::from(TKF92SearchParameters::Ratio)] = lambda / mu;
+        params[usize::from(TKF92SearchParameters::Rate)] = (lambda + mu) / 2.0;
+        Ok(Self {
             params,
             ln_r: r.ln(),
             ln_one_minus_r_over_r: ((1.0 - r) / r).ln(),
-        }
+        })
+    }
+
+    pub fn r(&self) -> f64 {
+        self.params[usize::from(TKF92SearchParameters::R)]
+    }
+
+    /// Recomputes the helper coordinates from the atomic parameters.
+    /// Called after an atomic parameter was set.
+    fn sync_helpers_with_params(&mut self) {
+        let lambda = self.params[usize::from(TKF92SearchParameters::Lambda)];
+        let mu = self.params[usize::from(TKF92SearchParameters::Mu)];
+        self.params[usize::from(TKF92SearchParameters::Ratio)] = lambda / mu;
+        self.params[usize::from(TKF92SearchParameters::Rate)] = (lambda + mu) / 2.0;
+    }
+
+    /// Recomputes the atomic parameters from the helper coordinates.
+    /// Called after a helper parameter was set.
+    fn sync_params_with_helpers(&mut self) {
+        let rate = self.params[usize::from(TKF92SearchParameters::Rate)];
+        let ratio = self.params[usize::from(TKF92SearchParameters::Ratio)];
+        self.params[usize::from(TKF92SearchParameters::Lambda)] =
+            2.0 * rate * ratio / (1.0 + ratio);
+        self.params[usize::from(TKF92SearchParameters::Mu)] = 2.0 * rate / (1.0 + ratio);
     }
 }
 
 impl Default for TKF92IndelModel {
     fn default() -> Self {
         let r = DEFAULT_R;
+        let lambda = DEFAULT_LAMBDA;
+        let mu = DEFAULT_MU;
+        let mut params = vec![0.0; TKF92_INTERNAL_PARAM_COUNT];
+        params[usize::from(TKF92SearchParameters::Lambda)] = lambda;
+        params[usize::from(TKF92SearchParameters::Mu)] = mu;
+        params[usize::from(TKF92SearchParameters::R)] = r;
+        params[usize::from(TKF92SearchParameters::Ratio)] = lambda / mu;
+        params[usize::from(TKF92SearchParameters::Rate)] = (lambda + mu) / 2.0;
         Self {
-            params: vec![DEFAULT_LAMBDA, DEFAULT_MU, r],
+            params,
             ln_r: r.ln(),
             ln_one_minus_r_over_r: (-r).ln_1p() - r.ln(),
         }
@@ -69,39 +143,11 @@ impl Default for TKF92IndelModel {
 
 impl TKFModel for TKF92IndelModel {
     fn lambda(&self) -> f64 {
-        self.params[usize::from(TKF92Parameters::Lambda)]
+        self.params[usize::from(TKF92SearchParameters::Lambda)]
     }
 
     fn mu(&self) -> f64 {
-        self.params[usize::from(TKF92Parameters::Mu)]
-    }
-
-    fn params(&self) -> &[f64] {
-        &self.params
-    }
-
-    fn set_param(&mut self, idx: usize, value: f64) {
-        let param = TKF92Parameters::from_primitive(idx);
-        match param {
-            TKF92Parameters::R => {
-                self.params[usize::from(TKF92Parameters::R)] = value;
-                self.ln_r = value.ln();
-                self.ln_one_minus_r_over_r = (-value).ln_1p() - value.ln();
-            }
-            _ => {
-                self.params[idx] = value;
-            }
-        };
-    }
-
-    fn param_range(&self, idx: usize) -> ParamRange {
-        let param = TKF92Parameters::from_primitive(idx);
-        match param {
-            TKF92Parameters::Lambda => (f64::EPSILON, self.mu() - f64::EPSILON),
-            TKF92Parameters::Mu => (self.lambda() + f64::EPSILON, f64::MAX),
-            TKF92Parameters::R => PARAM_RANGE_UNIT_INTERVAL_EXCLUSIVE,
-            _ => panic!("Invalid parameter index for TKF model: {param:?}"),
-        }
+        self.params[usize::from(TKF92SearchParameters::Mu)]
     }
 
     fn ln_insertion_factor_at_root(&self) -> f64 {
@@ -128,7 +174,47 @@ impl TKFModel for TKF92IndelModel {
     }
 
     fn get_blocks<AA: AncestralAlignment>(&self, msa: &AA) -> Vec<usize> {
-        blocks_of_alignment(msa)
+        blocks_of_ancestral_alignment(msa)
+    }
+
+    fn param_count(&self) -> usize {
+        TKF92_SEARCH_PARAM_COUNT
+    }
+
+    fn param(&self, idx: usize) -> f64 {
+        self.params[idx]
+    }
+
+    fn set_param(&mut self, idx: usize, value: f64) {
+        let param = TKF92SearchParameters::from_primitive(idx);
+        match param {
+            TKF92SearchParameters::R => {
+                self.params[idx] = value;
+                self.ln_r = value.ln();
+                self.ln_one_minus_r_over_r = (-value).ln_1p() - value.ln();
+            }
+            TKF92SearchParameters::Lambda | TKF92SearchParameters::Mu => {
+                self.params[idx] = value;
+                self.sync_helpers_with_params();
+            }
+            TKF92SearchParameters::Ratio | TKF92SearchParameters::Rate => {
+                self.params[idx] = value;
+                self.sync_params_with_helpers();
+            }
+            _ => panic!("Invalid parameter index: {}", idx),
+        };
+    }
+
+    fn param_range(&self, idx: usize) -> ParamRange {
+        let param = TKF92SearchParameters::from_primitive(idx);
+        match param {
+            TKF92SearchParameters::Lambda => (f64::EPSILON, self.mu() - f64::EPSILON),
+            TKF92SearchParameters::Mu => (self.lambda() + f64::EPSILON, f64::MAX),
+            TKF92SearchParameters::R => PARAM_RANGE_UNIT_INTERVAL_EXCLUSIVE,
+            TKF92SearchParameters::Ratio => (f64::EPSILON, 1.0 - f64::EPSILON),
+            TKF92SearchParameters::Rate => (f64::EPSILON, f64::MAX),
+            _ => panic!("Invalid parameter index for TKF model: {param:?}"),
+        }
     }
 }
 
@@ -168,154 +254,107 @@ impl ExpectedRootLength for TKF92IndelModel {
     }
 }
 
-/// Validates the TKF92 parameter `r`. If it is not valid, it is set to
-/// its default value and a warning is logged.
-/// Returns valid `r`.
-pub(super) fn validate_r(params: &mut [f64]) {
-    let r_id = usize::from(TKF92Parameters::R);
-    let r = params[r_id];
-    if r == 0.0 {
-        params[r_id] = DEFAULT_R;
-        warn!(
-            "Tried to set r to invalid value 0. \
-            It must be in (0, 1). Setting r to {}. \
-            Hint: r = 0 yields special case: TKF91 model, consider using that instead.",
-            params[r_id]
-        );
-    } else if r <= 0.0 || r >= 1.0 {
-        params[r_id] = DEFAULT_R;
-        warn!(
-            "Tried to set r to invalid value {r}. \
-            It must be in (0, 1). Setting r to {}.",
-            params[r_id]
-        );
-    }
-}
-
-/// Builder for the cost using the [`TKF92IndelModel`], i.e., without a substitution model.
-pub struct TKF92IndelCostBuilder<AA: AncestralAlignment> {
-    params: Vec<f64>,
-    phylo: PhyloInfo<AA>,
-}
-
-impl<AA: AncestralAlignment> TKF92IndelCostBuilder<AA> {
-    pub fn new(params: &[f64], phylo: PhyloInfo<AA>) -> Self {
-        Self {
-            params: params.to_vec(),
-            phylo,
-        }
-    }
-
-    pub fn build(self) -> Result<TKFIndelCost<TKF92IndelModel, AA>> {
-        let mut params = self.params;
-        if params.len() != 3 {
-            warn!(
-                "Expected 3 parameters for TKF92 model (lambda, mu, r), but got {}",
-                params.len()
-            );
-            warn!("Falling back to default values");
-            params.resize(3, 0.0);
-            params[usize::from(TKF92Parameters::Lambda)] = DEFAULT_LAMBDA;
-            params[usize::from(TKF92Parameters::Mu)] = DEFAULT_MU;
-            params[usize::from(TKF92Parameters::R)] = DEFAULT_R;
-        } else {
-            validate_lambda_mu(&mut params);
-            validate_r(&mut params);
-        }
-        let r = params[usize::from(TKF92Parameters::R)];
-        let model = TKF92IndelModel {
-            params,
-            ln_r: r.ln(),
-            ln_one_minus_r_over_r: ((1.0 - r) / r).ln(),
-        };
-        let info = TKFIndelModelInfo::new(&model, &self.phylo);
-        Ok(TKFIndelCost {
-            model,
-            phylo: self.phylo.clone(),
-            model_info: RefCell::new(info),
-        })
-    }
-}
-
-/// Builder for the TKF92 cost, i.e., with a substitution model.
-pub struct TKF92CostBuilder<Q: QMatrix, AA: AncestralAlignment> {
-    params: Vec<f64>,
-    subst_model: SubstModel<Q>,
-    phylo: PhyloInfo<AA>,
-}
-
-impl<Q: QMatrix, AA: AncestralAlignment> TKF92CostBuilder<Q, AA> {
-    pub fn new(params: &[f64], subst_model: SubstModel<Q>, phylo: PhyloInfo<AA>) -> Self {
-        Self {
-            params: params.to_vec(),
-            subst_model,
-            phylo,
-        }
-    }
-
-    pub fn build(self) -> Result<TKFCost<Q, TKF92IndelModel, AA>> {
-        let indel_cost = TKF92IndelCostBuilder::new(&self.params, self.phylo.clone()).build()?;
-        let subst_cost = SCB::new(self.subst_model, self.phylo).build()?;
-        Ok(TKFCost {
-            indel_cost,
-            subst_cost,
-        })
-    }
-}
-
-/// Determines the block borders from the alignment. A block border is defined as a
-/// position where any sequence changes from gap to non-gap or vice versa. Returns a sorted
-/// vector of the right exclusive block borders.
-pub(crate) fn blocks_of_alignment<AA: AncestralAlignment>(msa: &AA) -> Vec<usize> {
-    let mut blocks: HashSet<usize> = HashSet::new();
-    if msa.len() == 0 {
-        return vec![];
-    }
-    for map in msa
-        .ancestral_maps()
-        .values()
-        .chain(msa.leaf_maps().values())
-    {
-        let mut previous_is_char = map[0].is_some();
-        for (i, c) in map.iter().skip(1).enumerate() {
-            let current_is_char = c.is_some();
-            // whenever there is a change from gap to not gap or vice versa, we have a block border
-            if previous_is_char ^ current_is_char {
-                blocks.insert(i + 1);
-            }
-            previous_is_char = current_is_char;
-        }
-        blocks.insert(map.len());
-    }
-    let mut blocks: Vec<usize> = blocks.iter().copied().collect();
-    blocks.sort();
-    blocks
-}
-
 #[cfg(test)]
 #[cfg_attr(coverage, coverage(off))]
 mod private_tests {
+    use assert_matches::assert_matches;
+    use rstest::rstest;
+
+    use crate::Error;
+
     use super::*;
+
+    #[test]
+    fn tkf92_indel_model_new_success() {
+        let model = TKF92IndelModel::new(&[0.5, 1.0, 0.3]).unwrap();
+        assert_eq!(model.lambda(), 0.5);
+        assert_eq!(model.mu(), 1.0);
+        assert_eq!(model.r(), 0.3);
+        assert_eq!(model.ln_r, 0.3f64.ln());
+        assert_eq!(model.ln_one_minus_r_over_r, ((1.0f64 - 0.3) / 0.3).ln());
+        assert_eq!(model.param(usize::from(TKF92SearchParameters::Ratio)), 0.5);
+        assert_eq!(model.param(usize::from(TKF92SearchParameters::Rate)), 0.75);
+    }
+
+    #[rstest]
+    #[case::too_few(&[0.5, 1.0])]
+    #[case::too_many(&[0.5, 1.0, 0.3, 2.0])]
+    fn tkf92_indel_model_new_wrong_param_count(#[case] params: &[f64]) {
+        let err = TKF92IndelModel::new(params).unwrap_err();
+        assert_matches!(
+            err,
+            Error::Tkf(msg)
+                if msg.contains("TKF92: expected 3 parameters (lambda, mu, r), got")
+        );
+    }
+
+    #[rstest]
+    #[case::zero(&[0.0, 1.0, 0.3])]
+    #[case::negative(&[-0.5, 1.0, 0.3])]
+    #[case::nan(&[f64::NAN, 1.0, 0.3])]
+    #[case::positive_infinite(&[f64::INFINITY, 1.0, 0.3])]
+    #[case::negative_infinite(&[f64::NEG_INFINITY, 1.0, 0.3])]
+    fn tkf92_indel_model_new_invalid_lambda(#[case] params: &[f64]) {
+        let err = TKF92IndelModel::new(params).unwrap_err();
+        assert_matches!(
+            err,
+            Error::Tkf(msg)
+                if msg.contains("parameter lambda must be positive, finite and non-nan")
+        );
+    }
+
+    #[rstest]
+    #[case::zero(&[0.5, 0.0, 0.3])]
+    #[case::negative(&[0.5, -1.0, 0.3])]
+    #[case::nan(&[0.5, f64::NAN, 0.3])]
+    #[case::positive_infinite(&[0.5, f64::INFINITY, 0.3])]
+    #[case::negative_infinite(&[0.5, f64::NEG_INFINITY, 0.3])]
+    fn tkf92_indel_model_new_invalid_mu(#[case] params: &[f64]) {
+        let err = TKF92IndelModel::new(params).unwrap_err();
+        assert_matches!(
+            err,
+            Error::Tkf(msg) if msg.contains("parameter mu must be positive, finite and non-nan")
+        );
+    }
+
+    #[rstest]
+    #[case::lambda_eq_mu(&[1.0, 1.0, 0.3])]
+    #[case::lambda_gt_mu(&[2.0, 1.0, 0.3])]
+    fn tkf92_indel_model_new_lambda_ge_mu(#[case] params: &[f64]) {
+        let err = TKF92IndelModel::new(params).unwrap_err();
+        assert_matches!(
+            err,
+            Error::Tkf(msg) if msg.contains("parameter lambda must be less than mu")
+        );
+    }
+
+    #[rstest]
+    #[case::zero(&[0.5, 1.0, 0.0])]
+    #[case::negative(&[0.5, 1.0, -0.3])]
+    #[case::nan(&[0.5, 1.0, f64::NAN])]
+    #[case::positive_infinite(&[0.5, 1.0, f64::INFINITY])]
+    #[case::negative_infinite(&[0.5, 1.0, f64::NEG_INFINITY])]
+    #[case::eq_one(&[0.5, 1.0, 1.0])]
+    #[case::gt_one(&[0.5, 1.0, 1.5])]
+    fn tkf92_indel_model_new_invalid_r(#[case] params: &[f64]) {
+        let err = TKF92IndelModel::new(params).unwrap_err();
+        assert_matches!(
+            err,
+            Error::Tkf(msg) if msg.contains("parameter r must be in (0, 1)")
+        );
+    }
 
     #[test]
     #[should_panic]
     fn tkf92_param_range_invalid_index() {
-        let model = TKF92IndelModel {
-            params: vec![0.5, 1.0, 0.3],
-            ln_r: 0.0, // cache filled with dummy, since it is not needed here
-            ln_one_minus_r_over_r: 0.0, // cache filled with dummy since it is not needed here
-        };
+        let model = TKF92IndelModel::default();
         // Use an invalid index
-        model.param_range(3);
+        model.param_range(TKF92_INTERNAL_PARAM_COUNT);
     }
 
     #[test]
     fn tkf92_model_fmt() {
-        let tkf_indel_model = TKF92IndelModel {
-            params: vec![1.1, 2.0, 0.3],
-            ln_r: 0.0,                  // cache filled with dummy since it is not printed
-            ln_one_minus_r_over_r: 0.0, // cache filled with dummy since it is not printed
-        };
+        let tkf_indel_model = TKF92IndelModel::new(&[1.1, 2.0, 0.3]).unwrap();
 
         let fmt = format!("{}", tkf_indel_model);
 
@@ -323,22 +362,111 @@ mod private_tests {
     }
 
     #[test]
-    fn tkf92_indel_set_param() {
-        let mut model = TKF92IndelModel {
-            params: vec![1.0, 2.0, 0.3],
-            ln_r: 0.0,                  // dummy
-            ln_one_minus_r_over_r: 0.0, // dummy
-        };
-        let new_lambda = 1.1;
-        model.set_param(usize::from(TKF92Parameters::Lambda), new_lambda);
+    fn tkf92_setting_params_doesnt_drift() {
+        // During prototyping when setting a new ratio or rate the lambda and mu
+        // would be used to calculate new values for lambda and mu.
+        // This caused parameters to differ slightly when setting rate or ratio multiple times,
+        // i.e., setting rate to x_1, x_2, ..., x_n or setting rate straight to x_n would yield
+        // different values for lambda and mu.
+        // With the current implementation, coordinate systems are separated: to calculate lambda
+        // and mu, only ratio and rate are used, and to calculate ratio and rate, only lambda and mu
+        // are used.
+        let mut model1 = TKF92IndelModel::new(&[1.0, 2.0, 0.3]).unwrap();
+        let mut model2 = model1.clone();
+        let ratio_idx = usize::from(TKF92SearchParameters::Ratio);
+        let rate_idx = usize::from(TKF92SearchParameters::Rate);
+
+        let new_rate = f64::EPSILON;
+        let end_rate = 2.0;
+        model1.set_param(rate_idx, new_rate);
+        model1.set_param(rate_idx, end_rate);
+        model2.set_param(rate_idx, end_rate);
+        assert_eq!(model1.lambda(), model2.lambda());
+        assert_eq!(model1.mu(), model2.mu());
+
+        let new_ratio = 1.0 - f64::EPSILON;
+        let end_ratio = 0.5;
+        model1.set_param(ratio_idx, new_ratio);
+        model1.set_param(ratio_idx, end_ratio);
+        model2.set_param(ratio_idx, end_ratio);
+        assert_eq!(model1.lambda(), model2.lambda());
+        assert_eq!(model1.mu(), model2.mu());
+    }
+
+    #[test]
+    fn tkf92_set_lambda() {
+        let mut model = TKF92IndelModel::new(&[1.0, 2.0, 0.5]).unwrap();
+        let new_lambda = 0.5;
+        model.set_param(usize::from(TKF92SearchParameters::Lambda), new_lambda);
         assert_eq!(model.lambda(), new_lambda);
-        let new_mu = 2.1;
-        model.set_param(usize::from(TKF92Parameters::Mu), new_mu);
+        assert_eq!(model.mu(), 2.0);
+        assert_eq!(model.r(), 0.5);
+        assert_eq!(model.param(usize::from(TKF92SearchParameters::Ratio)), 0.25);
+        assert_eq!(model.param(usize::from(TKF92SearchParameters::Rate)), 1.25);
+    }
+
+    #[test]
+    fn tkf92_set_mu() {
+        let mut model = TKF92IndelModel::new(&[1.0, 2.0, 0.5]).unwrap();
+        let new_mu = 3.0;
+        model.set_param(usize::from(TKF92SearchParameters::Mu), new_mu);
+        assert_eq!(model.lambda(), 1.0);
         assert_eq!(model.mu(), new_mu);
-        let new_r = 0.4;
-        model.set_param(usize::from(TKF92Parameters::R), new_r);
+        assert_eq!(model.r(), 0.5);
+        assert_eq!(
+            model.param(usize::from(TKF92SearchParameters::Ratio)),
+            1.0 / 3.0
+        );
+        assert_eq!(model.param(usize::from(TKF92SearchParameters::Rate)), 2.0);
+    }
+
+    #[test]
+    fn tkf92_set_r() {
+        let mut model = TKF92IndelModel::new(&[1.0, 2.0, 0.5]).unwrap();
+        let new_r = 0.25;
+        model.set_param(usize::from(TKF92SearchParameters::R), new_r);
+        assert_eq!(model.lambda(), 1.0);
+        assert_eq!(model.mu(), 2.0);
         assert_eq!(model.r(), new_r);
-        assert_eq!(model.ln_r, new_r.ln());
-        assert_eq!(model.ln_one_minus_r_over_r, (-new_r).ln_1p() - (new_r).ln());
+        assert_eq!(model.param(usize::from(TKF92SearchParameters::Ratio)), 0.5);
+        assert_eq!(model.param(usize::from(TKF92SearchParameters::Rate)), 1.5);
+    }
+
+    #[test]
+    fn tkf92_set_ratio() {
+        let mut model = TKF92IndelModel::new(&[1.0, 5.0, 0.5]).unwrap();
+        let initial_rate = model.param(usize::from(TKF92SearchParameters::Rate));
+        let new_ratio = 0.5;
+        model.set_param(usize::from(TKF92SearchParameters::Ratio), new_ratio);
+        assert_eq!(model.lambda(), 2.0);
+        assert_eq!(model.mu(), 4.0);
+        assert_eq!(model.r(), 0.5);
+        assert_eq!(
+            model.param(usize::from(TKF92SearchParameters::Ratio)),
+            new_ratio
+        );
+        assert_eq!(
+            model.param(usize::from(TKF92SearchParameters::Rate)),
+            initial_rate
+        );
+    }
+
+    #[test]
+    fn tkf92_set_rate() {
+        let mut model = TKF92IndelModel::new(&[1.0, 2.0, 0.5]).unwrap();
+        let initial_ratio = model.param(usize::from(TKF92SearchParameters::Ratio));
+        let new_rate = 3.0;
+        model.set_param(usize::from(TKF92SearchParameters::Rate), new_rate);
+        assert_eq!(model.lambda(), 2.0);
+        assert_eq!(model.mu(), 4.0);
+        assert_eq!(model.r(), 0.5);
+        assert_eq!(
+            model.param(usize::from(TKF92SearchParameters::Ratio)),
+            initial_ratio
+        );
+        assert_eq!(
+            model.param(usize::from(TKF92SearchParameters::Rate)),
+            new_rate
+        );
     }
 }

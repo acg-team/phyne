@@ -817,7 +817,8 @@ mod private_tests {
     use crate::phylo_info::{set_missing_tree_node_ids, PhyloInfo};
     use crate::random::DefaultGenerator;
     use crate::tkf_model::{
-        TKF91IndelCostBuilder, TKF91IndelModel, TKF92FixedIndelCostBuilder, TKF92IndelModel,
+        TKF91IndelModel, TKF92FixedIndelCostBuilder, TKF92FixedIndelModel, TKF92IndelModel,
+        TKFIndelCostBuilder,
     };
     use crate::tree;
 
@@ -909,7 +910,7 @@ mod private_tests {
             let lambda = 1.1;
             let mu = 1.2;
             let r = 0.6;
-            let tkf_model = TKF92IndelModel::new(lambda, mu, r);
+            let tkf_model = TKF92IndelModel::new(&[lambda, mu, r]).unwrap();
             let mut tree = tree!("(((9: 0.220067, (10: 0.150408, 6: 0.150408): 0.069660): 0.054476, (5: 0.033214, 8: 0.033214): 0.241329): 0.725457, ((((3: 0.033362, 1: 0.033362): 0.000893, 7: 0.034255): 0.379610, 4: 0.413865): 0.310280, 2: 0.724145): 0.275855);");
             set_missing_tree_node_ids(&mut tree).unwrap();
 
@@ -936,14 +937,15 @@ mod private_tests {
                 phylo.check_dollos_constraint().is_ok(),
                 "Simulated alignment must satisfy Dollo's constraint (no re-gain of characters)"
             );
-            let cost = TKF92FixedIndelCostBuilder::new(
+            let fixed_frag_model = TKF92FixedIndelModel::new(
                 &[lambda, mu, r],
                 result.fragmentation.right_exclusive_boundaries().to_vec(),
-                phylo,
             )
-            .build()
-            .unwrap()
-            .logl();
+            .unwrap();
+            let cost = TKF92FixedIndelCostBuilder::new(fixed_frag_model, phylo)
+                .build()
+                .unwrap()
+                .logl();
             assert_relative_eq!(logl, cost, epsilon = 1e-10);
         }
     }
@@ -952,8 +954,6 @@ mod private_tests {
     fn tkf91_indel_simulate() {
         for seed in 0..100 {
             let tkf_model = TKF91IndelModel::default();
-            let lambda = tkf_model.lambda();
-            let mu = tkf_model.mu();
             let mut tree = tree!("(((9: 0.220067, (10: 0.150408, 6: 0.150408): 0.069660): 0.054476, (5: 0.033214, 8: 0.033214): 0.241329): 0.725457, ((((3: 0.033362, 1: 0.033362): 0.000893, 7: 0.034255): 0.379610, 4: 0.413865): 0.310280, 2: 0.724145): 0.275855);");
             set_missing_tree_node_ids(&mut tree).unwrap();
 
@@ -962,7 +962,8 @@ mod private_tests {
             // are summed together for the case of drawing a max_insertion_length.
             let max_insertion_length = Some(100);
             let simulator =
-                TKFIndelMSASimulator::new(tkf_model, tree.clone(), max_insertion_length).unwrap();
+                TKFIndelMSASimulator::new(tkf_model.clone(), tree.clone(), max_insertion_length)
+                    .unwrap();
             let mut rng = DefaultGenerator::new(seed);
             let result: TKFSimulationResult<MASA> =
                 simulator.simulate_with_fragments_and_logl(&mut rng);
@@ -992,10 +993,8 @@ mod private_tests {
                 phylo.check_dollos_constraint().is_ok(),
                 "Simulated alignment must satisfy Dollo's constraint (no re-gain of characters)"
             );
-            let cost = TKF91IndelCostBuilder::new(&[lambda, mu], phylo)
-                .build()
-                .unwrap()
-                .logl();
+
+            let cost = TKFIndelCostBuilder::new(tkf_model, phylo).build().logl();
             assert_relative_eq!(logl, cost, epsilon = 1e-10);
         }
     }
@@ -1005,7 +1004,7 @@ mod private_tests {
         let lambda = 0.29;
         let mu = 0.3;
         let r = 0.9;
-        let tkf_model = TKF92IndelModel::new(lambda, mu, r);
+        let tkf_model = TKF92IndelModel::new(&[lambda, mu, r]).unwrap();
         let tree = tree!("(A:1.0,B:1.0)R:1.0;");
         let max_len = Some(2);
         let seed = 123;
@@ -1021,7 +1020,7 @@ mod private_tests {
 
     #[test]
     fn build_root_links_no_zero_length_links() {
-        let tkf_model = TKF92IndelModel::new(0.01, 0.0105, 0.7);
+        let tkf_model = TKF92IndelModel::new(&[0.01, 0.0105, 0.7]).unwrap();
         let tree = tree!("(A:1.0,B:1.0)R:1.0;");
         let max_len = Some(50);
         for seed in 0..1000 {
@@ -1045,7 +1044,7 @@ mod private_tests {
         let lambda = 1.00;
         let mu = 1.1;
         let r = 0.5;
-        let tkf_model = TKF92IndelModel::new(lambda, mu, r);
+        let tkf_model = TKF92IndelModel::new(&[lambda, mu, r]).unwrap();
         let tree = tree!("(A:1.0,B:1.0)R:1.0;");
         let max_len = Some(0); // Cap at 0 insertions on branches
         let simulator = TKFIndelMSASimulator::new(tkf_model, tree.clone(), max_len).unwrap();
@@ -1067,7 +1066,7 @@ mod private_tests {
 
     #[test]
     fn tkf92_indel_capping_hits_cap_for_all_fates() {
-        let tkf_model = TKF92IndelModel::new(0.19, 0.2, 0.5);
+        let tkf_model = TKF92IndelModel::new(&[0.19, 0.2, 0.5]).unwrap();
         let tree = tree!("(A:1.0,B:1.0)R:1.0;");
         // Cap at 0 inserted fragments, so both fates always fall through to the capping branch.
         let simulator = TKFIndelMSASimulator::new(tkf_model, tree, Some(0)).unwrap();

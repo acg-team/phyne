@@ -9,6 +9,9 @@ pub enum Error {
     #[error("Alphabet error: {0}")]
     Alphabet(String),
 
+    #[error("ASR error: {0}")]
+    Asr(String),
+
     #[error("Sequence error: {0}")]
     Sequence(String),
 
@@ -29,6 +32,9 @@ pub enum Error {
 
     #[error("Tree error: {0}")]
     Tree(String),
+
+    #[error("Tkf model error: {0}")]
+    Tkf(String),
 
     #[error("Tree move error: {0}")]
     TreeMove(String),

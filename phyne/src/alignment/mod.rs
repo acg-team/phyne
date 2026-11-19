@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Display};
 
 use fixedbitset::FixedBitSet;
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use itertools::Itertools;
 use log::warn;
 use rand::{Rng, SeedableRng};
@@ -910,6 +910,57 @@ fn warn_on_extinct_columns(masa: &impl AncestralAlignment) {
             surviving.ones().format(", ")
         );
     }
+}
+
+/// For given [`Mapping`] iterator returns the sorted indices where any of the maps changes
+/// from `Some(_)` to `None` or vice versa.
+/// Used in [`blocks_of_alignment`] and [`blocks_of_ancestral_alignment`].
+fn blocks_for_maps<'a, I: Iterator<Item = &'a Mapping>>(maps: I) -> Vec<usize> {
+    let mut blocks: HashSet<usize> = HashSet::new();
+    for map in maps {
+        if map.is_empty() {
+            return vec![];
+        }
+        let mut previous_is_char = map[0].is_some();
+        for (i, c) in map.iter().skip(1).enumerate() {
+            let current_is_char = c.is_some();
+            // whenever there is a change from gap to not gap or vice versa, we have a block border
+            if previous_is_char ^ current_is_char {
+                blocks.insert(i + 1);
+            }
+            previous_is_char = current_is_char;
+        }
+        blocks.insert(map.len());
+    }
+    let mut blocks: Vec<usize> = blocks.iter().copied().collect();
+    blocks.sort();
+    blocks
+}
+
+/// Determines the block borders from the ancestral alignment. A block border is defined as a
+/// position where any sequence (leaf or internal) changes from gap to non-gap or vice versa.
+/// Returns a sorted vector of the right exclusive block borders.
+pub fn blocks_of_ancestral_alignment<AA: AncestralAlignment>(msa: &AA) -> Vec<usize> {
+    blocks_for_maps(
+        msa.ancestral_maps()
+            .values()
+            .chain(msa.leaf_maps().values()),
+    )
+}
+
+/// Determines the block borders from the alignment. A block border is defined as a
+/// position where any sequence (at the leaf nodes) changes from gap to non-gap or vice versa.
+/// Returns a sorted vector of the right exclusive block borders.
+pub fn blocks_of_alignment<A: Alignment>(msa: &A) -> Vec<usize> {
+    blocks_for_maps(msa.leaf_maps().values())
+}
+
+/// Returns whether there are block borders that are only enforced by the ancestral sequences.
+/// See [`blocks_of_ancestral_alignment`] and [`blocks_of_alignment`].
+pub fn block_borders_enforced_by_ancestral_seqs<AA: AncestralAlignment>(msa: &AA) -> bool {
+    let blocks_of_ancestral = blocks_of_ancestral_alignment(msa);
+    let blocks_of_leaves = blocks_of_alignment(msa);
+    blocks_of_ancestral != blocks_of_leaves
 }
 
 /// Simulates sequences along a tree producing an alignment.

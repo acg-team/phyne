@@ -229,9 +229,8 @@ mod private_tests {
     use crate::alignment::AncestralAlignment;
     use crate::alphabets::Alphabet;
     use crate::random::FakeGenerator;
-    use crate::tkf_model::{
-        tests::setup_test_phylo, EdgeSeqsReestimator, TKF92IndelCostBuilder, TKFModel,
-    };
+    use crate::tkf_model::{tests::setup_test_phylo, EdgeSeqsReestimator, TKFModel};
+    use crate::tkf_model::{TKF92IndelModel, TKFIndelCostBuilder};
 
     use super::*;
 
@@ -437,9 +436,8 @@ mod private_tests {
     #[test]
     fn tkf_possible_del_or_not_table_idx_without_root() {
         let phylo = setup_test_phylo(Alphabet::dna());
-        let mut cost = TKF92IndelCostBuilder::new(&[0.4, 0.5, 0.8], phylo)
-            .build()
-            .unwrap();
+        let tkf_indel_model = TKF92IndelModel::new(&[0.4, 0.5, 0.8]).unwrap();
+        let mut cost = TKFIndelCostBuilder::new(tkf_indel_model, phylo).build();
         let rng = &mut FakeGenerator::default();
         // reestimator is initiated with default quartet (i.e., none of the edges are the root)
         let reestimator = EdgeSeqsReestimator::new(&mut cost, rng);
@@ -475,9 +473,8 @@ mod private_tests {
     fn tkf_possible_del_or_not_table_idx_with_root() {
         let phylo = setup_test_phylo(Alphabet::dna());
         let root = phylo.tree.root;
-        let mut cost = TKF92IndelCostBuilder::new(&[0.4, 0.5, 0.8], phylo)
-            .build()
-            .unwrap();
+        let tkf_indel_model = TKF92IndelModel::new(&[0.4, 0.5, 0.8]).unwrap();
+        let mut cost = TKFIndelCostBuilder::new(tkf_indel_model, phylo).build();
         let rng = &mut FakeGenerator::default();
         // reestimator is initiated with default quartet (i.e., none if the edges are root)
         let mut reestimator = EdgeSeqsReestimator::new(&mut cost, rng);

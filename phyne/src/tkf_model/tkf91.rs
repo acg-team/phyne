@@ -1,21 +1,19 @@
-use std::cell::RefCell;
 use std::fmt::Display;
 
-use log::warn;
 use num_enum::{FromPrimitive, IntoPrimitive};
 use rand::{Rng, SeedableRng};
 
 use crate::alignment::AncestralAlignment;
 use crate::likelihood::ParamRange;
-use crate::phylo_info::PhyloInfo;
 use crate::random::RandomGenerator;
-use crate::substitution_models::{QMatrix, SubstModel, SubstitutionCostBuilder as SCB};
 use crate::tkf_model::simulate_msa::{ExpectedRootLength, FragmentSampler};
 use crate::tkf_model::{
-    TKFCost, TKFIndelCost, TKFIndelModelInfo, TKFModel, DEFAULT_LAMBDA, DEFAULT_LAMBDA_MU_RATIO,
-    DEFAULT_MU,
+    valid_lambda_mu, valid_number_tkf_params, TKFModel, DEFAULT_LAMBDA, DEFAULT_MU,
 };
 use crate::Result;
+
+/// Number of parameters in the TKF91 model: lambda and mu.
+pub const TKF91_PARAM_COUNT: usize = 2;
 
 #[derive(Debug, Eq, PartialEq, FromPrimitive, IntoPrimitive)]
 #[repr(usize)]
@@ -26,51 +24,95 @@ pub(crate) enum TKF91Parameters {
     Invalid(usize),
 }
 
+/// By setting this to a value smaller than the number of parameters in [`TKF91SearchParameters`],
+/// we can limit the model search to a subset of parameters/axes. For example, if we set
+/// this to 2, then only the ratio and rate will be optimized. This is useful for ad hoc testing.
+const TKF91_SEARCH_PARAM_COUNT: usize = 2;
+
+/// Defined parameters/axes for the [`TKF91IndelModel`] where the parameter optimisation is
+/// performed on. Can be limited by setting [`TKF91_SEARCH_PARAM_COUNT`] to a value smaller than the
+/// number of parameters in this enum.
+///
+/// Searching over derived parameters can be useful for optimisation in case of constraints like lambda < mu,
+/// which is assumed so that the equilibrium root length distribution is well-defined.
+#[derive(Debug, Eq, PartialEq, FromPrimitive, IntoPrimitive)]
+#[repr(usize)]
+enum TKF91SearchParameters {
+    Ratio = 0,
+    Rate = 1,
+    Lambda = 2,
+    Mu = 3,
+    #[num_enum(catch_all)]
+    Invalid(usize),
+}
+
+/// Number of parameters stored internally. That is, both the [usual parameters](`TKF91Parameters`)
+/// and [derived parameters](`TKF91SearchParameters`).
+const TKF91_INTERNAL_PARAM_COUNT: usize = 4;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct TKF91IndelModel {
     params: Vec<f64>,
 }
 
 impl TKF91IndelModel {
-    pub fn new(lambda: f64, mu: f64) -> Self {
-        let mut params = vec![lambda, mu];
-        validate_lambda_mu(&mut params);
-        Self { params }
+    /// Creates a new TKF91 model given parameters: lambda, mu.
+    /// Validates the parameters and returns an error if they are invalid:
+    /// 0 < lambda < mu < infinity.
+    pub fn new(params: &[f64]) -> Result<Self> {
+        valid_number_tkf_params("TKF91", "lambda, mu", params, TKF91_PARAM_COUNT)?;
+        let lambda = params[usize::from(TKF91Parameters::Lambda)];
+        let mu = params[usize::from(TKF91Parameters::Mu)];
+        valid_lambda_mu(lambda, mu)?;
+
+        let mut params = vec![0.0; TKF91_INTERNAL_PARAM_COUNT];
+        params[usize::from(TKF91SearchParameters::Ratio)] = lambda / mu;
+        params[usize::from(TKF91SearchParameters::Rate)] = (lambda + mu) / 2.0;
+        params[usize::from(TKF91SearchParameters::Lambda)] = lambda;
+        params[usize::from(TKF91SearchParameters::Mu)] = mu;
+        Ok(Self { params })
+    }
+
+    /// Recomputes the helper coordinates from the atomic parameters.
+    /// Called after an atomic parameter was set.
+    fn sync_helpers_with_params(&mut self) {
+        let lambda = self.params[usize::from(TKF91SearchParameters::Lambda)];
+        let mu = self.params[usize::from(TKF91SearchParameters::Mu)];
+        self.params[usize::from(TKF91SearchParameters::Ratio)] = lambda / mu;
+        self.params[usize::from(TKF91SearchParameters::Rate)] = (lambda + mu) / 2.0;
+    }
+
+    /// Recomputes the atomic parameters from the helper coordinates.
+    /// Called after a helper parameter was set.
+    fn sync_params_with_helpers(&mut self) {
+        let rate = self.params[usize::from(TKF91SearchParameters::Rate)];
+        let ratio = self.params[usize::from(TKF91SearchParameters::Ratio)];
+        self.params[usize::from(TKF91SearchParameters::Lambda)] =
+            2.0 * rate * ratio / (1.0 + ratio);
+        self.params[usize::from(TKF91SearchParameters::Mu)] = 2.0 * rate / (1.0 + ratio);
     }
 }
 
 impl Default for TKF91IndelModel {
     fn default() -> Self {
-        Self {
-            params: vec![DEFAULT_LAMBDA, DEFAULT_MU],
-        }
+        let lambda = DEFAULT_LAMBDA;
+        let mu = DEFAULT_MU;
+        let mut params = vec![0.0; TKF91_INTERNAL_PARAM_COUNT];
+        params[usize::from(TKF91SearchParameters::Ratio)] = lambda / mu;
+        params[usize::from(TKF91SearchParameters::Rate)] = (lambda + mu) / 2.0;
+        params[usize::from(TKF91SearchParameters::Lambda)] = lambda;
+        params[usize::from(TKF91SearchParameters::Mu)] = mu;
+        Self { params }
     }
 }
 
 impl TKFModel for TKF91IndelModel {
     fn lambda(&self) -> f64 {
-        self.params[usize::from(TKF91Parameters::Lambda)]
+        self.params[usize::from(TKF91SearchParameters::Lambda)]
     }
 
     fn mu(&self) -> f64 {
-        self.params[usize::from(TKF91Parameters::Mu)]
-    }
-
-    fn params(&self) -> &[f64] {
-        &self.params
-    }
-
-    fn set_param(&mut self, idx: usize, value: f64) {
-        self.params[idx] = value;
-    }
-
-    fn param_range(&self, idx: usize) -> ParamRange {
-        let param = TKF91Parameters::from_primitive(idx);
-        match param {
-            TKF91Parameters::Lambda => (f64::EPSILON, self.mu() - f64::EPSILON),
-            TKF91Parameters::Mu => (self.lambda() + f64::EPSILON, f64::MAX),
-            _ => panic!("Invalid parameter index for TKF model: {param:?}"),
-        }
+        self.params[usize::from(TKF91SearchParameters::Mu)]
     }
 
     fn ln_insertion_factor_at_root(&self) -> f64 {
@@ -89,6 +131,40 @@ impl TKFModel for TKF91IndelModel {
     /// Since TKF91 is a single-residue indel model, each position is its own block.
     fn get_blocks<AA: AncestralAlignment>(&self, msa: &AA) -> Vec<usize> {
         (1..msa.len() + 1).collect()
+    }
+
+    fn param_count(&self) -> usize {
+        TKF91_SEARCH_PARAM_COUNT
+    }
+
+    fn param(&self, idx: usize) -> f64 {
+        self.params[idx]
+    }
+
+    fn set_param(&mut self, idx: usize, value: f64) {
+        let param = TKF91SearchParameters::from_primitive(idx);
+        match param {
+            TKF91SearchParameters::Lambda | TKF91SearchParameters::Mu => {
+                self.params[idx] = value;
+                self.sync_helpers_with_params();
+            }
+            TKF91SearchParameters::Ratio | TKF91SearchParameters::Rate => {
+                self.params[idx] = value;
+                self.sync_params_with_helpers();
+            }
+            _ => panic!("Invalid parameter index: {}", idx),
+        };
+    }
+
+    fn param_range(&self, idx: usize) -> ParamRange {
+        let param = TKF91SearchParameters::from_primitive(idx);
+        match param {
+            TKF91SearchParameters::Lambda => (f64::EPSILON, self.mu() - f64::EPSILON),
+            TKF91SearchParameters::Mu => (self.lambda() + f64::EPSILON, f64::MAX),
+            TKF91SearchParameters::Ratio => (f64::EPSILON, 1.0 - f64::EPSILON),
+            TKF91SearchParameters::Rate => (f64::EPSILON, f64::MAX),
+            _ => panic!("Invalid parameter index for TKF model: {param:?}"),
+        }
     }
 }
 
@@ -120,125 +196,88 @@ impl ExpectedRootLength for TKF91IndelModel {
     }
 }
 
-/// Validates the TKF indel parameters lambda and mu. If they are not valid, they are set to
-/// default values and a warning is logged.
-/// Returns valid (lambda, mu).
-pub(super) fn validate_lambda_mu(params: &mut [f64]) {
-    let lambda_id = usize::from(TKF91Parameters::Lambda);
-    let mu_id = usize::from(TKF91Parameters::Mu);
-    let lambda = params[lambda_id];
-    let mu = params[mu_id];
-
-    if lambda <= 0.0 && mu <= 0.0 {
-        warn!(
-            "Both lambda and mu must be positive. Setting lambda to {DEFAULT_LAMBDA} and mu to {DEFAULT_MU}."
-        );
-        params[lambda_id] = DEFAULT_LAMBDA;
-        params[mu_id] = DEFAULT_MU;
-    } else if lambda <= 0.0 {
-        params[lambda_id] = DEFAULT_LAMBDA_MU_RATIO * mu;
-        warn!(
-            "Tried to set lambda to invalid value {lambda}. \
-            It must be in (0, mu) with mu = {mu}. \
-            Setting lambda to {DEFAULT_LAMBDA_MU_RATIO}*mu = {}",
-            params[lambda_id]
-        );
-    } else if mu <= lambda {
-        params[mu_id] = lambda / DEFAULT_LAMBDA_MU_RATIO;
-        warn!(
-            "Tried to set mu to invalid value {mu}. \
-            It must be in (lambda, infinity) with lambda = {lambda}. \
-            Setting mu to lambda/{DEFAULT_LAMBDA_MU_RATIO} = {}",
-            params[mu_id]
-        );
-    }
-}
-
-/// Builder for the cost using the [`TKF91IndelModel`], i.e., without a substitution model.
-pub struct TKF91IndelCostBuilder<AA: AncestralAlignment> {
-    params: Vec<f64>,
-    phylo: PhyloInfo<AA>,
-}
-
-impl<AA: AncestralAlignment> TKF91IndelCostBuilder<AA> {
-    pub fn new(params: &[f64], phylo: PhyloInfo<AA>) -> Self {
-        Self {
-            params: params.to_vec(),
-            phylo,
-        }
-    }
-
-    pub fn build(self) -> Result<TKFIndelCost<TKF91IndelModel, AA>> {
-        let mut params = self.params;
-        if params.len() != 2 {
-            warn!(
-                "Expected 2 parameters for TKF91 model (lambda, mu), but got {}",
-                params.len()
-            );
-            warn!("Falling back to default values");
-            params.resize(2, 0.0);
-            params[usize::from(TKF91Parameters::Lambda)] = DEFAULT_LAMBDA;
-            params[usize::from(TKF91Parameters::Mu)] = DEFAULT_MU;
-        }
-        validate_lambda_mu(&mut params);
-        let model = TKF91IndelModel { params };
-        let info = TKFIndelModelInfo::new(&model, &self.phylo);
-        Ok(TKFIndelCost {
-            model,
-            phylo: self.phylo,
-            model_info: RefCell::new(info),
-        })
-    }
-}
-
-/// Builder for the TKF91 cost, i.e., with a substitution model.
-pub struct TKF91CostBuilder<Q: QMatrix, AA: AncestralAlignment> {
-    params: Vec<f64>,
-    subst_model: SubstModel<Q>,
-    phylo: PhyloInfo<AA>,
-}
-
-impl<Q: QMatrix, AA: AncestralAlignment> TKF91CostBuilder<Q, AA> {
-    pub fn new(params: &[f64], subst_model: SubstModel<Q>, phylo: PhyloInfo<AA>) -> Self {
-        Self {
-            params: params.to_vec(),
-            subst_model,
-            phylo,
-        }
-    }
-
-    pub fn build(self) -> Result<TKFCost<Q, TKF91IndelModel, AA>> {
-        let indel_cost = TKF91IndelCostBuilder::new(&self.params, self.phylo.clone()).build()?;
-        let subst_cost = SCB::new(self.subst_model, self.phylo.clone()).build()?;
-        Ok(TKFCost {
-            indel_cost,
-            subst_cost,
-        })
-    }
-}
-
 #[cfg(test)]
 #[cfg_attr(coverage, coverage(off))]
 mod private_tests {
-    use approx::assert_relative_eq;
+    use assert_matches::assert_matches;
+    use rstest::rstest;
+
+    use crate::Error;
 
     use super::*;
 
     #[test]
+    fn tkf91_indel_model_new_success() {
+        let model = TKF91IndelModel::new(&[0.5, 1.0]).unwrap();
+        assert_eq!(model.lambda(), 0.5);
+        assert_eq!(model.mu(), 1.0);
+        assert_eq!(model.param_count(), TKF91_SEARCH_PARAM_COUNT);
+        assert_eq!(model.param(usize::from(TKF91SearchParameters::Ratio)), 0.5);
+        assert_eq!(model.param(usize::from(TKF91SearchParameters::Rate)), 0.75);
+    }
+
+    #[rstest]
+    #[case::too_few(&[0.5])]
+    #[case::too_many(&[0.5, 1.0, 2.0])]
+    fn tkf91_indel_model_new_wrong_param_count(#[case] params: &[f64]) {
+        let err = TKF91IndelModel::new(params).unwrap_err();
+        assert_matches!(
+            err,
+            Error::Tkf(msg) if msg.contains("TKF91: expected 2 parameters (lambda, mu), got")
+        );
+    }
+
+    #[rstest]
+    #[case::zero(&[0.0, 1.0])]
+    #[case::negative(&[-0.5, 1.0])]
+    #[case::nan(&[f64::NAN, 1.0])]
+    #[case::positive_infinite(&[f64::INFINITY, 1.0])]
+    #[case::negative_infinite(&[f64::NEG_INFINITY, 1.0])]
+    fn tkf91_indel_model_new_invalid_lambda(#[case] params: &[f64]) {
+        let err = TKF91IndelModel::new(params).unwrap_err();
+        assert_matches!(
+            err,
+            Error::Tkf(msg)
+                if msg.contains("parameter lambda must be positive, finite and non-nan")
+        );
+    }
+
+    #[rstest]
+    #[case::zero(&[0.5, 0.0])]
+    #[case::negative(&[0.5, -1.0])]
+    #[case::nan(&[0.5, f64::NAN])]
+    #[case::positive_infinite(&[0.5, f64::INFINITY])]
+    #[case::negative_infinite(&[0.5, f64::NEG_INFINITY])]
+    fn tkf91_indel_model_new_invalid_mu(#[case] params: &[f64]) {
+        let err = TKF91IndelModel::new(params).unwrap_err();
+        assert_matches!(
+            err,
+            Error::Tkf(msg) if msg.contains("parameter mu must be positive, finite and non-nan")
+        );
+    }
+
+    #[rstest]
+    #[case::lambda_eq_mu(&[1.0, 1.0])]
+    #[case::lambda_gt_mu(&[2.0, 1.0])]
+    fn tkf91_indel_model_new_lambda_ge_mu(#[case] params: &[f64]) {
+        let err = TKF91IndelModel::new(params).unwrap_err();
+        assert_matches!(
+            err,
+            Error::Tkf(msg) if msg.contains("parameter lambda must be less than mu")
+        );
+    }
+
+    #[test]
     #[should_panic]
     fn tkf91_param_range_invalid_index() {
-        let model = TKF91IndelModel {
-            params: vec![0.5, 1.0],
-        };
+        let model = TKF91IndelModel::new(&[0.5, 1.0]).unwrap();
         // Use an invalid index
-        model.param_range(2);
+        model.param_range(TKF91_INTERNAL_PARAM_COUNT);
     }
 
     #[test]
     fn tkf91_model_fmt() {
-        let tkf_indel_model = TKF91IndelModel {
-            params: vec![1.1, 2.0],
-        };
+        let tkf_indel_model = TKF91IndelModel::new(&[1.1, 2.0]).unwrap();
 
         let fmt = format!("{}", tkf_indel_model);
 
@@ -246,22 +285,96 @@ mod private_tests {
     }
 
     #[test]
-    fn tkf91_indel_set_param() {
-        let mut model = TKF91IndelModel {
-            params: vec![1.0, 2.0],
-        };
-        let new_lambda = 1.1;
-        model.set_param(usize::from(TKF91Parameters::Lambda), new_lambda);
-        assert_eq!(model.lambda(), new_lambda);
-        let new_mu = 2.1;
-        model.set_param(usize::from(TKF91Parameters::Mu), new_mu);
-        assert_eq!(model.mu(), new_mu);
+    fn tkf91_setting_params_doesnt_drift() {
+        // During prototyping when setting a new ratio or rate the lambda and mu
+        // would be used to calculate new values for lambda and mu.
+        // This caused parameters to differ slightly when setting rate or ratio multiple times,
+        // i.e., setting rate to x_1, x_2, ..., x_n or setting rate straight to x_n would yield
+        // different values for lambda and mu.
+        // With the current implementation, coordinate systems are separated: to calculate lambda
+        // and mu, only ratio and rate are used, and to calculate ratio and rate, only lambda and mu
+        // are used.
+        let mut model1 = TKF91IndelModel::new(&[1.0, 2.0]).unwrap();
+        let mut model2 = model1.clone();
+        let ratio_idx = usize::from(TKF91SearchParameters::Ratio);
+        let rate_idx = usize::from(TKF91SearchParameters::Rate);
+
+        let new_rate = f64::EPSILON;
+        let end_rate = 2.0;
+        model1.set_param(rate_idx, new_rate);
+        model1.set_param(rate_idx, end_rate);
+        model2.set_param(rate_idx, end_rate);
+        assert_eq!(model1.lambda(), model2.lambda());
+        assert_eq!(model1.mu(), model2.mu());
+
+        let new_ratio = f64::EPSILON;
+        let end_ratio = 0.5;
+        model1.set_param(ratio_idx, new_ratio);
+        model1.set_param(ratio_idx, end_ratio);
+        model2.set_param(ratio_idx, end_ratio);
+        assert_eq!(model1.lambda(), model2.lambda());
+        assert_eq!(model1.mu(), model2.mu());
     }
 
     #[test]
-    fn tkf91_expected_root_length() {
-        let model = TKF91IndelModel::new(1.1, 2.0);
-        let ratio = model.lambda() / model.mu();
-        assert_relative_eq!(model.expected_root_length(), ratio / (1.0 - ratio));
+    fn tkf91_set_lambda() {
+        let mut model = TKF91IndelModel::new(&[1.0, 2.0]).unwrap();
+        let new_lambda = 0.5;
+        model.set_param(usize::from(TKF91SearchParameters::Lambda), new_lambda);
+        assert_eq!(model.lambda(), new_lambda);
+        assert_eq!(model.mu(), 2.0);
+        assert_eq!(model.param(usize::from(TKF91SearchParameters::Ratio)), 0.25);
+        assert_eq!(model.param(usize::from(TKF91SearchParameters::Rate)), 1.25);
+    }
+
+    #[test]
+    fn tkf91_set_mu() {
+        let mut model = TKF91IndelModel::new(&[1.0, 2.0]).unwrap();
+        let new_mu = 3.0;
+        model.set_param(usize::from(TKF91SearchParameters::Mu), new_mu);
+        assert_eq!(model.lambda(), 1.0);
+        assert_eq!(model.mu(), new_mu);
+        assert_eq!(
+            model.param(usize::from(TKF91SearchParameters::Ratio)),
+            1.0 / 3.0
+        );
+        assert_eq!(model.param(usize::from(TKF91SearchParameters::Rate)), 2.0);
+    }
+
+    #[test]
+    fn tkf91_set_ratio() {
+        let mut model = TKF91IndelModel::new(&[1.0, 5.0]).unwrap();
+        let initial_rate = model.param(usize::from(TKF91SearchParameters::Rate));
+        let new_ratio = 0.5;
+        model.set_param(usize::from(TKF91SearchParameters::Ratio), new_ratio);
+        assert_eq!(model.lambda(), 2.0);
+        assert_eq!(model.mu(), 4.0);
+        assert_eq!(
+            model.param(usize::from(TKF91SearchParameters::Ratio)),
+            new_ratio
+        );
+        assert_eq!(
+            model.param(usize::from(TKF91SearchParameters::Rate)),
+            initial_rate
+        );
+    }
+
+    #[test]
+    fn tkf91_set_rate() {
+        let mut model = TKF91IndelModel::new(&[1.0, 2.0]).unwrap();
+        let initial_ratio = model.param(usize::from(TKF91SearchParameters::Ratio));
+        assert_eq!(initial_ratio, 0.5);
+        let new_rate = 3.0;
+        model.set_param(usize::from(TKF91SearchParameters::Rate), new_rate);
+        assert_eq!(model.lambda(), 2.0);
+        assert_eq!(model.mu(), 4.0);
+        assert_eq!(
+            model.param(usize::from(TKF91SearchParameters::Ratio)),
+            initial_ratio
+        );
+        assert_eq!(
+            model.param(usize::from(TKF91SearchParameters::Rate)),
+            new_rate
+        );
     }
 }

@@ -1,8 +1,7 @@
 use fixedbitset::FixedBitSet;
 
-use crate::alignment::AncestralAlignment;
+use crate::alignment::{blocks_of_ancestral_alignment, AncestralAlignment};
 use crate::bug;
-use crate::tkf_model::blocks_of_alignment;
 
 /// The fragmentation of an alignment.
 ///
@@ -174,7 +173,7 @@ impl Fragmentation {
         }
 
         // get the blocks of the alignment, these indices must also be in the fragmentation
-        let blocks = blocks_of_alignment(masa);
+        let blocks = blocks_of_ancestral_alignment(masa);
         for block in blocks {
             if !self.right_exclusive_boundaries.contains(&block) {
                 bug!(format!(

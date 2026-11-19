@@ -204,6 +204,10 @@ impl<Q: QMatrix, A: Alignment> ModelSearchCost for SubstitutionCost<Q, A> {
         self.model.qmatrix.param_range(param)
     }
 
+    fn freqs(&self) -> &FreqVector {
+        self.model.freqs()
+    }
+
     fn set_freqs(&mut self, freqs: FreqVector) -> Result<()> {
         self.model.set_freqs(freqs)?;
         self.tmp.borrow_mut().node_models_valid.fill(false);
@@ -212,10 +216,6 @@ impl<Q: QMatrix, A: Alignment> ModelSearchCost for SubstitutionCost<Q, A> {
 
     fn empirical_freqs(&self) -> FreqVector {
         self.info.freqs()
-    }
-
-    fn freqs(&self) -> &FreqVector {
-        self.model.freqs()
     }
 }
 

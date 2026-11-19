@@ -1,8 +1,9 @@
+use approx::relative_eq;
 use fixedbitset::FixedBitSet;
-use log::info;
+use log::{info, warn};
 use rand::{Rng, SeedableRng};
 
-use crate::alignment::{AncestralAlignment, Mapping};
+use crate::alignment::{block_borders_enforced_by_ancestral_seqs, AncestralAlignment, Mapping};
 use crate::likelihood::TreeSearchCost;
 use crate::phylo_info::PhyloInfo;
 use crate::random::RandomGenerator;
@@ -142,36 +143,50 @@ struct BackTrackingResult {
 /// of the node that is passed as argument and its parent node under the [`TKFModel`]
 /// maximum likelihood criterion. The re-estimation of indel points can remove characters or add new
 /// characters ([wild cards](`crate::alphabets::AMB_CHAR`)) to the ancestral sequences.
-/// If a character is removed from a column leaving it empty, the column is not removed from the alignment.
-/// This can only happen if the initial alignment contained columns where the homology path of the
-/// ancestral character did not survive to any of the leaves. If you want to avoid this call
-/// [`AncestralAlignment::remove_extinct_columns`] before re-estimation.
-/// Can be used as an ASR refinement method if repeatedly called on all internal nodes (i.e. edges),
-/// see the [example](#example) below.
-/// It is also used after an NNI move was applied during tree inference to fix the
-/// ancestral sequences of the affected nodes, see
-/// [`crate::tkf_model::TKFIndelCost::update_tree`].
+///
+/// # Attention
+/// * If during re-estimation a character is removed from a column leaving it empty, the column is not
+///   removed from the alignment. This can only happen if the initial alignment contained columns where
+///   the homology path of the ancestral character did not survive to any of the leaves.
+///   If you want to avoid this call [`AncestralAlignment::remove_extinct_columns`] before re-estimation.
+/// * If there are any blocks that are enforced by only the ancestral sequences, like in the case of
+///   extinct columns, they may not be enforced after the re-estimation. Therefore, when creating a new cost from
+///   the re-estimated alignment the log-likelihoods can differ because the blocks are different.
+///   Use [`block_borders_enforced_by_ancestral_seqs`] to check.
+///
+/// # Applications
+/// * Can be used as an ASR refinement method if repeatedly called on all internal nodes (i.e. edges),
+///   see the [example](#example) below.
+/// * It is also used after an NNI move was applied during tree inference to fix the
+///   ancestral sequences of the affected nodes, see
+///   [`crate::tkf_model::TKFIndelCost::update_tree`].
 ///
 /// # Example
 /// ```rust
 /// # use phyne::Result;
 /// # fn main() -> Result<()> {
-/// use phyne::alignment::AncestralAlignment;
+/// use phyne::alignment::{AncestralAlignment, block_borders_enforced_by_ancestral_seqs};
+/// use phyne::likelihood::ModelSearchCost;
 /// use phyne::phylo_info::PhyloInfoBuilder;
 /// use phyne::random::DefaultGenerator;
-/// use phyne::tkf_model::{EdgeSeqsReestimator, TKF92IndelCostBuilder};
+/// use phyne::tkf_model::{EdgeSeqsReestimator, TKF92IndelModel, TKFIndelCostBuilder};
 /// use phyne::tree::NodeIdx::{Internal, Leaf};
+///
 /// // Re-estimation for ASR refinement.
-/// // The alignment below includes ancestral sequences for which the indel points will be refined.
+/// // The alignment below includes ancestral sequences
+/// // for which the indel points will be re-estimated.
 /// let tree = "data/tkf/reestimate/tree.newick";
 /// let msa = "data/tkf/reestimate/masa.fasta";
 /// let mut phylo = PhyloInfoBuilder::with_attrs(msa, tree).build_with_ancestors()?;
+///
+/// // By calling and ensuring this we can guarantee
+/// // that the clean_cost matches the re-estimated cost.
 /// phylo.msa.remove_extinct_columns();
-/// let lambda = 0.9;
-/// let mu = 1.0;
-/// let r = 0.5;
-/// let mut tkf92_indel_cost = TKF92IndelCostBuilder::new(&[lambda, mu, r], phylo)
-///     .build()?;
+/// assert!(!block_borders_enforced_by_ancestral_seqs(&phylo.msa));
+///
+/// let tkf_indel_model = TKF92IndelModel::default();
+/// let mut tkf92_indel_cost = TKFIndelCostBuilder::new(tkf_indel_model.clone(), phylo).build();
+/// let mut prev_logl = tkf92_indel_cost.cost();
 /// let mut rng = DefaultGenerator::default();
 /// let mut reestimator = EdgeSeqsReestimator::new(&mut tkf92_indel_cost, &mut rng);
 ///
@@ -182,16 +197,23 @@ struct BackTrackingResult {
 ///     match node {
 ///         Internal(_) => {
 ///             let new_cost = reestimator.reestimate(&node)?;
-///             println!("Re-estimated sequences at node {node}, cost after re-estimation: {new_cost}",);
+///             assert!(new_cost >= prev_logl);
+///             if new_cost > prev_logl {
+///                 println!("logl improved from {prev_logl} to {new_cost}");
+///                 prev_logl = new_cost;
+///             }
 ///         }
 ///         Leaf(_) => {}
 ///     }
 /// }
+///
 /// println!(
 ///     "The re-estimated ancestral MSA is {}",
 ///     reestimator.phylo().msa
 /// );
-/// println!("Re-estimation complete.");
+///
+/// let clean_cost = TKFIndelCostBuilder::new(tkf_indel_model, reestimator.phylo().clone()).build();
+/// assert_eq!(clean_cost.cost(), tkf92_indel_cost.cost());
 /// # Ok(()) }
 /// ```
 pub struct EdgeSeqsReestimator<'a, T: TKFModel, AA: AncestralAlignment, R: Rng + SeedableRng> {
@@ -200,6 +222,7 @@ pub struct EdgeSeqsReestimator<'a, T: TKFModel, AA: AncestralAlignment, R: Rng +
     cost: &'a mut TKFIndelCost<T, AA>,
     quartet_edges: QuartetEdges,
     rng: &'a mut RandomGenerator<R>,
+    logl_before_reestimation: f64,
 }
 
 impl<'a, T, AA, R> EdgeSeqsReestimator<'a, T, AA, R>
@@ -216,12 +239,23 @@ where
         rng: &'a mut RandomGenerator<R>,
     ) -> EdgeSeqsReestimator<'a, T, AA, R> {
         let num_blocks = cost.model_info.borrow().blocks.len();
+        if block_borders_enforced_by_ancestral_seqs(&cost.phylo.msa) {
+            warn!(
+                "There are block borders enforced by the ancestral sequences. \
+                 Re-estimation may change the ancestral sequences and therefore the blocks \
+                 that are enforced by the alignment. The log-likelihood of the current cost \
+                 and the log-likelihood of a cost created from the re-estimated alignment 
+                 may therefore differ."
+            )
+        }
+        let logl = cost.cost();
         EdgeSeqsReestimator {
             dp_table: vec![[f64::NEG_INFINITY; DP_COL_SIZE]; num_blocks],
             backtracking_table: vec![[BACKTRACKING_INVALID; DP_COL_SIZE]; num_blocks],
             cost,
             quartet_edges: QuartetEdges::default(),
             rng,
+            logl_before_reestimation: logl,
         }
     }
 
@@ -241,7 +275,9 @@ where
     /// Accordingly, this method will return an error if this is not the case.
     ///
     /// # Returns
-    /// On success, returns the resulting ln likelihood of the [`AncestralAlignment`] given the tree after reestimation.
+    /// On success, returns the ln likelihood of the [`AncestralAlignment`] given the tree after reestimation.
+    /// This value may differ slightly from the one obtained by calling `cost.cost()`
+    /// after reestimation, due to floating-point precision.
     pub fn reestimate(&mut self, v2_idx: &NodeIdx) -> Result<f64> {
         let v2_id = self.cost.phylo.tree.node(v2_idx).id.clone();
         if v2_idx == &self.cost.phylo.tree.root {
@@ -272,7 +308,9 @@ where
     /// a sibling. If this condition is violated, this method panics.
     ///
     /// # Returns
-    /// Returns the resulting ln likelihood of the [`AncestralAlignment`] given the tree after reestimation.
+    /// Returns the ln likelihood of the [`AncestralAlignment`] given the tree after reestimation.
+    /// This value may differ slightly from the one obtained by calling `cost.cost()`
+    /// after reestimation, due to floating-point precision.
     pub fn reestimate_unchecked(&mut self, v2_idx: &NodeIdx) -> f64 {
         if !self
             .cost
@@ -296,10 +334,23 @@ where
         self.fill_dp_table();
         let backtrack_res = self.backtrack();
         self.set_invalid();
-        self.update_mappings(&backtrack_res);
+        let mappings_changed = self.update_mappings(&backtrack_res);
         debug_assert!(self.cost.phylo.check_dollos_constraint().is_ok());
         self.make_valid_for_further_reestimate_calls();
-        backtrack_res.logl
+        // Making sure that the returned logl is unchanged if the mappings did not change.
+        // Returning `logl_from_root_model_info` or `backtrack_res.logl` instead of
+        // `self.logl_before_reestimation` sometimes results in a slightly different value since
+        // `prepare_for_dp` and `make_valid_for_further_reestimate_calls`
+        // may introduce small floating point differences.
+        // This fixes https://github.com/acg-team/phyne/issues/175
+        if mappings_changed {
+            let new_logl = self.cost.logl_from_root_model_info();
+            debug_assert!(relative_eq!(new_logl, backtrack_res.logl, epsilon = 1e-8));
+            self.logl_before_reestimation = new_logl;
+            new_logl
+        } else {
+            self.logl_before_reestimation
+        }
     }
 
     /// Resets the DP and backtracking tables. Initialises the [`QuartetEdges`]. Removes the old
@@ -350,11 +401,16 @@ where
         }
     }
 
-    fn update_mappings(&mut self, backtrack_res: &BackTrackingResult) {
+    /// Updates the ancestral maps of the quartet nodes `v1` and `v2` with the re-estimated
+    /// mappings. Returns `true` if at least one of the maps changed.
+    fn update_mappings(&mut self, backtrack_res: &BackTrackingResult) -> bool {
         let block_lengths = &self.cost.model_info.borrow().block_lengths;
         let seq_len = self.cost.phylo.msa.len();
         let v1_mapping = mapping_from_node_seq(&backtrack_res.v1_bitset, block_lengths, seq_len);
         let v2_mapping = mapping_from_node_seq(&backtrack_res.v2_bitset, block_lengths, seq_len);
+        let v1_changed = &v1_mapping != self.cost.phylo.msa.ancestral_map(self.quartet_edges.v1());
+        let v2_changed = &v2_mapping != self.cost.phylo.msa.ancestral_map(self.quartet_edges.v2());
+        let mappings_changed = v1_changed || v2_changed;
         let msa = &mut self.cost.phylo.msa;
         assert!(v1_mapping.len() == msa.len());
         assert!(v2_mapping.len() == msa.len());
@@ -363,6 +419,7 @@ where
             .expect("Failed to update ancestral map for v1");
         msa.update_ancestral_map(self.quartet_edges.v2(), v2_mapping)
             .expect("Failed to update ancestral map for v2");
+        mappings_changed
     }
 
     /// Updates the tmp values of the model info such that there are valid for further
@@ -740,7 +797,9 @@ mod private_tests {
     use crate::alphabets::Alphabet;
     use crate::phylo_info::PhyloInfoBuilder;
     use crate::random::{DefaultGenerator, FakeGenerator, FakeRng};
-    use crate::tkf_model::{tests::setup_test_phylo, EdgeSeqsReestimator, TKF92IndelCostBuilder};
+    use crate::tkf_model::{
+        tests::setup_test_phylo, EdgeSeqsReestimator, TKF92IndelModel, TKFIndelCostBuilder,
+    };
     use crate::{record_wo_desc as record, tree};
 
     use super::*;
@@ -826,9 +885,8 @@ mod private_tests {
         #[case] expected_events: QuartetEvents,
     ) {
         let phylo = setup_test_phylo(Alphabet::dna());
-        let mut cost = TKF92IndelCostBuilder::new(&[0.4, 0.5, 0.8], phylo)
-            .build()
-            .unwrap();
+        let tkf_indel_model = TKF92IndelModel::new(&[0.4, 0.5, 0.8]).unwrap();
+        let mut cost = TKFIndelCostBuilder::new(tkf_indel_model, phylo).build();
         let rng = &mut FakeGenerator::default();
         let v2_idx = cost.phylo.tree.by_id("I3").idx;
         let mut reestimator = EdgeSeqsReestimator::new(&mut cost, rng);
@@ -842,9 +900,8 @@ mod private_tests {
     fn tkf_backtrack() {
         let phylo = setup_test_phylo(Alphabet::dna());
         // the parameters here do not matter for the backtracking test
-        let mut cost = TKF92IndelCostBuilder::new(&[0.4, 0.5, 0.8], phylo)
-            .build()
-            .unwrap();
+        let tkf_indel_model = TKF92IndelModel::new(&[0.4, 0.5, 0.8]).unwrap();
+        let mut cost = TKFIndelCostBuilder::new(tkf_indel_model, phylo).build();
         // FakeRng such that we can test tie-breaking (max value in last column) in backtracking
         let rng = &mut FakeGenerator::from_rng(FakeRng::from_f64_values(vec![0.1, 0.2]));
 
@@ -918,11 +975,9 @@ mod private_tests {
             tree,
         )
         .unwrap();
-        let mut cost = TKF92IndelCostBuilder::new(&[0.4, 0.5, 0.8], phylo)
-            .build()
-            .unwrap();
-        let logl = cost.logl(); // must be called to initialize the model_info, which is
-                                // needed for const_per_alignment().
+        let tkf_indel_model = TKF92IndelModel::new(&[0.4, 0.5, 0.8]).unwrap();
+        let mut cost = TKFIndelCostBuilder::new(tkf_indel_model, phylo).build();
+        let logl = cost.logl(); // must be called to initialize the model_info, which is needed for const_per_alignment().
         let rng = &mut DefaultGenerator::default();
         let reestimator = EdgeSeqsReestimator::new(&mut cost, rng);
         assert_eq!(reestimator.const_per_alignment(), logl);
@@ -931,10 +986,8 @@ mod private_tests {
     #[test]
     fn tkf_remove_and_add_back_quartet() {
         let phylo = setup_test_phylo(Alphabet::dna());
-        let mut cost = TKF92IndelCostBuilder::new(&[0.4, 0.5, 0.8], phylo)
-            .build()
-            .unwrap();
-
+        let tkf_indel_model = TKF92IndelModel::new(&[0.4, 0.5, 0.8]).unwrap();
+        let mut cost = TKFIndelCostBuilder::new(tkf_indel_model, phylo).build();
         let rng = &mut DefaultGenerator::default();
         let mut reestimator = EdgeSeqsReestimator::new(&mut cost, rng);
         let original_logl = reestimator.cost.logl();
@@ -956,9 +1009,8 @@ mod private_tests {
             .build_with_ancestors()
             .unwrap();
 
-        let mut cost = TKF92IndelCostBuilder::new(&[1.0, 2.0, 0.3], phylo)
-            .build()
-            .unwrap();
+        let tkf_indel_model = TKF92IndelModel::new(&[1.0, 2.0, 0.3]).unwrap();
+        let mut cost = TKFIndelCostBuilder::new(tkf_indel_model, phylo).build();
         let rng = &mut DefaultGenerator::default();
         let mut reestimator = EdgeSeqsReestimator::new(&mut cost, rng);
         let original_logl = reestimator.cost.logl();
@@ -988,9 +1040,8 @@ mod private_tests {
             .build_with_ancestors()
             .unwrap();
 
-        let mut cost = TKF92IndelCostBuilder::new(&[1.0, 2.0, 0.3], phylo)
-            .build()
-            .unwrap();
+        let tkf_indel_model = TKF92IndelModel::new(&[1.0, 2.0, 0.3]).unwrap();
+        let mut cost = TKFIndelCostBuilder::new(tkf_indel_model, phylo).build();
         let rng = &mut DefaultGenerator::default();
         let mut reestimator = EdgeSeqsReestimator::new(&mut cost, rng);
         let original_logl = reestimator.cost.logl();

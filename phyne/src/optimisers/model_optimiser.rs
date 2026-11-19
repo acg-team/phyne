@@ -62,7 +62,7 @@ impl<C: ModelSearchCost + Display + Clone> ModelOptimiser<C> {
             costs.push(curr_cost);
         }
 
-        debug_assert_eq!(curr_cost, self.c.cost());
+        debug_assert_eq!(curr_cost, self.c.clone().cost());
         info!("Done optimising model parameters");
         info!("Final cost: {curr_cost}, achieved in {iterations} iteration(s)");
 
@@ -109,12 +109,11 @@ impl<C: ModelSearchCost + Display + Clone> ModelOptimiser<C> {
             debug!("Optimising parameter {param:?} from value {start_value} with cost {curr_cost}");
             let param_opt = self.opt_parameter(param, start_value)?;
             if param_opt.final_cost < curr_cost {
-                // Parameter will have been reset by the optimiser, set it back to start value
-                self.c.set_param(param, start_value);
                 continue;
             }
             self.c.set_param(param, param_opt.value);
             curr_cost = param_opt.final_cost;
+            debug_assert_eq!(curr_cost, self.c.clone().cost());
             debug!(
                 "Optimised parameter {param:?} to value {} with cost {curr_cost}",
                 param_opt.value

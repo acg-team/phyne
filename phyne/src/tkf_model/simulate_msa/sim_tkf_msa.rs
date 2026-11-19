@@ -326,7 +326,7 @@ mod private_tests {
         let lambda = 0.19;
         let mu = 0.2;
         let r = 0.8;
-        let tkf_model = TKF92IndelModel::new(lambda, mu, r);
+        let tkf_model = TKF92IndelModel::new(&[lambda, mu, r]).unwrap();
 
         let max_ins_len = Some(50);
         let simulator =
@@ -355,7 +355,7 @@ mod private_tests {
     fn tkf91_simulation_fixed_root_length() {
         let tree = tree!("(A:1.0,B:1.0)R;");
         let subst_model = SubstModel::<JC69>::default();
-        let tkf_model = TKF91IndelModel::new(0.1, 0.2);
+        let tkf_model = TKF91IndelModel::new(&[0.1, 0.2]).unwrap();
 
         let max_ins_len = Some(50);
         let simulator =
@@ -372,7 +372,7 @@ mod private_tests {
     fn tkf92_simulation_fixed_root_length() {
         let tree = tree!("(A:1.0,B:1.0)R;");
         let subst_model = SubstModel::<JC69>::default();
-        let tkf_model = TKF92IndelModel::new(0.1, 0.2, 0.8);
+        let tkf_model = TKF92IndelModel::new(&[0.1, 0.2, 0.8]).unwrap();
         let max_ins_len = Some(50);
         let simulator =
             TKFMSASimulator::new(tkf_model, subst_model, tree.clone(), max_ins_len).unwrap();
@@ -393,7 +393,7 @@ mod private_tests {
             "((((A:1.0,B:1.0)I1:0.5,C:1.5)I2:0.5,D:2.0)I3:0.5,((E:1.0,F:1.0)I4:0.5,G:1.5)I5:0.5)R;"
         );
         let subst_model = SubstModel::<JC69>::default();
-        let tkf_model = TKF92IndelModel::new(0.19, 0.2, 0.8);
+        let tkf_model = TKF92IndelModel::new(&[0.19, 0.2, 0.8]).unwrap();
         let max_ins_len = Some(50);
         let seed = 123;
 

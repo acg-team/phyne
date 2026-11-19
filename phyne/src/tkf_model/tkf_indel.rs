@@ -18,13 +18,63 @@ use crate::tree::Tree;
 use crate::{bail, bug, Result};
 
 lazy_static! {
-    pub(super) static ref DUMMY_FREQS: DVector<f64> = DVector::<f64>::zeros(0);
+    pub(super) static ref DUMMY_FREQS: FreqVector = DVector::<f64>::zeros(0);
 }
 
 pub(super) static DEFAULT_LAMBDA: f64 = 1.0;
 pub(super) static DEFAULT_MU: f64 = 1.1;
-pub(super) static DEFAULT_LAMBDA_MU_RATIO: f64 = 0.9;
 pub(super) static DEFAULT_R: f64 = 0.5;
+
+/// Bails if an incorrect number of parameters are provided for the given model.
+pub(super) fn valid_number_tkf_params(
+    model_name: &str,
+    param_names: &str,
+    params: &[f64],
+    expected_len: usize,
+) -> Result<()> {
+    if params.len() != expected_len {
+        bail!(
+            Tkf,
+            "{model_name}: expected {expected_len} parameters ({param_names}), got {}",
+            params.len()
+        );
+    }
+    Ok(())
+}
+
+pub(super) fn valid_lambda_mu(lambda: f64, mu: f64) -> Result<()> {
+    if !lambda.is_finite() || lambda <= 0.0 {
+        bail!(
+            Tkf,
+            "parameter lambda must be positive, finite and non-nan, but got lambda = {}",
+            lambda
+        );
+    }
+    if !mu.is_finite() || mu <= 0.0 {
+        bail!(
+            Tkf,
+            "parameter mu must be positive, finite and non-nan, but got mu = {}",
+            mu
+        );
+    }
+    if lambda >= mu {
+        bail!(
+            Tkf,
+            "parameter lambda must be less than mu, but got lambda = {} and mu = {}",
+            lambda,
+            mu
+        );
+    }
+    Ok(())
+}
+
+/// Validates that the TKF92 parameter r is in (0, 1).
+pub(super) fn valid_r(r: f64) -> Result<()> {
+    if r.is_nan() || r <= 0.0 || r >= 1.0 {
+        bail!(Tkf, "parameter r must be in (0, 1), but got r = {}", r);
+    }
+    Ok(())
+}
 
 /// For the function [u]: only if the time is shorter than this threshold, we use the Taylor approximation.
 static SHORT_TIME_U: f64 = 1e-5;
@@ -46,19 +96,8 @@ pub(super) enum Event {
 /// [TKF92IndelModel](`crate::tkf_model::TKF92IndelModel`)).
 #[allow(clippy::upper_case_acronyms)]
 pub trait TKFModel: Clone + Display {
-    // TODO: it might be better for model optimisation to have parameter lambda and scale s = mu/lambda,
-    // because of the constraint that mu > lambda.
-    // See issue #152 https://github.com/acg-team/phyne/issues/152
     fn lambda(&self) -> f64;
     fn mu(&self) -> f64;
-    /// [TKF91](crate::tkf_model::tkf91) has 2 parameters: `lambda` and `mu`, [TKF92](crate::tkf_model::tkf92)
-    /// has 3 parameters: `lambda`, `mu` and `r`.
-    /// The parameter `r` in [TKF92](crate::tkf_model::tkf92) is used to model the length distribution of inserted segments,
-    /// i.e., in [`super::TKF92IndelModel::ln_insertion_factor_at_non_root`] and
-    /// [`super::TKF92IndelModel::ln_insertion_factor_at_root`].
-    fn params(&self) -> &[f64];
-    fn set_param(&mut self, idx: usize, value: f64);
-    fn param_range(&self, idx: usize) -> ParamRange;
     /// Returns the factor corresponding to an insertion event at the root.
     fn ln_insertion_factor_at_root(&self) -> f64;
     /// Returns the factor corresponding to an insertion event at a non-root node.
@@ -70,6 +109,14 @@ pub trait TKFModel: Clone + Display {
     /// corresponding to the evolutionary events in this block [`TKFModel::block_prob`] computes
     /// the ln probability of the block under the model.
     fn get_blocks<AA: AncestralAlignment>(&self, msa: &AA) -> Vec<usize>;
+    /// Used by [`TKFIndelCost`] which implements [`ModelSearchCost::param_count`].
+    fn param_count(&self) -> usize;
+    /// Used by [`TKFIndelCost`] which implements [`ModelSearchCost::param`].
+    fn param(&self, idx: usize) -> f64;
+    /// Used by [`TKFIndelCost`] which implements [`ModelSearchCost::set_param`].
+    fn set_param(&mut self, idx: usize, value: f64);
+    /// Used by [`TKFIndelCost`] which implements [`ModelSearchCost::param_range`].
+    fn param_range(&self, idx: usize) -> ParamRange;
 }
 
 // TODO: link our paper once it is published. For now see original TKF92 paper: https://doi.org/10.1007/bf00163848
@@ -313,6 +360,7 @@ impl<T: TKFModel, AA: AncestralAlignment> TKFIndelCost<T, AA> {
         };
         model_info.previous_event_deletion.set(node_id, false);
         model_info.valid.set(node_id, false);
+        model_info.valid_for_reestimation.set(node_id, false);
     }
 
     fn set_node_values(
@@ -395,28 +443,82 @@ impl<T: TKFModel, AA: AncestralAlignment> TKFIndelCost<T, AA> {
     }
 }
 
+/// Builder for [`TKFIndelCost`], i.e., the TKF indel cost of an
+/// [ancestral alignment](`AncestralAlignment`) and a [tree](`crate::tree::Tree`)
+/// under a [`TKFModel`], without a substitution model.
+///
+/// # Example
+/// ```rust
+/// use phyne::alignment::{Alignment, AncestralAlignment, Sequences, MASA};
+/// use phyne::likelihood::ModelSearchCost;
+/// use phyne::tkf_model::{TKF92IndelModel, TKFIndelCostBuilder};
+/// use phyne::{record_wo_desc as record, tree};
+///
+/// # use phyne::Result;
+/// # fn main() -> Result<()> {
+/// let tree = tree!("(((A1:2.0,B2:2.0)I3:0.3,C4:2.0)R5:1.0);");
+/// let phylo = MASA::from_aligned_with_ancestral(
+///     Sequences::new(vec![
+///         record!("A1", b"--GTGGA---"),
+///         record!("B2", b"-------NNA"),
+///         record!("I3", b"--T-------"),
+///         record!("C4", b"AGG-------"),
+///         record!("R5", b"--A-------"),
+///     ])?,
+///     tree,
+/// )?;
+/// let indel_model = TKF92IndelModel::new(&[0.4, 0.5, 0.8])?;
+/// let cost = TKFIndelCostBuilder::new(indel_model, phylo).build();
+/// assert!(cost.cost().is_finite());
+/// # Ok(()) }
+/// ```
+pub struct TKFIndelCostBuilder<T: TKFModel, AA: AncestralAlignment> {
+    model: T,
+    phylo: PhyloInfo<AA>,
+}
+
+impl<T: TKFModel, AA: AncestralAlignment> TKFIndelCostBuilder<T, AA> {
+    pub fn new(model: T, phylo: PhyloInfo<AA>) -> Self {
+        Self { model, phylo }
+    }
+
+    pub fn build(self) -> TKFIndelCost<T, AA> {
+        let info = TKFIndelModelInfo::new(&self.model, &self.phylo);
+        TKFIndelCost {
+            model: self.model,
+            phylo: self.phylo,
+            model_info: RefCell::new(info),
+        }
+    }
+}
+
 impl<T: TKFModel, AA: AncestralAlignment> ModelSearchCost for TKFIndelCost<T, AA> {
     fn cost(&self) -> f64 {
         self.logl()
     }
 
     fn param_count(&self) -> usize {
-        self.model.params().len()
+        self.model.param_count()
     }
 
     fn param(&self, idx: usize) -> f64 {
-        self.model.params()[idx]
+        self.model.param(idx)
     }
 
     fn set_param(&mut self, idx: usize, value: f64) {
         self.model.set_param(idx, value);
         self.model_info.borrow_mut().valid.clear();
+        self.model_info.borrow_mut().valid_for_reestimation.clear();
     }
 
     /// Returns the valid range for a model parameter [min, max], inclusive.
     /// Assumes that current parameter values are valid.
     fn param_range(&self, idx: usize) -> ParamRange {
         self.model.param_range(idx)
+    }
+
+    fn freqs(&self) -> &FreqVector {
+        &DUMMY_FREQS
     }
 
     fn set_freqs(&mut self, _: FreqVector) -> Result<()> {
@@ -430,10 +532,6 @@ impl<T: TKFModel, AA: AncestralAlignment> ModelSearchCost for TKFIndelCost<T, AA
         // At the time of writing this, this method is only used to set the frequencies of
         // the model, but the TKF92IndelCost does not have frequencies.
         self.phylo.freqs()
-    }
-
-    fn freqs(&self) -> &FreqVector {
-        &DUMMY_FREQS
     }
 }
 
@@ -605,52 +703,4 @@ pub(super) fn get_block_lengths(blocks: &[usize]) -> Vec<usize> {
         };
     }
     block_lens
-}
-
-#[cfg(test)]
-#[cfg_attr(coverage, coverage(off))]
-mod private_tests {
-
-    use super::*;
-    use crate::alphabets::Alphabet;
-    use crate::tkf_model::tests::setup_test_phylo;
-    use crate::tkf_model::TKF91IndelCostBuilder;
-    use crate::tkf_model::TKF92IndelCostBuilder;
-    use crate::tkf_model::TKFModel;
-
-    #[cfg(test)]
-    fn validate_lambda_mu(l: f64, m: f64, l_expected: f64, m_expected: f64) {
-        let cost = TKF91IndelCostBuilder::new(&[l, m], setup_test_phylo(Alphabet::dna()))
-            .build()
-            .unwrap();
-        assert_eq!(cost.model.lambda(), l_expected);
-        assert_eq!(cost.model.mu(), m_expected);
-        let cost = TKF92IndelCostBuilder::new(&[l, m, 0.1], setup_test_phylo(Alphabet::dna()))
-            .build()
-            .unwrap();
-        assert_eq!(cost.model.lambda(), l_expected);
-        assert_eq!(cost.model.mu(), m_expected);
-    }
-
-    #[cfg(test)]
-    fn validate_r(r: f64, r_expected: f64) {
-        let cost = TKF92IndelCostBuilder::new(&[1.0, 2.0, r], setup_test_phylo(Alphabet::dna()))
-            .build()
-            .unwrap();
-        assert_eq!(cost.model.r(), r_expected);
-    }
-
-    #[test]
-    fn tkf_validate_params_for_builder() {
-        validate_lambda_mu(-1.0, -2.0, DEFAULT_LAMBDA, DEFAULT_MU);
-        validate_lambda_mu(0.0, 2.0, DEFAULT_LAMBDA_MU_RATIO * 2.0, 2.0);
-        validate_lambda_mu(2.0, -0.1, 2.0, 2.0 / DEFAULT_LAMBDA_MU_RATIO);
-        validate_lambda_mu(2.0, 1.9999, 2.0, 2.0 / DEFAULT_LAMBDA_MU_RATIO);
-        validate_lambda_mu(1.2, 1.21, 1.2, 1.21);
-        validate_r(-0.5, DEFAULT_R);
-        validate_r(0.0, DEFAULT_R);
-        validate_r(1.0, DEFAULT_R);
-        validate_r(1.5, DEFAULT_R);
-        validate_r(0.1, 0.1);
-    }
 }
