@@ -242,7 +242,6 @@ mod tests;
 mod tkf92_fixed_fragmentation;
 
 #[cfg(test)]
-#[cfg_attr(coverage, coverage(off))]
 pub use tkf92_fixed_fragmentation::*;
 
 #[cfg(test)]
