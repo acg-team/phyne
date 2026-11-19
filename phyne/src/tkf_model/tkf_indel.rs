@@ -446,6 +446,38 @@ impl<T: TKFModel, AA: AncestralAlignment> TKFIndelCost<T, AA> {
             0.0
         }
     }
+
+    /// After an NNI move was applied in [`Self::update_tree`] the ancestral sequences might not be
+    /// valid anymore and must be re-estimated.
+    ///
+    /// Also sets tmp node values to [`invalid`](`Self::invalidate_nodes_after_nni`).
+    fn fix_phylo_after_nni(&mut self, v2: &NodeIdx) {
+        self.invalidate_nodes_after_nni(v2);
+        // TODO: For now we use the FakeGenerator to have deterministic behavior, but in the future
+        // we should use a proper RNG here. But pass the RNG from outside and not
+        // create a new one each time, see issue #142 https://github.com/acg-team/phyne/issues/142
+        let rng = &mut FakeGenerator::default();
+        let mut reestimator = EdgeSeqsReestimator::new(self, rng);
+        let dp_logl = reestimator.reestimate_unchecked(v2);
+        assert_relative_eq!(dp_logl, self.logl(), epsilon = 1e-10);
+    }
+
+    /// The tree movers mark nodes as dirty assuming the cost marginalises the
+    /// ancestral sequences, but for the TKF indel cost we include a specific ancestral alignment
+    /// and therefore after a tree move the direct children of the affected nodes
+    /// must also be marked dirty, because their events may have changed.
+    fn invalidate_nodes_after_nni(&mut self, v2: &NodeIdx) {
+        let mut nodes_to_invalidate = self.phylo.tree.node(v2).children.clone();
+        if let Some(sibling) = self.phylo.tree.sibling(v2) {
+            nodes_to_invalidate.push(sibling);
+        }
+        let model_info = &mut self.model_info.borrow_mut();
+        for node_idx in nodes_to_invalidate {
+            let idx = usize::from(node_idx);
+            model_info.valid.set(idx, false);
+            model_info.valid_for_reestimation.set(idx, false);
+        }
+    }
 }
 
 /// Builder for [`TKFIndelCost`], i.e., the TKF indel cost of an
@@ -556,22 +588,11 @@ impl<T: TKFModel, AA: AncestralAlignment> TreeSearchCost for TKFIndelCost<T, AA>
         drop(model_info);
 
         // We have to call this before setting the new tree.
-        let update_reason = update_reason(&self.phylo.tree, &tree, &dirty_nodes);
+        let reason = update_reason(&self.phylo.tree, &tree, &dirty_nodes);
         self.phylo.tree = tree;
 
-        if let TreeUpdateReason::NNI(v2) = update_reason {
-            // The tree movers mark nodes as dirty assuming the cost is marginalized over the
-            // ancestral sequences, but for the TKF indel cost we include a specific ancestral alignment
-            // and therefore after a tree move the direct children of affected nodes by the move
-            // are also dirty, because their events may have changed.
-            invalidate_nodes_after_nni(&self.phylo.tree, &mut self.model_info.borrow_mut(), &v2);
-            // TODO: For now we use the FakeGenerator to have deterministic behavior, but in the future
-            // we should use a proper RNG here. But pass the RNG from outside and not
-            // create a new one each time, see issue #142 https://github.com/acg-team/phyne/issues/142
-            let rng = &mut FakeGenerator::default();
-            let mut reestimator = EdgeSeqsReestimator::new(self, rng);
-            let dp_logl = reestimator.reestimate_unchecked(&v2);
-            assert_relative_eq!(dp_logl, self.logl(), epsilon = 1e-10);
+        if let TreeUpdateReason::NNI(v2) = reason {
+            self.fix_phylo_after_nni(&v2);
         }
         self.phylo.tree.clean();
     }
@@ -581,8 +602,12 @@ impl<T: TKFModel, AA: AncestralAlignment> TreeSearchCost for TKFIndelCost<T, AA>
     }
 }
 
+/// Returns the reason for the tree update.
+///
+/// We only care whether the update was an NNI or not,
+/// because for NNI we have to reestimate the edge sequences.
 enum TreeUpdateReason {
-    /// The tree was updated and topology changed due to a NNI move; contains the child node of the NNI edge.
+    /// The tree was updated and topology changed due to an NNI move; contains the child node of the NNI edge.
     /// Other topology changes are not supported yet, see [`crate::optimisers::Compatible`].
     #[allow(clippy::upper_case_acronyms)]
     NNI(NodeIdx),
@@ -605,22 +630,6 @@ fn update_reason(prev_tree: &Tree, new_tree: &Tree, dirty_nodes: &[usize]) -> Tr
         TreeUpdateReason::NNI(dirty_node_idx)
     } else {
         TreeUpdateReason::Other
-    }
-}
-
-fn invalidate_nodes_after_nni(tree: &Tree, model_info: &mut TKFIndelModelInfo, v2: &NodeIdx) {
-    // The tree movers mark nodes as dirty assuming the cost is marginalized over the
-    // ancestral sequences, but for TKF indel cost we include a specific ancestral alignment
-    // and therefore after a tree move direct child nodes of the nodes affected by the move
-    // are also dirty, because their events may have changed.
-    let mut nodes_to_invalidate = tree.node(v2).children.clone();
-    if let Some(sibling) = tree.sibling(v2) {
-        nodes_to_invalidate.push(sibling);
-    }
-    for node_idx in nodes_to_invalidate {
-        let idx = usize::from(node_idx);
-        model_info.valid.set(idx, false);
-        model_info.valid_for_reestimation.set(idx, false);
     }
 }
 
