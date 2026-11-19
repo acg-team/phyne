@@ -1,6 +1,7 @@
 // Warning: If you change this test, please also update the example in the README.md file
 // accordingly!
 #[test]
+#[cfg_attr(feature = "ci_coverage", ignore)]
 fn example_main_from_readme() {
     use phyne::likelihood::TreeSearchCost;
     use phyne::optimisers::{SprOptimiser, TopologyOptimiser};

@@ -7,6 +7,7 @@ use phyne::pip_model::{PIPIndels, PIPModel};
 use phyne::substitution_models::JC69;
 
 #[test]
+#[cfg_attr(feature = "ci_coverage", ignore)]
 fn homology_against_arpip() {
     // Data from the ARPIP paper, javapip simulation with mu = 0.1
     // sim-0_msa_new.fasta as the input msa
