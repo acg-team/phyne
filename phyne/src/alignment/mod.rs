@@ -84,7 +84,9 @@ pub type InternalAlignments = HashMap<NodeIdx, PairwiseAlignment>;
 /// sequences for that node.
 pub type SeqMaps = HashMap<NodeIdx, Mapping>;
 
-/// Represents a pairwise alignment of two sequences or MSAs. Used in [`InternalAlignments`].
+/// Represents a pairwise alignment of two sequences or MSAs using [`Mapping`], which represents the
+/// aligned positions of the sequences or MSAs.
+/// Used in [`InternalAlignments`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct PairwiseAlignment {
     pub(crate) map_x: Mapping,
@@ -104,6 +106,11 @@ pub(crate) fn mapping_to_bits(mapping: &Mapping) -> FixedBitSet {
 }
 
 impl PairwiseAlignment {
+    /// Creates a new `PairwiseAlignment` with the given mappings for the two sequences or MSAs.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the lengths of the provided mappings are not equal.
     pub fn new(map_x: Mapping, map_y: Mapping) -> PairwiseAlignment {
         assert_eq!(
             map_x.len(),
@@ -113,15 +120,18 @@ impl PairwiseAlignment {
         PairwiseAlignment { map_x, map_y }
     }
 
+    /// Returns the mapping of the first sequence or MSA in the pairwise alignment.
     pub fn map_x(&self) -> &Mapping {
         &self.map_x
     }
 
+    /// Returns the mapping of the second sequence or MSA in the pairwise alignment.
     pub fn map_y(&self) -> &Mapping {
         &self.map_y
     }
 
     #[allow(clippy::len_without_is_empty)]
+    /// Returns the length of the pairwise alignment, which is the number of aligned positions.
     pub fn len(&self) -> usize {
         debug_assert_eq!(self.map_x.len(), self.map_y.len());
         self.map_x.len()
