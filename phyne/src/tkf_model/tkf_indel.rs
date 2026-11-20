@@ -769,7 +769,7 @@ pub(super) fn relative_separation(a: f64, b: f64) -> f64 {
 
 /// `C` is at the rounding-noise level, so it must not be formed by the
 /// subtraction. With `delta = m - l`, `x = l*t` and `y = delta*t`:
-/// `B = delta*h(x) + l*e^{-x}*(expm1(-y) + y)` with `h(x) = 1 - (1+x)e^{-x}`,
+/// `C = delta*h(x) + l*e^{-x}*(expm1(-y) + y)` with `h(x) = 1 - (1+x)e^{-x}`,
 /// hence `ln C = ln(delta) + ln(h) + ln1p(correction)` where
 /// `correction = l*e^{-x}*(expm1(-y)+y) / (delta*h)`.
 ///
