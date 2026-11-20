@@ -1,3 +1,47 @@
+//! Alignment module for handling sequences and alignments in phylogenetic analyses.
+//!
+//! This module provides the [`Sequences`] object for representing collections of sequences.
+//! The sequence IDs must be unique within the collection.
+//! The sequences stored in the object can be aligned or unaligned.
+//!
+//! Contains the [`Alignment`] and [`AncestralAlignment`] traits for representing and manipulating
+//! sequence alignments with or without ancestral sequences.
+//!
+//! Additionally, provides the [`MSA`] struct that implements [`Alignment`] and the [`MASA`] struct that implements
+//! [`AncestralAlignment`]. The [`MSA`] and [`MASA`] structs use [`Sequences`] to store the gapless sequence data
+//! and [`Mapping`] to store the alignment information.
+//!
+//! Both [`MSA`] and [`MASA`] structures are coupled with a [`Tree`] that represents the phylogenetic relationships
+//! among the sequences and are meaningless without the associated tree. Internally, the structures use tree node
+//! indices ([`NodeIdx`]) to associate sequences with tree nodes for faster lookup. Consequently, all methods that
+//! return an alignment will return [`PhyloInfo`] objects to maintain the association between sequences and tree nodes.
+//!
+//! Finally, this module includes the [`Aligner`] trait that can be implemented for sequence alignment algorithms.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use phyne::alignment::{Aligner, Alignment, Sequences, MSA};
+//! use phyne::parsimony::ParsimonyAligner;
+//! use phyne::phylo_info::PhyloInfo;
+//! use phyne::{record, tree};
+//!
+//! # use phyne::Result;
+//! # fn main() -> Result<()> {
+//! let seqs = Sequences::new(vec![
+//!         record!("A", None, b"AACT"),
+//!         record!("B", None, b"AC"),
+//!         record!("C", None, b"AACT"),
+//!     ])?;
+//! let tree = tree!("((A:1.0, B:1.0):1.0, C:2.0);");
+//! let aligner = ParsimonyAligner::default();
+//! let phylo_info: PhyloInfo<MSA> = aligner.align(seqs, tree)?;
+//! let alignment = phylo_info.msa;
+//! assert_eq!(alignment.seq_count(), 3);
+//! assert!(alignment.len() >= 4);
+//! # Ok(()) }
+//! ```
+
 use std::fmt::{Debug, Display};
 
 use fixedbitset::FixedBitSet;
