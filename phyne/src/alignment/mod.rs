@@ -73,15 +73,15 @@ pub use aligner::*;
 /// Represents an aligned position in a sequence. Used in [`Mapping`].
 pub type Position = Option<usize>;
 /// Represents a mapping of an ungapped sequence to its aligned positions in the alignment.
-/// E.g. if the ungapped sequence is `AT` and the aligned sequence is `A--T-`, the `Mapping`
-/// would be `[Some(0), None, None, Some(1), None]`.
+/// E.g. if the ungapped sequence is `AT` and the aligned sequence is `A--T-`, the `Mapping` would be
+/// `[Some(0), None, None, Some(1), None]`.
 pub type Mapping = Vec<Position>;
-/// For an internal node of the tree, represents the pairwise alignment of the two sub MSAs that
-/// correspond to the two children of that node.
+/// For an internal node of the tree, represents the pairwise alignment of the two sub MSAs that correspond to the two
+/// children of that node.
 pub type InternalAlignments = HashMap<NodeIdx, PairwiseAlignment>;
-/// Represents the mapping of sequences for nodes in the tree as a `hashbrown::HashMap`
-/// where the key is the node index (of type [`NodeIdx`]) and the value is the [`Mapping`] of
-/// sequences for that node.
+/// Represents the mapping of sequences for nodes in the tree as a `hashbrown::HashMap` where the key is the node index
+/// (of type [`NodeIdx`], associated with a node in the [`Tree`] struct) and the value is the [`Mapping`] of the
+/// sequence for that node.
 pub type SeqMaps = HashMap<NodeIdx, Mapping>;
 
 /// Translates a `Mapping` to a `FixedBitSet` where positions that are `Some` are set to `true`.
