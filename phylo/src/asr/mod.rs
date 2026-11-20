@@ -1,7 +1,8 @@
 //! Ancestral sequence reconstruction module.
 //!
 //! Provides the `AncestralSequenceReconstruction` trait for reconstructing ancestral sequences
-//! given a leaf alignment or an existing ancestral alignment and a phylogenetic tree.
+//! given a multiple sequence alignment and a phylogenetic tree.
+//! If the provided alignment already contains ancestral sequences, they will be ignored and reconstructed anew.
 //!
 //! # Examples
 //!
