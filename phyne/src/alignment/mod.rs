@@ -148,20 +148,30 @@ impl PairwiseAlignment {
 pub trait Alignment: Display + Clone + Debug {
     /// Returns the alphabet of the sequences in the alignment.
     fn alphabet(&self) -> &'static Alphabet;
-    /// Returns the sequences without gaps
+
+    /// Returns the sequences without gaps.
     fn seqs(&self) -> &Sequences;
-    /// Returns the length of the sequences in the alignment
+
+    /// Returns the length of the alignment (number of columns).
     fn len(&self) -> usize;
-    /// Returns the number of sequences in the alignment. Should be equal to the number of leaves
-    /// in the tree.
+
+    /// Returns the number of sequences in the alignment. Should be equal to the number of leaves in the tree.
     fn seq_count(&self) -> usize;
+
+    /// Returns the [`Mapping`] of the leaf sequence corresponding to the given node index.
     fn leaf_map(&self, node: &NodeIdx) -> &Mapping;
+
+    /// Returns the [`Mapping`]s of all leaves in the alignment as a [`SeqMaps`] (`HashMap` of node indices to
+    /// mappings).
     fn leaf_maps(&self) -> &SeqMaps;
+
+    /// Returns a map of all the [`PairwiseAlignment`]s at the internal nodes.
     fn internal_alignments(&self) -> &InternalAlignments;
+
     /// Checks if inputs are compatible, removes columns with only gaps and calls [`Self::from_aligned_unchecked`].
     ///
-    /// Tree is consumed and stored together with the alignment, because the alignment is only
-    /// meaningful in the context of the tree that it was built from.
+    /// Tree is consumed and stored together with the alignment, because the alignment is only meaningful in the
+    /// context of the tree that it was built from.
     ///
     /// # Errors
     ///
@@ -175,12 +185,13 @@ pub trait Alignment: Display + Clone + Debug {
         sequences.remove_gap_cols();
         Ok(Self::from_aligned_unchecked(sequences, tree))
     }
-    /// Constructs a [`PhyloInfo`] from aligned sequences and a phylogenetic tree. Is called
-    /// by [`Alignment::from_aligned`]. The caller must ensure that the sequences are aligned, that the
-    /// sequence IDs are unique, and that the sequence IDs match the taxa IDs in the tree.
+
+    /// Constructs a [`PhyloInfo`] from aligned sequences and a phylogenetic tree. Is called by
+    /// [`Alignment::from_aligned`]. The caller must ensure that the sequences are aligned, that the sequence IDs are
+    /// unique, and that the sequence IDs match the taxa IDs in the tree.
     ///
-    /// Tree is consumed and stored together with the alignment, because the alignment is only
-    /// meaningful in the context of the tree that it was built from.
+    /// Tree is consumed and stored together with the alignment, because the alignment is only meaningful in the
+    /// context of the tree that it was built from.
     fn from_aligned_unchecked(sequences: Sequences, tree: Tree) -> PhyloInfo<Self>;
 }
 
