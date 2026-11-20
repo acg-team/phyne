@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::fmt::Display;
 
-use approx::assert_relative_eq;
+use approx::relative_eq;
 use fixedbitset::FixedBitSet;
 use itertools::Itertools;
 use lazy_static::lazy_static;
@@ -459,7 +459,7 @@ impl<T: TKFModel, AA: AncestralAlignment> TKFIndelCost<T, AA> {
         let rng = &mut FakeGenerator::default();
         let mut reestimator = EdgeSeqsReestimator::new(self, rng);
         let dp_logl = reestimator.reestimate_unchecked(v2);
-        assert_relative_eq!(dp_logl, self.logl(), epsilon = 1e-10);
+        debug_assert!(relative_eq!(dp_logl, self.logl(), epsilon = 1e-10));
     }
 
     /// The tree movers mark nodes as dirty assuming the cost marginalises the

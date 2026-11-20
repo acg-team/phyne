@@ -48,8 +48,8 @@ fn tkf_reestimate_without_choice() {
         .is_full());
 }
 
-/// Reproduces the stale tmp values logl bug: see https://github.com/acg-team/phyne/issues/216.
-/// Which is fixed now.
+/// This test triggered the stale tmp values logl bug: see https://github.com/acg-team/phyne/issues/216,
+/// which is fixed now.
 ///
 /// After an NNI move the parent of `A1` and `C4` changes (since they swap places),
 /// so their TKF events change, but their tmp values were not invalidated in `TKFIndelCost::update_tree`.
@@ -75,13 +75,14 @@ fn tkf_nni_with_unchanged_mappings_does_not_return_stale_logl() {
     let tkf_indel_model = TKF92IndelModel::new(&[0.4, 0.5, 0.8]).unwrap();
     let mut cost = TKFIndelCostBuilder::new(tkf_indel_model.clone(), phylo.clone()).build();
     let original_masa = cost.phylo.msa.clone();
-    assert!(TreeSearchCost::cost(&cost).is_finite());
+    assert!(cost.cost().is_finite());
 
     let node_idx = phylo.tree.by_id("I3").idx;
     let child_idx = phylo.tree.by_id("A1").idx;
     let new_tree = rooted_nni(&phylo.tree, &node_idx, &child_idx).unwrap();
+
     // This panicked before the bug was fixed, because the returned DP re-estimation
-    // logl did not match the clean cost in the assert after re- estimation.
+    // logl did not match the clean cost in the assert after re-estimation.
     cost.update_tree(new_tree);
 
     // The mappings should not have changed, i.e. we exercise the stale-logl branch.
@@ -102,11 +103,7 @@ fn tkf_nni_with_unchanged_mappings_does_not_return_stale_logl() {
     };
     // Sanity check
     let clean_cost = TKFIndelCostBuilder::new(tkf_indel_model, new_phylo).build();
-    assert_relative_eq!(
-        TreeSearchCost::cost(&cost),
-        TreeSearchCost::cost(&clean_cost),
-        epsilon = 1e-10
-    );
+    assert_relative_eq!(cost.cost(), clean_cost.cost(), epsilon = 1e-10);
 }
 
 #[test]
