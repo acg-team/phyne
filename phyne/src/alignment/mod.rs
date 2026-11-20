@@ -130,11 +130,15 @@ impl PairwiseAlignment {
         &self.map_y
     }
 
-    #[allow(clippy::len_without_is_empty)]
     /// Returns the length of the pairwise alignment, which is the number of aligned positions.
     pub fn len(&self) -> usize {
         debug_assert_eq!(self.map_x.len(), self.map_y.len());
         self.map_x.len()
+    }
+
+    /// Checks if the pairwise alignment is empty (i.e. length is zero).
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 
