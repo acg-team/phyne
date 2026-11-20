@@ -17,9 +17,13 @@ use crate::random::RandomGenerator;
 use crate::tree::{NodeIdx, NodeIdx::Internal, NodeIdx::Leaf, Tree};
 use crate::{align, aligned_seq, bail, bug, record, Result};
 
+#[doc(hidden)]
 pub mod sequences;
+#[doc(inline)]
 pub use sequences::*;
+#[doc(hidden)]
 pub mod aligner;
+#[doc(inline)]
 pub use aligner::*;
 
 /// Represents an aligned position in a sequence. Used in [`Mapping`].
