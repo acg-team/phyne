@@ -248,6 +248,10 @@ where
                  may therefore differ."
             )
         }
+
+        // When this reestimator is created the ancestral seqs might be in a non Dollo state.
+        // Then the re-estimation will update the mappings to be Dollo and this logl will never
+        // be read.
         let logl = cost.cost();
         EdgeSeqsReestimator {
             dp_table: vec![[f64::NEG_INFINITY; DP_COL_SIZE]; num_blocks],
@@ -396,8 +400,10 @@ where
     /// the tmp values for these nodes are recomputed.
     fn set_invalid(&mut self) {
         let mut model_info = self.cost.model_info.borrow_mut();
-        for edge in self.quartet_edges.edges() {
-            model_info.valid.set(usize::from(*edge), false);
+        for edge_idx in self.quartet_edges.edges() {
+            let idx = usize::from(*edge_idx);
+            model_info.valid.set(idx, false);
+            model_info.valid_for_reestimation.set(idx, false);
         }
     }
 

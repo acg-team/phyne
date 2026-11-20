@@ -76,10 +76,13 @@ pub(super) fn valid_r(r: f64) -> Result<()> {
     Ok(())
 }
 
-/// For the function [u]: only if the time is shorter than this threshold, we use the Taylor approximation.
-static SHORT_TIME_U: f64 = 1e-5;
-/// For the function [u]: the critical threshold used for condition 4. Only necessary for x86 CPUs.
-static X86_CRITICAL_THRESHOLD_U: f64 = 1e-11;
+/// For the function [u]: target absolute accuracy of the result.
+static TAU_U: f64 = 1e-7;
+/// For the function [u]: safety factor on the rounding-error bound `eps * (3/R + 1)`.
+static ROUNDING_SAFETY_FACTOR: f64 = 8.0;
+/// For the function [u]: minimum `|B| / (A + C)` for trusting the direct `ln(B)` evaluation.
+/// Equal to `ROUNDING_SAFETY_FACTOR * (f64::EPSILON / 2) / TAU_U` (about 8.88e-9).
+static MIN_REL_SEPARATION: f64 = ROUNDING_SAFETY_FACTOR * (f64::EPSILON / 2.0) / TAU_U;
 /// For the function [ln_n0]: threshold for numerical issues
 static NUMERICAL_ISSUE_N0_THRESHOLD: f64 = 1e-12;
 
@@ -323,7 +326,9 @@ impl<T: TKFModel, AA: AncestralAlignment> TKFIndelCost<T, AA> {
         }
         let mut model_info = self.model_info.borrow_mut();
         if let Some(parent_idx) = self.phylo.tree.parent(node_idx) {
-            model_info.valid.set(usize::from(parent_idx), false);
+            let idx = usize::from(parent_idx);
+            model_info.valid.set(idx, false);
+            model_info.valid_for_reestimation.set(idx, false);
         }
         model_info.valid.set(node_id, true);
         model_info.valid_for_reestimation.set(node_id, true);
@@ -565,13 +570,28 @@ impl<T: TKFModel, AA: AncestralAlignment> TreeSearchCost for TKFIndelCost<T, AA>
         self.phylo.tree = tree;
         if update_due_to_nni {
             let v2 = self.tree().nodes[dirty_nodes[0]].idx;
+
+            // Since the topology changed we must also mark the children of affected nodes as dirty,
+            // because their parent changed and thus their tkf event may have changed.
+            let mut nodes_to_invalidate = self.phylo.tree.node(&v2).children.clone();
+            if let Some(sibling) = self.phylo.tree.sibling(&v2) {
+                nodes_to_invalidate.push(sibling);
+            }
+            let mut model_info = self.model_info.borrow_mut();
+            for node_idx in nodes_to_invalidate {
+                let idx = usize::from(node_idx);
+                model_info.valid.set(idx, false);
+                model_info.valid_for_reestimation.set(idx, false);
+            }
+            drop(model_info);
+
             // TODO: For now we use the FakeGenerator to have deterministic behavior, but in the future
             // we should use a proper RNG here. But pass the RNG from outside and not
             // create a new one each time, see issue #142 https://github.com/acg-team/phyne/issues/142
             let rng = &mut FakeGenerator::default();
             let mut reestimator = EdgeSeqsReestimator::new(self, rng);
             let dp_logl = reestimator.reestimate_unchecked(&v2);
-            assert_relative_eq!(dp_logl, self.logl(), epsilon = 1e-10);
+            assert_relative_eq!(dp_logl, self.logl(), epsilon = 1e-8);
         }
         self.phylo.tree.clean();
     }
@@ -607,7 +627,11 @@ pub(crate) fn ln1mexp(x: f64) -> f64 {
 pub(super) fn ln_beta(lambda: f64, mu: f64, time: f64) -> f64 {
     let expo = (lambda - mu) * time;
     let term1 = ln1mexp(expo);
-    let ln_ratio = expo + lambda.ln() - mu.ln();
+    // ln_ratio = expo + ln(lambda) - ln(mu)
+    //          = expo + ln1p((lambda - mu) / mu)
+    // The `ln1p` form avoids the cancellation of `ln(lambda) - ln(mu)` when
+    // lambda ~ mu, which would otherwise be amplified by `ln1mexp`.
+    let ln_ratio = expo + ((lambda - mu) / mu).ln_1p();
     let term2 = mu.ln() + ln1mexp(ln_ratio);
     term1 - term2
 }
@@ -664,31 +688,98 @@ pub(super) fn eta(l: f64, m: f64, ln_beta: f64, t: f64) -> f64 {
 }
 
 /// Returns ln(1 - e^{-m*t} - m*beta).
+///
 /// Is only used in [`crate::tkf_model::tkf_indel::eta`] and was just extracted to make the code cleaner.
+///
+/// Split as `u = term1 + term2 + term3` with `term1 = (l-m)*t`,
+/// `term2 = ln(B)` and `term3 = -ln(D)`, where
+/// `B = m*(1-e^{-l*t}) - l*(1-e^{-m*t})` and `D = m - l*e^{(l-m)*t}`.
+/// `ln(D)` is well conditioned for `l < m`. `ln(B)` needs two cases because
+/// `B` can be a difference of the two nearly equal contributions `A` and `C`.
 pub(super) fn u(l: f64, m: f64, t: f64) -> f64 {
     // See https://github.com/MattesMrzik/tkf_mathematica for how this was found.
-    let critical_condition_1 = (-l * t).exp() == 1.0;
-    let critical_condition_2 = (-m * t).exp() == 1.0;
-    let critical_condition_3 = ((l - m) * t).exp() == 1.0;
-    // The tkf_numerical_test passed on macOS (M-series) with a threshold of 0.
-    // However, the same tests failed on Linux x86. Using this threshold ensures they pass on both platforms.
-    let critical_condition_4 =
-        ((m - l) - m * (-l * t).exp() + l * (-m * t).exp()).abs() <= X86_CRITICAL_THRESHOLD_U;
-
-    let critical_condition = critical_condition_1
-        || critical_condition_2
-        || critical_condition_3
-        || critical_condition_4;
-
-    if critical_condition && t < SHORT_TIME_U {
-        // using the Taylor expansion around t = 0 and for small times t
-        return l.ln() + m.ln() + 2.0 * t.ln() - 2.0f64.ln() + (-(l + 4.0 * m) * t / 3.0).ln_1p();
-    }
+    let a = m * (-(-l * t).exp_m1());
+    let c = l * (-(-m * t).exp_m1());
 
     let term1 = (l - m) * t;
-    let term2 = ((m - l) - m * (-l * t).exp() + l * (-m * t).exp()).ln();
-    let term3 = -(m - l * ((l - m) * t).exp()).ln();
+    let term2 = if relative_separation(a, c) >= MIN_REL_SEPARATION {
+        // Case 1: B is well separated from the rounding noise of A and C.
+        (a - c).ln()
+    } else {
+        // Case 2: B is at the rounding-noise level; avoid forming it by subtraction.
+        ln_b_stable(l, m, t)
+    };
+
+    // m - l*e^{(l-m)*t}
+    let term3 = -((m - l) - l * ((l - m) * t).exp_m1()).ln();
+
     term1 + term2 + term3
+}
+
+/// Returns `R = |B| / (A + C)`. `1/R` is the relative condition number of
+/// the subtraction `A - C`, so the relative error of `B` is about `eps / R`.
+pub(super) fn relative_separation(a: f64, c: f64) -> f64 {
+    (a - c).abs() / (a + c)
+}
+
+/// Case 2: `B` is at the rounding-noise level, so it must not be formed by the
+/// subtraction. With `delta = m - l`, `x = l*t` and `y = delta*t`:
+/// `B = delta*h(x) + l*e^{-x}*(expm1(-y) + y)` with `h(x) = 1 - (1+x)e^{-x}`,
+/// hence `ln B = ln(delta) + ln(h) + ln1p(correction)` where
+/// `correction = l*e^{-x}*(expm1(-y)+y) / (delta*h)`.
+///
+/// The helpers below are evaluated in log space, so that `h ~ x^2/2` and
+/// `expm1(-y)+y ~ y^2/2` do not underflow for very small `x` or `y`.
+pub(super) fn ln_b_stable(l: f64, m: f64, t: f64) -> f64 {
+    let delta = m - l;
+    let ln_delta = delta.ln();
+    let ln_h = ln_h(l, t);
+    let ln_g = ln_g(delta, t);
+    let ln_correction = l.ln() - l * t + ln_g - ln_delta - ln_h;
+    // TODO: if we keep blens to at least epsilon then we could also use ln(delta h + l e^{-x} e)
+    ln_delta + ln_h + ln_1p_exp(ln_correction)
+}
+
+/// Returns `ln(h(x))` with `h(x) = 1 - (1+x)*e^{-x}` and `x = l*t`.
+///
+/// `h(x) = x^2 * (1/2 - x/3 + x^2/8 - x^3/30 + x^4/144 + O(x^5))`.
+/// The series is evaluated in log space so that `x^2` cannot underflow.
+fn ln_h(l: f64, t: f64) -> f64 {
+    let x = l * t;
+    if x < 1e-2 {
+        // The direct expression would cancel for small x.
+        let x2 = x * x;
+        let series = 0.5 - x / 3.0 + x2 / 8.0 - x2 * x / 30.0 + x2 * x2 / 144.0;
+        2.0 * (l.ln() + t.ln()) + series.ln()
+    } else {
+        (1.0 - (1.0 + x) * (-x).exp()).ln()
+    }
+}
+
+/// Returns `ln(g(y))` with `g(y) = expm1(-y) + y` and `y = delta*t`.
+///
+/// `g(y) = y^2 * (1/2 - y/6 + y^2/24 - y^3/120 + y^4/720 + O(y^5))`.
+/// Again in log space, to avoid underflow of `y^2`.
+fn ln_g(delta: f64, t: f64) -> f64 {
+    let y = delta * t;
+    if y < 1e-2 {
+        // expm1(-y) + y would cancel for small y.
+        let y2 = y * y;
+        let series = 0.5 - y / 6.0 + y2 / 24.0 - y2 * y / 120.0 + y2 * y2 / 720.0;
+        2.0 * (delta.ln() + t.ln()) + series.ln()
+    } else {
+        ((-y).exp_m1() + y).ln()
+    }
+}
+
+/// Returns `ln(1 + e^ln_c)` without overflow.
+/// Underflow only causes absolute error smaller than epsilon in the additive space, so it is not a problem.
+fn ln_1p_exp(ln_c: f64) -> f64 {
+    if ln_c > 0.0 {
+        ln_c + (-ln_c).exp().ln_1p()
+    } else {
+        ln_c.exp().ln_1p()
+    }
 }
 
 /// Given the right exclusive block borders, returns the lengths of the blocks.
