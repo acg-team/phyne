@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::fmt::Display;
 
-use approx::assert_relative_eq;
+use approx::relative_eq;
 use fixedbitset::FixedBitSet;
 use itertools::Itertools;
 use lazy_static::lazy_static;
@@ -323,7 +323,9 @@ impl<T: TKFModel, AA: AncestralAlignment> TKFIndelCost<T, AA> {
         }
         let mut model_info = self.model_info.borrow_mut();
         if let Some(parent_idx) = self.phylo.tree.parent(node_idx) {
-            model_info.valid.set(usize::from(parent_idx), false);
+            let idx = usize::from(parent_idx);
+            model_info.valid.set(idx, false);
+            model_info.valid_for_reestimation.set(idx, false);
         }
         model_info.valid.set(node_id, true);
         model_info.valid_for_reestimation.set(node_id, true);
@@ -441,6 +443,38 @@ impl<T: TKFModel, AA: AncestralAlignment> TKFIndelCost<T, AA> {
             0.0
         }
     }
+
+    /// After an NNI move was applied in [`Self::update_tree`] the ancestral sequences might not be
+    /// valid anymore and must be re-estimated.
+    ///
+    /// Also sets tmp node values to [`invalid`](`Self::invalidate_nodes_after_nni`).
+    fn fix_phylo_after_nni(&mut self, v2: &NodeIdx) {
+        self.invalidate_nodes_after_nni(v2);
+        // TODO: For now we use the FakeGenerator to have deterministic behavior, but in the future
+        // we should use a proper RNG here. But pass the RNG from outside and not
+        // create a new one each time, see issue #142 https://github.com/acg-team/phyne/issues/142
+        let rng = &mut FakeGenerator::default();
+        let mut reestimator = EdgeSeqsReestimator::new(self, rng);
+        let dp_logl = reestimator.reestimate_unchecked(v2);
+        debug_assert!(relative_eq!(dp_logl, self.logl(), epsilon = 1e-10));
+    }
+
+    /// The tree movers mark nodes as dirty assuming the cost marginalises the
+    /// ancestral sequences, but for the TKF indel cost we include a specific ancestral alignment
+    /// and therefore after a tree move the direct children of the affected nodes
+    /// must also be marked dirty, because their events may have changed.
+    fn invalidate_nodes_after_nni(&mut self, v2: &NodeIdx) {
+        let mut nodes_to_invalidate = self.phylo.tree.node(v2).children.clone();
+        if let Some(sibling) = self.phylo.tree.sibling(v2) {
+            nodes_to_invalidate.push(sibling);
+        }
+        let model_info = &mut self.model_info.borrow_mut();
+        for node_idx in nodes_to_invalidate {
+            let idx = usize::from(node_idx);
+            model_info.valid.set(idx, false);
+            model_info.valid_for_reestimation.set(idx, false);
+        }
+    }
 }
 
 /// Builder for [`TKFIndelCost`], i.e., the TKF indel cost of an
@@ -550,34 +584,49 @@ impl<T: TKFModel, AA: AncestralAlignment> TreeSearchCost for TKFIndelCost<T, AA>
         }
         drop(model_info);
 
-        let update_due_to_nni = dirty_nodes.len() == 1 && {
-            // check if children of the dirty node are different than before
-            let mut previous_children = self.phylo.tree.nodes[dirty_nodes[0]]
-                .children
-                .iter()
-                .collect_vec();
-            let mut new_children = tree.nodes[dirty_nodes[0]].children.iter().collect_vec();
-            previous_children.sort();
-            new_children.sort();
-
-            previous_children != new_children
-        };
+        // We have to call this before setting the new tree.
+        let reason = update_reason(&self.phylo.tree, &tree, &dirty_nodes);
         self.phylo.tree = tree;
-        if update_due_to_nni {
-            let v2 = self.tree().nodes[dirty_nodes[0]].idx;
-            // TODO: For now we use the FakeGenerator to have deterministic behavior, but in the future
-            // we should use a proper RNG here. But pass the RNG from outside and not
-            // create a new one each time, see issue #142 https://github.com/acg-team/phyne/issues/142
-            let rng = &mut FakeGenerator::default();
-            let mut reestimator = EdgeSeqsReestimator::new(self, rng);
-            let dp_logl = reestimator.reestimate_unchecked(&v2);
-            assert_relative_eq!(dp_logl, self.logl(), epsilon = 1e-10);
+
+        if let TreeUpdateReason::NNI(v2) = reason {
+            self.fix_phylo_after_nni(&v2);
         }
         self.phylo.tree.clean();
     }
 
     fn tree(&self) -> &Tree {
         &self.phylo.tree
+    }
+}
+
+/// Returns the reason for the tree update.
+///
+/// We only care whether the update was an NNI or not,
+/// because for NNI we have to reestimate the edge sequences.
+enum TreeUpdateReason {
+    /// The tree was updated and topology changed due to an NNI move; contains the child node of the NNI edge.
+    /// Other topology changes are not supported yet, see [`crate::optimisers::Compatible`].
+    #[allow(clippy::upper_case_acronyms)]
+    NNI(NodeIdx),
+    /// The tree was updated, but topology did not change (e.g., branch length update).
+    Other,
+}
+
+fn update_reason(prev_tree: &Tree, new_tree: &Tree, dirty_nodes: &[usize]) -> TreeUpdateReason {
+    if dirty_nodes.len() != 1 {
+        return TreeUpdateReason::Other;
+    }
+    let dirty_node_id = dirty_nodes[0];
+    let dirty_node_idx = prev_tree.nodes[dirty_node_id].idx;
+    let mut previous_children = prev_tree.children(&dirty_node_idx).iter().collect_vec();
+    let mut new_children = new_tree.children(&dirty_node_idx).iter().collect_vec();
+    previous_children.sort();
+    new_children.sort();
+
+    if previous_children != new_children {
+        TreeUpdateReason::NNI(dirty_node_idx)
+    } else {
+        TreeUpdateReason::Other
     }
 }
 
