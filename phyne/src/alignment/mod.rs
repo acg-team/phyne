@@ -84,15 +84,6 @@ pub type InternalAlignments = HashMap<NodeIdx, PairwiseAlignment>;
 /// sequences for that node.
 pub type SeqMaps = HashMap<NodeIdx, Mapping>;
 
-/// Represents a pairwise alignment of two sequences or MSAs using [`Mapping`], which represents the
-/// aligned positions of the sequences or MSAs.
-/// Used in [`InternalAlignments`].
-#[derive(Clone, Debug, PartialEq)]
-pub struct PairwiseAlignment {
-    pub(crate) map_x: Mapping,
-    pub(crate) map_y: Mapping,
-}
-
 /// Translates a `Mapping` to a `FixedBitSet` where positions that are `Some` are set to `true`.
 /// E.g. for the mapping `[Some(0), None, Some(1)]`, the resulting `FixedBitSet` will have bits `101`.
 pub(crate) fn mapping_to_bits(mapping: &Mapping) -> FixedBitSet {
@@ -103,6 +94,15 @@ pub(crate) fn mapping_to_bits(mapping: &Mapping) -> FixedBitSet {
         }
     }
     bits
+}
+
+/// Represents a pairwise alignment of two sequences or MSAs using [`Mapping`], which represents the
+/// aligned positions of the sequences or MSAs.
+/// Used in [`InternalAlignments`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct PairwiseAlignment {
+    pub(crate) map_x: Mapping,
+    pub(crate) map_y: Mapping,
 }
 
 impl PairwiseAlignment {
