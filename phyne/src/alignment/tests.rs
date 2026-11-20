@@ -62,6 +62,25 @@ fn maps() -> (InternalAlignments, SeqMaps) {
 }
 
 #[test]
+fn pairwise_alignment_length() {
+    let pa = PA::new(align!(b"-0123"), align!(b"01-23"));
+    assert_eq!(pa.len(), 5);
+}
+
+#[test]
+fn pairwise_alignment_empty() {
+    let pa = PA::new(align!(b""), align!(b""));
+    assert_eq!(pa.len(), 0);
+    assert!(pa.is_empty());
+}
+
+#[test]
+#[should_panic]
+fn pairwise_alignment_mismatch() {
+    PA::new(align!(b"-0123"), align!(b"01-2"));
+}
+
+#[test]
 fn sequences_from_aligned() {
     let seqs = vec![
         record!("A0", Some("A0 sequence"), b"AAAAAA"),
