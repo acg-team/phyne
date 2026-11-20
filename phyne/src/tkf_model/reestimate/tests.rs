@@ -4,6 +4,9 @@ use fixedbitset::FixedBitSet;
 
 use crate::alignment::{AncestralAlignment, Sequences, MASA};
 use crate::alphabets::Alphabet;
+use crate::likelihood::TreeSearchCost;
+use crate::optimisers::rooted_nni;
+use crate::phylo_info::PhyloInfo;
 use crate::random::FakeGenerator;
 use crate::tkf_model::reestimate::mapping_from_node_seq;
 use crate::tkf_model::tests::setup_test_phylo;
@@ -43,6 +46,64 @@ fn tkf_reestimate_without_choice() {
         .borrow()
         .valid_for_reestimation
         .is_full());
+}
+
+/// This test triggered the stale tmp values logl bug: see https://github.com/acg-team/phyne/issues/216,
+/// which is fixed now.
+///
+/// After an NNI move the parent of `A1` and `C4` changes (since they swap places),
+/// so their TKF events change, but their tmp values were not invalidated in `TKFIndelCost::update_tree`.
+/// If the re-estimation did not change the ancestral mappings,
+/// it assumes nothing changed and returns the before re-estimation logl, which is incorrect.
+/// Now, nodes are correctly invalidated after an NNI move so the before re-estimation logl is correct.
+#[test]
+fn tkf_nni_with_unchanged_mappings_does_not_return_stale_logl() {
+    // The branches of A1 and C4 differ on purpose, otherwise their swapped event factors
+    // would cancel out and mask the bug.
+    let tree = tree!("(((A1:0.5,B2:0.1)I3:1.0,C4:2.0)R5:1.0);");
+    let phylo = MASA::from_aligned_with_ancestral(
+        Sequences::new_unchecked(vec![
+            record!("A1", b"-"),
+            record!("B2", b"A"),
+            record!("C4", b"-"),
+            record!("I3", b"N"),
+            record!("R5", b"-"),
+        ]),
+        tree,
+    )
+    .unwrap();
+    let tkf_indel_model = TKF92IndelModel::new(&[0.4, 0.5, 0.8]).unwrap();
+    let mut cost = TKFIndelCostBuilder::new(tkf_indel_model.clone(), phylo.clone()).build();
+    let original_masa = cost.phylo.msa.clone();
+    assert!(cost.cost().is_finite());
+
+    let node_idx = phylo.tree.by_id("I3").idx;
+    let child_idx = phylo.tree.by_id("A1").idx;
+    let new_tree = rooted_nni(&phylo.tree, &node_idx, &child_idx).unwrap();
+
+    // This panicked before the bug was fixed, because the returned DP re-estimation
+    // logl did not match the clean cost in the assert after re-estimation.
+    cost.update_tree(new_tree);
+
+    // The mappings should not have changed, i.e. we exercise the stale-logl branch.
+    let i3_idx = cost.phylo.tree.by_id("I3").idx;
+    let r5_idx = cost.phylo.tree.by_id("R5").idx;
+    assert_eq!(
+        cost.phylo.msa.ancestral_map(&i3_idx),
+        original_masa.ancestral_map(&i3_idx)
+    );
+    assert_eq!(
+        cost.phylo.msa.ancestral_map(&r5_idx),
+        original_masa.ancestral_map(&r5_idx)
+    );
+
+    let new_phylo = PhyloInfo {
+        msa: cost.phylo.msa.clone(),
+        tree: cost.tree().clone(),
+    };
+    // Sanity check
+    let clean_cost = TKFIndelCostBuilder::new(tkf_indel_model, new_phylo).build();
+    assert_relative_eq!(cost.cost(), clean_cost.cost(), epsilon = 1e-10);
 }
 
 #[test]
