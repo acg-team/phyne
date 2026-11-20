@@ -80,8 +80,8 @@ pub(super) fn valid_r(r: f64) -> Result<()> {
 static TAU_U: f64 = 1e-7;
 /// For the function [u]: safety factor on the rounding-error bound `eps * (3/R + 1)`.
 static ROUNDING_SAFETY_FACTOR: f64 = 8.0;
-/// For the function [u]: minimum `|B| / (A + C)` for trusting the direct `ln(B)` evaluation.
-/// Equal to `ROUNDING_SAFETY_FACTOR * (f64::EPSILON / 2) / TAU_U` (about 8.88e-9).
+/// For the function [u]: minimum `|A-B| / (A + B)` for trusting the direct `ln(C)` evaluation.
+/// Equal to [`ROUNDING_SAFETY_FACTOR`] * ([`f64::EPSILON`] / 2) / [`TAU_U`] (about 8.88e-9).
 static MIN_REL_SEPARATION: f64 = ROUNDING_SAFETY_FACTOR * (f64::EPSILON / 2.0) / TAU_U;
 /// For the function [ln_n0]: threshold for numerical issues
 static NUMERICAL_ISSUE_N0_THRESHOLD: f64 = 1e-12;
@@ -601,6 +601,20 @@ impl<T: TKFModel, AA: AncestralAlignment> TreeSearchCost for TKFIndelCost<T, AA>
     }
 }
 
+/// Given the right exclusive block borders, returns the lengths of the blocks.
+/// For example, given [3, 5, 8], the block lengths are [3, 2, 3].
+pub(super) fn get_block_lengths(blocks: &[usize]) -> Vec<usize> {
+    let mut block_lens = vec![0; blocks.len()];
+    for (i, block) in blocks.iter().enumerate() {
+        block_lens[i] = if i == 0 {
+            *block
+        } else {
+            block - blocks[i - 1]
+        };
+    }
+    block_lens
+}
+
 /// Returns `ln(1 - exp(x))` in a numerically stable way.
 ///
 /// This function handles two regions to avoid precision loss or underflow:
@@ -691,22 +705,21 @@ pub(super) fn eta(l: f64, m: f64, ln_beta: f64, t: f64) -> f64 {
 ///
 /// Is only used in [`crate::tkf_model::tkf_indel::eta`] and was just extracted to make the code cleaner.
 ///
-/// Split as `u = term1 + term2 + term3` with `term1 = (l-m)*t`,
-/// `term2 = ln(B)` and `term3 = -ln(D)`, where
-/// `B = m*(1-e^{-l*t}) - l*(1-e^{-m*t})` and `D = m - l*e^{(l-m)*t}`.
-/// `ln(D)` is well conditioned for `l < m`. `ln(B)` needs two cases because
-/// `B` can be a difference of the two nearly equal contributions `A` and `C`.
+/// Split as `u = term1 + term2 + term3` with
+/// * `term1 = (l-m)*t`,
+/// * `term2 = ln(C)`, with `C = m*(1-e^{-l*t}) - l*(1-e^{-m*t})`
+/// * `term3 = -ln(D)`, with `D = m - l*e^{(l-m)*t}`
 pub(super) fn u(l: f64, m: f64, t: f64) -> f64 {
     // See https://github.com/MattesMrzik/tkf_mathematica for how this was found.
     let a = m * (-(-l * t).exp_m1());
-    let c = l * (-(-m * t).exp_m1());
+    let b = l * (-(-m * t).exp_m1());
 
     let term1 = (l - m) * t;
-    let term2 = if relative_separation(a, c) >= MIN_REL_SEPARATION {
-        // Case 1: B is well separated from the rounding noise of A and C.
-        (a - c).ln()
+    let term2 = if relative_separation(a, b) >= MIN_REL_SEPARATION {
+        // C is well separated from the rounding noise of A and B.
+        (a - b).ln()
     } else {
-        // Case 2: B is at the rounding-noise level; avoid forming it by subtraction.
+        // C is at the rounding-noise level; avoid forming it by subtraction.
         ln_b_stable(l, m, t)
     };
 
@@ -716,16 +729,16 @@ pub(super) fn u(l: f64, m: f64, t: f64) -> f64 {
     term1 + term2 + term3
 }
 
-/// Returns `R = |B| / (A + C)`. `1/R` is the relative condition number of
-/// the subtraction `A - C`, so the relative error of `B` is about `eps / R`.
-pub(super) fn relative_separation(a: f64, c: f64) -> f64 {
-    (a - c).abs() / (a + c)
+/// Returns `R = |A-B| / (A + B)`. `1/R` is the relative condition number of
+/// the subtraction `A - B`, so the relative error of `C` is about `eps / R`.
+pub(super) fn relative_separation(a: f64, b: f64) -> f64 {
+    (a - b).abs() / (a + b)
 }
 
-/// Case 2: `B` is at the rounding-noise level, so it must not be formed by the
+/// `C` is at the rounding-noise level, so it must not be formed by the
 /// subtraction. With `delta = m - l`, `x = l*t` and `y = delta*t`:
 /// `B = delta*h(x) + l*e^{-x}*(expm1(-y) + y)` with `h(x) = 1 - (1+x)e^{-x}`,
-/// hence `ln B = ln(delta) + ln(h) + ln1p(correction)` where
+/// hence `ln C = ln(delta) + ln(h) + ln1p(correction)` where
 /// `correction = l*e^{-x}*(expm1(-y)+y) / (delta*h)`.
 ///
 /// The helpers below are evaluated in log space, so that `h ~ x^2/2` and
@@ -759,7 +772,7 @@ fn ln_h(l: f64, t: f64) -> f64 {
 /// Returns `ln(g(y))` with `g(y) = expm1(-y) + y` and `y = delta*t`.
 ///
 /// `g(y) = y^2 * (1/2 - y/6 + y^2/24 - y^3/120 + y^4/720 + O(y^5))`.
-/// Again in log space, to avoid underflow of `y^2`.
+/// The series is evaluated in log space so that `y^2` cannot underflow.
 fn ln_g(delta: f64, t: f64) -> f64 {
     let y = delta * t;
     if y < 1e-2 {
@@ -780,18 +793,4 @@ fn ln_1p_exp(ln_c: f64) -> f64 {
     } else {
         ln_c.exp().ln_1p()
     }
-}
-
-/// Given the right exclusive block borders, returns the lengths of the blocks.
-/// For example, given [3, 5, 8], the block lengths are [3, 2, 3].
-pub(super) fn get_block_lengths(blocks: &[usize]) -> Vec<usize> {
-    let mut block_lens = vec![0; blocks.len()];
-    for (i, block) in blocks.iter().enumerate() {
-        block_lens[i] = if i == 0 {
-            *block
-        } else {
-            block - blocks[i - 1]
-        };
-    }
-    block_lens
 }
