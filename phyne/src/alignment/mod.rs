@@ -382,8 +382,9 @@ impl Display for MSA {
 }
 
 impl MSA {
-    fn stack_maps(msa_len: usize, map_x: &Mapping, map_y: &Mapping) -> Mapping {
-        let mut map = Vec::with_capacity(msa_len);
+    fn stack_maps(map_x: &Mapping, map_y: &Mapping) -> Mapping {
+        debug_assert!(map_x.len() == map_y.len());
+        let mut map = Vec::with_capacity(map_x.len());
         let mut ind = 0usize;
         for (x, y) in map_x.iter().zip(map_y.iter()) {
             if x.is_none() && y.is_none() {
@@ -533,7 +534,7 @@ impl Alignment for MSA {
                     let childs = tree.children(node_idx);
                     let map_x = stack[&childs[0]].clone();
                     let map_y = stack[&childs[1]].clone();
-                    stack.insert(*node_idx, Self::stack_maps(msa_len, &map_x, &map_y));
+                    stack.insert(*node_idx, Self::stack_maps(&map_x, &map_y));
                     internal_alignments
                         .insert(*node_idx, Self::clear_common_gaps(msa_len, &map_x, &map_y));
                 }
