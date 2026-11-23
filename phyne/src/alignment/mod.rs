@@ -412,9 +412,9 @@ impl MSA {
         map
     }
 
-    fn clear_common_gaps(msa_len: usize, map_x: &Mapping, map_y: &Mapping) -> PairwiseAlignment {
-        let mut upd_map_x = Vec::with_capacity(msa_len);
-        let mut upd_map_y = Vec::with_capacity(msa_len);
+    fn clear_common_gaps(map_x: &Mapping, map_y: &Mapping) -> PairwiseAlignment {
+        let mut upd_map_x = Vec::with_capacity(map_x.len().max(map_y.len()));
+        let mut upd_map_y = Vec::with_capacity(map_x.len().max(map_y.len()));
         for (x, y) in map_x.iter().zip(map_y.iter()) {
             if x.is_some() || y.is_some() {
                 upd_map_x.push(*x);
@@ -550,8 +550,7 @@ impl Alignment for MSA {
                     let map_x = stack[&childs[0]].clone();
                     let map_y = stack[&childs[1]].clone();
                     stack.insert(*node_idx, Self::stack_maps(&map_x, &map_y));
-                    internal_alignments
-                        .insert(*node_idx, Self::clear_common_gaps(msa_len, &map_x, &map_y));
+                    internal_alignments.insert(*node_idx, Self::clear_common_gaps(&map_x, &map_y));
                 }
                 Leaf(_) => {
                     let seq = seqs.record_by_id(tree.node_id(node_idx)).seq();
