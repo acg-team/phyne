@@ -346,6 +346,7 @@ lazy_static! {
     pub static ref GAP_SET: ParsimonySet = ParsimonySet::from_slice(&[GAP]);
 }
 
+/// Function used to precompute static conditional probability vectors for each nucleotide character.
 fn nucl_cond_probs(char: u8) -> FreqVector {
     let char = char.to_ascii_uppercase();
     match char {
@@ -367,6 +368,7 @@ fn nucl_cond_probs(char: u8) -> FreqVector {
     }
 }
 
+/// Function used to precompute static parsimony sets for each nucleotide character.
 fn nucl_parsimony_set(char: &u8) -> ParsimonySet {
     let char = char.to_ascii_uppercase();
     if NUCLEOTIDES.contains(&char) {
@@ -443,6 +445,7 @@ lazy_static! {
     };
 }
 
+/// Function used to precompute static conditional probability vectors for each amino acid character.
 fn aa_cond_probs(char: u8) -> FreqVector {
     let char = char.to_ascii_uppercase();
     let index = &AMINOACID_INDEX;
@@ -476,6 +479,7 @@ fn aa_cond_probs(char: u8) -> FreqVector {
     }
 }
 
+/// Function used to precompute static parsimony sets for each amino acid character.
 fn aa_parsimony_set(char: &u8) -> ParsimonySet {
     let char = char.to_ascii_uppercase();
     if AMINOACIDS.contains(&char) {
