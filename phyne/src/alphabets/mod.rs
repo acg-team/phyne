@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use phylo::alphabets::Alphabet;
+//! use phyne::alphabets::Alphabet;
 //!
 //! let dna = Alphabet::dna();
 //! assert_eq!(dna.name(), "DNA");
@@ -123,7 +123,7 @@ impl Alphabet {
     ///
     /// # Example:
     /// ```
-    /// use phylo::alphabets::Alphabet;
+    /// use phyne::alphabets::Alphabet;
     /// assert_eq!(Alphabet::dna().name(), "DNA");
     /// assert_eq!(Alphabet::protein().name(), "protein");
     /// ```
@@ -135,7 +135,7 @@ impl Alphabet {
     ///
     /// # Example:
     /// ```
-    /// use phylo::alphabets::Alphabet;
+    /// use phyne::alphabets::Alphabet;
     /// let alphabet = Alphabet::dna();
     /// assert_eq!(alphabet.len(), 4);
     /// assert_eq!(alphabet.name(), "DNA");
@@ -149,7 +149,7 @@ impl Alphabet {
     ///
     /// # Example:
     /// ```
-    /// use phylo::alphabets::Alphabet;
+    /// use phyne::alphabets::Alphabet;
     /// let alphabet = Alphabet::protein();
     /// assert_eq!(alphabet.len(), 20);
     /// assert_eq!(alphabet.name(), "protein");
