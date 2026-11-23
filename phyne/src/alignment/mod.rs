@@ -1089,3 +1089,57 @@ pub trait AlignmentSimulation<R: Rng + SeedableRng> {
 #[cfg(test)]
 #[cfg_attr(coverage, coverage(off))]
 mod tests;
+
+#[cfg(test)]
+#[cfg_attr(coverage, coverage(off))]
+mod private_tests {
+    use super::*;
+
+    #[test]
+    fn stack_maps_simple() {
+        let map_x = align!(b"01-2");
+        let map_y = align!(b"-012");
+        let stacked = MSA::stack_maps(&map_x, &map_y);
+        assert_eq!(stacked, align!(b"0123"));
+    }
+
+    #[test]
+    fn stack_maps_all_present_in_both() {
+        let map_x = align!(b"01234567");
+        let map_y = align!(b"01234567");
+        let stacked = MSA::stack_maps(&map_x, &map_y);
+        assert_eq!(stacked, align!(b"01234567"));
+    }
+
+    #[test]
+    fn stack_maps_all_present_in_one() {
+        let map_x = align!(b"01234567");
+        let map_y = align!(b"--------");
+        let stacked = MSA::stack_maps(&map_x, &map_y);
+        assert_eq!(stacked, align!(b"01234567"));
+    }
+
+    #[test]
+    fn stack_maps_all_present_in_one_or_other() {
+        let map_x = align!(b"0123----");
+        let map_y = align!(b"----0123");
+        let stacked = MSA::stack_maps(&map_x, &map_y);
+        assert_eq!(stacked, align!(b"01234567"));
+    }
+
+    #[test]
+    fn stack_maps_common_gaps() {
+        let map_x = align!(b"012-----");
+        let map_y = align!(b"-----012");
+        let stacked = MSA::stack_maps(&map_x, &map_y);
+        assert_eq!(stacked, align!(b"012--345"));
+    }
+
+    #[test]
+    fn stack_maps_example() {
+        let map_x = Mapping::from_iter([None, Some(0), None, Some(1)]);
+        let map_y = Mapping::from_iter([None, None, Some(0), Some(1)]);
+        let stacked = MSA::stack_maps(&map_x, &map_y);
+        assert_eq!(stacked, [None, Some(0), Some(1), Some(2)]);
+    }
+}
