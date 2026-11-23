@@ -543,7 +543,6 @@ impl Alignment for MSA {
     /// # Ok(()) }
     /// ```
     fn from_aligned_unchecked(seqs: Sequences, tree: Tree) -> PhyloInfo<MSA> {
-        let msa_len = seqs[0].seq().len();
         let mut stack = HashMap::<NodeIdx, Mapping>::with_capacity(tree.len());
         let mut internal_alignments = InternalAlignments::with_capacity(tree.n);
         let mut idx_to_id = vec![String::new(); tree.len()];
