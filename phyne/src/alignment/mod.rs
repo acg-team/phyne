@@ -350,6 +350,12 @@ pub fn surviving_columns_mask(ancestral_alignment: &impl AncestralAlignment) -> 
     surviving
 }
 
+/// Represents a multiple sequence alignment (MSA) with associated leaf mappings and internal alignments.
+///
+/// This structure stores the sequences and their corresponding mappings for leaf nodes, as well as the internal
+/// alignments and a mapping from node indices in the tree to sequence IDs.
+/// Only valid in the context of the corresponding phylogenetic tree and should always be stored with it as a
+/// `PhyloInfo` instance.
 #[derive(Debug, Clone)]
 pub struct MSA {
     seqs: Sequences,
