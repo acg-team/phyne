@@ -4,7 +4,7 @@ use std::marker::{PhantomData, Sized};
 use std::ops::Mul;
 
 use hashbrown::HashMap;
-use nalgebra::DMatrix;
+use nalgebra::{DMatrix, SymmetricEigen};
 
 use crate::alignment::Alignment;
 use crate::alphabets::Alphabet;
@@ -48,15 +48,59 @@ pub trait QMatrix: Debug + Clone + Display {
     fn alphabet() -> &'static Alphabet;
 }
 
+#[derive(Clone, Debug, PartialEq)]
+struct Decomposition {
+    left: DMatrix<f64>,
+    right: DMatrix<f64>,
+    eigenvalues: FreqVector,
+}
+fn decomp<Q: QMatrix>(qmatrix: &Q) -> Option<Decomposition> {
+    let freqs = qmatrix.freqs();
+    if freqs.iter().any(|&pi| !pi.is_finite() || pi <= 0.0) {
+        return None;
+    }
+
+    let q = qmatrix.q();
+    let sqrt_pi = freqs.map(|pi| pi.sqrt());
+    let n = freqs.len();
+    let symmetric = DMatrix::from_fn(n, n, |i, j| q[(i, j)] * sqrt_pi[i] / sqrt_pi[j]);
+
+    // A reversible model gives a symmetric matrix, up to rounding.
+    for i in 0..n {
+        for j in 0..i {
+            let a = symmetric[(i, j)];
+            let b = symmetric[(j, i)];
+            let tolerance = 1e-12 * a.abs().max(b.abs());
+            if (a - b).abs() > tolerance {
+                return None;
+            }
+        }
+    }
+
+    let eig = SymmetricEigen::try_new(symmetric, f64::EPSILON, 10_000)?;
+    let u = eig.eigenvectors;
+
+    Some(Decomposition {
+        left: DMatrix::from_fn(n, n, |i, k| u[(i, k)] / sqrt_pi[i]),
+        right: DMatrix::from_fn(n, n, |k, j| u[(j, k)] * sqrt_pi[j]),
+        eigenvalues: eig.eigenvalues,
+    })
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SubstModel<Q: QMatrix> {
     pub(crate) qmatrix: Q,
+    decomposition: Option<Decomposition>,
 }
 
 impl<Q: QMatrix + Default> Default for SubstModel<Q> {
     fn default() -> Self {
-        SubstModel {
-            qmatrix: Q::default(),
+        let qmatrix = Q::default();
+        let decomposition = decomp(&qmatrix);
+
+        Self {
+            qmatrix,
+            decomposition,
         }
     }
 }
@@ -72,21 +116,29 @@ impl<Q: QMatrix + QMatrixMaker> SubstModel<Q> {
     where
         Self: Sized,
     {
-        Ok(SubstModel {
-            qmatrix: Q::create(frequencies, params)?,
+        let qmatrix = Q::create(frequencies, params)?;
+        let decomposition = decomp(&qmatrix);
+        Ok(Self {
+            qmatrix,
+            decomposition,
         })
     }
 }
 
 impl<Q: QMatrix> EvoModel for SubstModel<Q> {
     fn p(&self, time: f64) -> ProbabilityMatrix {
+        let time = if time > MAX_BLEN { MAX_BLEN } else { time };
         // If time > 1e10f64 the matrix exponentiation breaks and stops converging, but before it breaks
         // starting with 1e5f64 it converges to the same result.
-        if time > MAX_BLEN {
-            (self.q().clone() * MAX_BLEN).exp()
-        } else {
-            (self.q().clone() * time).exp()
+        let Some(decomposition) = &self.decomposition else {
+            return (self.q().clone() * time).exp();
+        };
+
+        let mut scaled_left = decomposition.left.clone();
+        for (k, &lambda) in decomposition.eigenvalues.iter().enumerate() {
+            scaled_left.column_mut(k).scale_mut((lambda * time).exp());
         }
+        scaled_left * &decomposition.right
     }
 
     fn q(&self) -> &RateMatrix {
@@ -103,6 +155,7 @@ impl<Q: QMatrix> EvoModel for SubstModel<Q> {
 
     fn set_param(&mut self, param: usize, value: f64) {
         self.qmatrix.set_param(param, value);
+        self.decomposition = decomp(&self.qmatrix);
     }
 
     fn freqs(&self) -> &FreqVector {
@@ -110,7 +163,9 @@ impl<Q: QMatrix> EvoModel for SubstModel<Q> {
     }
 
     fn set_freqs(&mut self, pi: FreqVector) -> Result<()> {
-        self.qmatrix.set_freqs(pi)
+        self.qmatrix.set_freqs(pi)?;
+        self.decomposition = decomp(&self.qmatrix);
+        Ok(())
     }
 
     fn n(&self) -> usize {
