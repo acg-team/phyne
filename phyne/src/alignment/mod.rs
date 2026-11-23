@@ -989,6 +989,15 @@ impl AncestralAlignment for MASA {
 }
 
 impl MASA {
+    /// Called by [`MASA::update_ancestral_map`].
+    ///
+    /// This is needed because with the [TKF models](`crate::tkf_model::TKFModel`),
+    /// we need to [re-estimate](`crate::tkf_model::reestimate::EdgeSeqsReestimator::reestimate`)
+    /// the ancestral maps after a [tree move](crate::likelihood::TreeSearchCost::update_tree) was applied.
+    /// Iterating through the aligned sequence (i.e., the old and new mappings), if the
+    /// presence of a character is maintained the actual character from the old sequence is
+    /// taken. If a character is newly introduced (i.e., was a gap before), an ambiguous
+    /// character is inserted.
     fn update_ancestral_map_unchecked(&mut self, node_idx: &NodeIdx, new_map: Mapping) {
         let old_map = self.ancestral_maps.get_mut(node_idx).unwrap();
         let id = &self.idx_to_id[usize::from(*node_idx)];
