@@ -6,23 +6,45 @@ use itertools::join;
 
 use crate::alphabets::GAP;
 
+/// The `ParsimonySet` struct represents a set of possible characters, e.g. in the Fitch algorithm.
+/// It is used to keep track of all potential character states at a given position in a sequence alignment.
 #[repr(transparent)]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ParsimonySet {
-    pub s: HashSet<u8>,
+    /// The underlying set of characters as a `hashbrown::HashSet<u8>`.
+    s: HashSet<u8>,
 }
 
 impl ParsimonySet {
+    /// Creates a new empty parsimony set.
+    ///
+    /// # Example
+    /// ```
+    /// use phyne::alphabets::ParsimonySet;
+    /// let empty_set = ParsimonySet::empty();
+    /// assert!(empty_set.is_empty());
+    /// ```
     pub fn empty() -> Self {
         Self { s: HashSet::new() }
     }
 
+    /// Creates a new parsimony set containing only the gap character.
+    ///
+    /// # Example
+    /// ```
+    /// use phyne::alphabets::ParsimonySet;
+    /// let gap_set = ParsimonySet::gap();
+    /// assert!(gap_set.contains(&b'-'));
+    /// ```
     pub fn gap() -> Self {
         Self {
             s: HashSet::from_iter([GAP]),
         }
     }
 
+    /// Creates a new parsimony set from a slice of characters. Cannot be used to create valid sets with ambiguous
+    /// symbols since their interpretation depends on the underlying alphabet and cannot be determined solely from
+    /// the slice.
     pub(crate) fn from_slice(slice: &[u8]) -> Self {
         Self {
             s: HashSet::from_iter(slice.iter().copied()),
