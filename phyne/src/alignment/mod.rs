@@ -101,7 +101,9 @@ pub(crate) fn mapping_to_bits(mapping: &Mapping) -> FixedBitSet {
 /// Used in [`InternalAlignments`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct PairwiseAlignment {
+    /// [`Mapping`] of the first child sequence or MSA in the pairwise alignment.
     pub(crate) map_x: Mapping,
+    /// [`Mapping`] of the second child sequence or MSA in the pairwise alignment.
     pub(crate) map_y: Mapping,
 }
 
