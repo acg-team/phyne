@@ -3,8 +3,8 @@
 // cargo bench --bench decomposition_benchmark -- spectral
 // on version you'd like to benchmark
 
-use phylo::evolutionary_models::EvoModel;
-use phylo::substitution_models::{SubstModel, WAG};
+use phyne::evolutionary_models::EvoModel;
+use phyne::substitution_models::{SubstModel, WAG};
 use std::env;
 use std::fs::OpenOptions;
 use std::hint::black_box;

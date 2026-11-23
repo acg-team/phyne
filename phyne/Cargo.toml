@@ -99,3 +99,6 @@ harness = false
 [[bench]]
 name = "helpers"
 harness = false
+[[bench]]
+name = "decomposition_criterion"
+harness = false
