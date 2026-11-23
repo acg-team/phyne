@@ -332,7 +332,7 @@ lazy_static! {
         map
     };
 
-    /// Static parsimony sets for each nucleotide character used in parsimony-based phylogenetic inference.
+    /// Static parsimony sets for each nucleotide character, used in parsimony-based phylogenetic inference.
     pub static ref NUCL_PARSIMONY_SETS: Vec<ParsimonySet> = {
         let mut map: Vec<ParsimonySet> = vec![ParsimonySet::empty(); 255];
         for (i, elem) in map.iter_mut().enumerate() {
