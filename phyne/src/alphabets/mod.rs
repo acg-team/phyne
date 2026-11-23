@@ -26,7 +26,9 @@ use nalgebra::DVector;
 use crate::evolutionary_models::FreqVector;
 use crate::frequencies;
 
+#[doc(hidden)]
 pub mod parsimony_set;
+#[doc(inline)]
 pub use parsimony_set::*;
 
 type ConditionalProbs = DVector<f64>;
