@@ -16,8 +16,11 @@ use crate::{bail, record, Result};
 /// Tracks whether the sequences are currently aligned (all have the same length).
 #[derive(Debug, Clone)]
 pub struct Sequences {
+    /// The vector of sequences stored as `bio::io::fasta::Record`.
     pub(crate) s: Vec<Record>,
+    /// Indicates whether the sequences are aligned (all have the same length).
     pub(crate) aligned: bool,
+    /// The alphabet of the sequences (e.g. DNA or protein).
     pub(crate) alphabet: &'static Alphabet,
 }
 
@@ -398,6 +401,8 @@ impl Sequences {
     }
 }
 
+/// Detects the alphabet of the given sequences based on their content.
+/// Returns `Alphabet::dna()` if all sequences are valid DNA words, otherwise returns `Alphabet::protein()`.
 fn detect_alphabet(sequences: &[Record]) -> &'static Alphabet {
     let dna_alphabet = Alphabet::dna();
     for record in sequences.iter() {
