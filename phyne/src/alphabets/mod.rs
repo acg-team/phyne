@@ -34,7 +34,7 @@ pub use parsimony_set::*;
 /// Type alias for conditional probability vectors.
 /// E.g. for the DNA alphabet, the R character (a purine) would have a conditional probability vector of
 /// `[0.0, 0.0, 1.0, 1.0]`, indicating the probabilities for each nucleotide (T, C, A, G) respectively.
-type ConditionalProbs = DVector<f64>;
+pub type ConditionalProbs = DVector<f64>;
 
 /// All single-letter symbols for valid non-ambiguous amino acids used in the alphabet.
 pub static AMINOACIDS: &[u8] = b"ARNDCQEGHILKMFPSTWYV";
