@@ -186,6 +186,8 @@ pub trait Alignment: Display + Clone + Debug {
         Ok(Self::from_aligned_unchecked(sequences, tree))
     }
 
+    /// Called by [`Alignment::from_aligned`].
+    ///
     /// Constructs a [`PhyloInfo`] from aligned sequences and a phylogenetic tree. Is called by
     /// [`Alignment::from_aligned`]. The caller must ensure that the sequences are aligned, that the sequence IDs are
     /// unique, and that the sequence IDs match the taxa IDs in the tree.
