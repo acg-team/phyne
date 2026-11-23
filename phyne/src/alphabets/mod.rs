@@ -299,15 +299,6 @@ lazy_static! {
         conditional_probs: &NUCL_COND_PROBS,
         parsimony_sets: &NUCL_PARSIMONY_SETS,
     };
-    pub static ref PROTEIN_ALPHABET: Alphabet = Alphabet {
-        name: "protein",
-        symbols: AMINOACIDS,
-        ambiguous: AMB_AMINOACIDS,
-        index: &AMINOACID_INDEX,
-        valid_symbols: &VALID_AMINOACIDS,
-        conditional_probs: &AA_COND_PROBS,
-        parsimony_sets: &AA_PARSIMONY_SETS,
-    };
 
     /// Static nucleotide index mapping for quick lookup, mapping each nucleotide character to its
     /// index in the DNA alphabet.
@@ -398,6 +389,15 @@ fn nucl_parsimony_set(char: &u8) -> ParsimonySet {
 }
 
 lazy_static! {
+    pub static ref PROTEIN_ALPHABET: Alphabet = Alphabet {
+        name: "protein",
+        symbols: AMINOACIDS,
+        ambiguous: AMB_AMINOACIDS,
+        index: &AMINOACID_INDEX,
+        valid_symbols: &VALID_AMINOACIDS,
+        conditional_probs: &AA_COND_PROBS,
+        parsimony_sets: &AA_PARSIMONY_SETS,
+    };
     pub static ref AMINOACID_INDEX: [usize; 255] = {
         let mut index = [0; 255];
         for (i, &char) in AMINOACIDS.iter().enumerate() {
