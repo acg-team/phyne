@@ -358,9 +358,14 @@ pub fn surviving_columns_mask(ancestral_alignment: &impl AncestralAlignment) -> 
 /// `PhyloInfo` instance.
 #[derive(Debug, Clone)]
 pub struct MSA {
+    /// The gapless sequences corresponding to the leaf nodes in the phylogenetic tree.
     seqs: Sequences,
+    /// The `[Mapping]`s of leaf node sequences to their positions in the alignment (gap or character).
     leaf_maps: SeqMaps,
+    /// The `[PairwiseAlignment]`s corresponding to internal nodes in the tree, mapping the sequences or alignments of
+    /// the child nodes to gap/non-gap positions.
     internal_alignments: InternalAlignments,
+    /// The mapping from node indices in the tree to sequence IDs for faster sequence lookup.
     idx_to_id: Vec<String>,
 }
 
