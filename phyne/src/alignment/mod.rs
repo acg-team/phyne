@@ -412,6 +412,10 @@ impl MSA {
         map
     }
 
+    /// Clears columns in the MSA where both input mappings have gaps.
+    ///
+    /// This function takes the length of the MSA and two mappings, and returns a [`PairwiseAlignment`]
+    /// where columns that are gaps in both input mappings are removed.
     fn clear_common_gaps(map_x: &Mapping, map_y: &Mapping) -> PairwiseAlignment {
         let mut upd_map_x = Vec::with_capacity(map_x.len().max(map_y.len()));
         let mut upd_map_y = Vec::with_capacity(map_x.len().max(map_y.len()));
