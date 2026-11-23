@@ -203,10 +203,20 @@ pub trait Alignment: Display + Clone + Debug {
 /// implementation and make sure to call [`Tree::node_ids_are_unique`] in addition to checks
 /// your implementation requires.
 pub trait AncestralAlignment: Alignment {
+    /// Returns the ancestral sequences (sequences associated with internal nodes) without gaps.
     fn ancestral_seqs(&self) -> &Sequences;
+
+    /// Returns the [`Mapping`] of the ancestral sequence corresponding to the given internal node index.
     fn ancestral_map(&self, node_idx: &NodeIdx) -> &Mapping;
+
+    /// Returns the [`Mapping`]s of all leaves in the alignment as a [`SeqMaps`] (`HashMap` of node indices to
+    /// mappings).
     fn ancestral_maps(&self) -> &SeqMaps;
+
+    /// Updates the [`Mapping`] of the ancestral sequence associated with the given internal node by
+    /// its node index.
     fn update_ancestral_map(&mut self, node_idx: &NodeIdx, map: Mapping) -> Result<()>;
+
     /// Checks if inputs are compatible and calls [`Self::from_aligned_with_ancestral_unchecked`].
     /// Checks:
     /// - if sequences are aligned
