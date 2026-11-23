@@ -36,12 +36,27 @@ pub use parsimony_set::*;
 /// `[0.0, 0.0, 1.0, 1.0]`, indicating the probabilities for each nucleotide (T, C, A, G) respectively.
 type ConditionalProbs = DVector<f64>;
 
+/// All single-letter symbols for valid non-ambiguous amino acids used in the alphabet.
 pub static AMINOACIDS: &[u8] = b"ARNDCQEGHILKMFPSTWYV";
+
+/// All single-letter symbols for ambiguous amino acids used in the alphabet.
 pub static AMB_AMINOACIDS: &[u8] = b"BJZX";
-pub static NUCLEOTIDES: &[u8] = b"TCAG"; // This is legacy sorting, i.e., conforming with tools like RaXML and PhyML
+
+/// All single-letter symbols for valid non-ambiguous nucleotides used in the alphabet.
+/// This is legacy sorting, i.e., conforming with tools like RaXML and PhyML, and is used also to maintain the order
+/// of rows/columns in substitution matrices.
+pub static NUCLEOTIDES: &[u8] = b"TCAG";
+
+/// All single-letter symbols for ambiguous nucleotides used in the alphabet.
 pub static AMB_NUCLEOTIDES: &[u8] = b"RYSWKMBDHVNZX";
+
+/// The character representing an ambiguous symbol in both the amino acid and nucleotide alphabets.
 pub static AMB_CHAR: u8 = b'X';
+
+/// The character representing a gap in an [`MSA`](`crate::alignment::MSA`) or [`MASA`](`crate::alignment::MASA`).
 pub static GAP: u8 = b'-';
+
+/// All possible characters that could represent a gap in an MSA, included for compatibility with other tools.
 pub static POSSIBLE_GAPS: &[u8] = b"_*-";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
