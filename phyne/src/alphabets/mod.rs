@@ -496,7 +496,11 @@ fn aa_parsimony_set(char: &u8) -> ParsimonySet {
 
 #[cfg(test)]
 lazy_static! {
+    /// Static empty set of symbols, used for the unknown alphabet.
     pub static ref EMPTY_SYMBOLS: HashSet<u8> = HashSet::new();
+
+    /// Static definition of an unknown alphabet, can be used as a fallback when the alphabet of a
+    /// sequence is not known (currently only used for testing).
     pub static ref UNKNOWN_ALPHABET: Alphabet = Alphabet {
         name: "unknown",
         symbols: &[],
