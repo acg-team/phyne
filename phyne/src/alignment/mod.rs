@@ -382,6 +382,16 @@ impl Display for MSA {
 }
 
 impl MSA {
+    /// Stacks two mappings into a single mapping for the MSA.
+    ///
+    /// This function takes two mappings, and returns a new mapping where gaps in both input mappings are represented
+    /// as `None`, and positions that are present in either mapping are counted as a character in the resulting
+    /// mapping.
+    ///
+    /// The mappings should be of equal length.
+    ///
+    /// E.g. for a `map_x = [None, Some(0), None, Some(1)]` and `map_y = [None, None, Some(0), Some(1)]`, the
+    /// resulting stacked map will be `[None, Some(0), Some(1), Some(2)]`.
     fn stack_maps(map_x: &Mapping, map_y: &Mapping) -> Mapping {
         debug_assert!(map_x.len() == map_y.len());
         let mut map = Vec::with_capacity(map_x.len());
