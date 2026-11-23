@@ -1156,4 +1156,22 @@ mod private_tests {
         let stacked = MSA::stack_maps(&map_x, &map_y);
         assert_eq!(stacked, [None, Some(0), Some(1), Some(2)]);
     }
+
+    #[test]
+    fn clear_common_gaps_no_gaps() {
+        let map_x = align!(b"01-2");
+        let map_y = align!(b"-012");
+        let cleared = MSA::clear_common_gaps(&map_x, &map_y);
+        let expected = PairwiseAlignment::new(map_x, map_y);
+        assert_eq!(cleared, expected);
+    }
+
+    #[test]
+    fn clear_common_gaps_with_gaps() {
+        let map_x = align!(b"-01--2");
+        let map_y = align!(b"--01-2");
+        let cleared = MSA::clear_common_gaps(&map_x, &map_y);
+        let expected = PairwiseAlignment::new(align!(b"01-2"), align!(b"-012"));
+        assert_eq!(cleared, expected);
+    }
 }
