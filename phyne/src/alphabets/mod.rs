@@ -1,4 +1,4 @@
-//! Alphabet module for handling biological sequence alphabets in phylogenetic analyses.
+//! Module for handling biological sequence alphabets in phylogenetic analyses.
 //!
 //! Contains definitions for a generic alphabet, as well as specific alphabets for DNA
 //! and protein sequences. The specific alphabets include cached conditional probabilities and
