@@ -59,14 +59,26 @@ pub static GAP: u8 = b'-';
 /// All possible characters that could represent a gap in an MSA, included for compatibility with other tools.
 pub static POSSIBLE_GAPS: &[u8] = b"_*-";
 
+/// Represents a biological sequence alphabet, including valid symbols, ambiguous symbols, and
+/// precomputed data for efficient sequence analysis (conditional probabilities and parsimony set
+/// definitions for each valid symbol).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Alphabet {
+    /// Human-readable name of the alphabet.
     name: &'static str,
+    /// Unambiguous symbols in the alphabet in the same order as used in substitution matrices (e.g. for DNA, the order
+    /// is [`TCAG`](`NUCLEOTIDES`), and the rate of change from A to C will be stored in the instantaneous rate matrix
+    /// at `Q[2][1]`).
     symbols: &'static [u8],
+    /// Symbols that represent more than one unambiguous symbol.
     ambiguous: &'static [u8],
+    /// Mapping from ASCII character codes to symbol indices for efficient lookups.
     index: &'static [usize; 255],
+    /// Symbols accepted by the alphabet, including ambiguous symbols and gaps.
     valid_symbols: &'static HashSet<u8>,
+    /// Conditional probability vectors indexed by character code.
     conditional_probs: &'static [FreqVector],
+    /// Parsimony sets indexed by character code.
     parsimony_sets: &'static [ParsimonySet],
 }
 
