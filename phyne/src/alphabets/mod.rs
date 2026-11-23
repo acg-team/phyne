@@ -289,6 +289,7 @@ impl Alphabet {
 }
 
 lazy_static! {
+    /// Static standard DNA alphabet definition
     pub static ref DNA_ALPHABET: Alphabet = Alphabet {
         name: "DNA",
         symbols: NUCLEOTIDES,
@@ -307,6 +308,9 @@ lazy_static! {
         conditional_probs: &AA_COND_PROBS,
         parsimony_sets: &AA_PARSIMONY_SETS,
     };
+
+    /// Static nucleotide index mapping for quick lookup, mapping each nucleotide character to its
+    /// index in the DNA alphabet.
     pub static ref NUCLEOTIDE_INDEX: [usize; 255] = {
         let mut index = [0; 255];
         for (i, char) in NUCLEOTIDES.iter().enumerate() {
@@ -316,6 +320,8 @@ lazy_static! {
         index[GAP as usize] = 4;
         index
     };
+
+    /// Static set of valid nucleotide characters, including ambiguous nucleotides and the gap character.
     pub static ref VALID_NUCLEOTIDES: HashSet<u8> = {
         NUCLEOTIDES
             .iter()
@@ -323,6 +329,9 @@ lazy_static! {
             .cloned()
             .collect()
     };
+
+    /// Static conditional probability vectors for each nucleotide character, used in e.g. Felsenstein's
+    /// pruning algorithm.
     pub static ref NUCL_COND_PROBS: Vec<FreqVector> = {
         let mut map = vec![frequencies!(&[0.0; 4]); 255];
         for (i, elem) in map.iter_mut().enumerate() {
@@ -331,6 +340,8 @@ lazy_static! {
         }
         map
     };
+
+    /// Static parsimony sets for each nucleotide character used in parsimony-based phylogenetic inference.
     pub static ref NUCL_PARSIMONY_SETS: Vec<ParsimonySet> = {
         let mut map: Vec<ParsimonySet> = vec![ParsimonySet::empty(); 255];
         for (i, elem) in map.iter_mut().enumerate() {
@@ -339,6 +350,8 @@ lazy_static! {
         }
         map
     };
+
+    /// Static parsimony set for the gap character for e.g. Dollo parsimony.
     pub static ref GAP_SET: ParsimonySet = ParsimonySet::from_slice(&[GAP]);
 }
 
