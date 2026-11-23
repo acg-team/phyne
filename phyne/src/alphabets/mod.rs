@@ -161,9 +161,9 @@ impl Alphabet {
 
     /// Checks if a word is valid in this alphabet, case-insensitive.
     ///
-    /// Example:
+    /// # Example:
     /// ```
-    /// # use phyne::alphabets::Alphabet;
+    /// use phyne::alphabets::Alphabet;
     /// assert!(Alphabet::dna().is_word(b"ACGT"));
     /// assert!(Alphabet::dna().is_word(b"aCgTx"));
     /// assert!(Alphabet::protein().is_word(b"ACGTFTH"));
@@ -177,9 +177,9 @@ impl Alphabet {
 
     /// Returns the valid and unambiguous symbols of the alphabet.
     ///
-    /// Example:
+    /// # Example:
     /// ```
-    /// # use phyne::alphabets::Alphabet;
+    /// use phyne::alphabets::Alphabet;
     /// assert_eq!(Alphabet::dna().symbols(), b"TCAG");
     /// assert_eq!(Alphabet::protein().symbols(), b"ARNDCQEGHILKMFPSTWYV");
     /// ```
@@ -189,9 +189,9 @@ impl Alphabet {
 
     /// Returns the ambiguous symbols of the alphabet.
     ///
-    /// Example:
+    /// # Example:
     /// ```
-    /// # use phyne::alphabets::Alphabet;
+    /// use phyne::alphabets::Alphabet;
     /// assert_eq!(Alphabet::dna().ambiguous(), b"RYSWKMBDHVNZX");
     /// assert_eq!(Alphabet::protein().ambiguous(), b"BJZX");
     /// ```
@@ -201,9 +201,9 @@ impl Alphabet {
 
     /// Returns the number of symbols in the alphabet, not including ambiguous characters or gaps.
     ///
-    /// Example:
+    /// # Example:
     /// ```
-    /// # use phyne::alphabets::Alphabet;
+    /// use phyne::alphabets::Alphabet;
     /// assert_eq!(Alphabet::dna().len(), 4);
     /// assert_eq!(Alphabet::protein().len(), 20);
     /// ```
@@ -216,9 +216,9 @@ impl Alphabet {
     /// The index maps ASCII character codes to their respective indices in the alphabet, case-insensitive.
     /// Used to maintain consistent ordering in frequency vectors and substitution matrices.
     ///
-    /// Example:
+    /// # Example:
     /// ```
-    /// # use phyne::alphabets::Alphabet;
+    /// use phyne::alphabets::Alphabet;
     /// assert_eq!(Alphabet::dna().index(&b'T'), 0);
     /// assert_eq!(Alphabet::dna().index(&b'c'), 1);
     /// assert_eq!(Alphabet::dna().index(&b'A'), 2);
@@ -233,14 +233,13 @@ impl Alphabet {
     /// Returns the conditional probability vector for a given character in the alphabet.
     /// The vector represents the conditional probabilities of observing each symbol in the alphabet given the specified character.
     ///
-    /// Example:
+    /// # Example:
     /// ```
-    /// # use phyne::alphabets::Alphabet;
-    /// # use nalgebra::dvector;
+    /// use phyne::alphabets::{Alphabet, ConditionalProbs};
     /// let t_probs = Alphabet::dna().char_encoding(b'T');
-    /// assert_eq!(t_probs, &dvector![1.0, 0.0, 0.0, 0.0]);
+    /// assert_eq!(t_probs, &ConditionalProbs::from_vec(vec![1.0, 0.0, 0.0, 0.0]));
     /// let amb_probs = Alphabet::dna().char_encoding(b'X');
-    /// assert_eq!(amb_probs, &dvector![1.0, 1.0, 1.0, 1.0]);
+    /// assert_eq!(amb_probs, &ConditionalProbs::from_vec(vec![1.0, 1.0, 1.0, 1.0]));
     /// ```
     pub fn char_encoding(&self, char: u8) -> &ConditionalProbs {
         &self.conditional_probs[char.to_ascii_uppercase() as usize]
@@ -248,12 +247,11 @@ impl Alphabet {
 
     /// Returns the conditional probability vector for the gap character in the alphabet, encoded as missing data.
     ///
-    /// Example:
+    /// # Example:
     /// ```
-    /// # use phyne::alphabets::Alphabet;
-    /// # use nalgebra::dvector;
+    /// # use phyne::alphabets::{Alphabet, ConditionalProbs};
     /// let gap_probs = Alphabet::dna().missing_char_encoding();
-    /// assert_eq!(gap_probs, &dvector![1.0, 1.0, 1.0, 1.0]);
+    /// assert_eq!(gap_probs, &ConditionalProbs::from_vec(vec![1.0, 1.0, 1.0, 1.0]));
     /// let amb_probs = Alphabet::dna().char_encoding(b'X');
     /// assert_eq!(gap_probs, amb_probs);
     /// ```
@@ -265,10 +263,9 @@ impl Alphabet {
     /// The parsimony set represents the set of unambiguous symbols that the character can represent.
     /// For example, in the DNA alphabet, the character 'R' represents the set {'A', 'G'}.
     ///
-    /// Example:
+    /// # Example:
     /// ```
-    /// # use phyne::alphabets::Alphabet;
-    /// # use phyne::alphabets::ParsimonySet;
+    /// use phyne::alphabets::{Alphabet, ParsimonySet};
     /// let r_set = Alphabet::dna().parsimony_set(&b'R');
     /// assert_eq!(format!("{r_set}"), "[AG]");
     /// let z_set = Alphabet::protein().parsimony_set(&b'Z');
@@ -280,10 +277,9 @@ impl Alphabet {
 
     /// Returns the parsimony set representing a gap character in the alphabet.
     ///
-    /// Example:
+    /// # Example:
     /// ```
-    /// # use phyne::alphabets::Alphabet;
-    /// # use phyne::alphabets::ParsimonySet;
+    /// use phyne::alphabets::{Alphabet, ParsimonySet};
     /// let gap_set = Alphabet::dna().gap_set();
     /// assert_eq!(format!("{gap_set}"), "[-]");
     /// ```
