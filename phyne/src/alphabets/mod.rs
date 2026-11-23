@@ -119,6 +119,14 @@ impl Display for Alphabet {
 }
 
 impl Alphabet {
+    /// Returns the name of the alphabet.
+    ///
+    /// # Example:
+    /// ```
+    /// use phylo::alphabets::Alphabet;
+    /// assert_eq!(Alphabet::dna().name(), "DNA");
+    /// assert_eq!(Alphabet::protein().name(), "protein");
+    /// ```
     pub fn name(&self) -> &str {
         self.name
     }
