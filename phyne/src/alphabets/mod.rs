@@ -302,7 +302,7 @@ lazy_static! {
 
     /// Static nucleotide index mapping for quick lookup, mapping each nucleotide character to its
     /// index in the DNA alphabet.
-    pub static ref NUCLEOTIDE_INDEX: [usize; 255] = {
+    pub(crate) static ref NUCLEOTIDE_INDEX: [usize; 255] = {
         let mut index = [0; 255];
         for (i, char) in NUCLEOTIDES.iter().enumerate() {
             index[*char as usize] = i;
@@ -313,7 +313,7 @@ lazy_static! {
     };
 
     /// Static set of valid nucleotide characters, including ambiguous nucleotides and the gap character.
-    pub static ref VALID_NUCLEOTIDES: HashSet<u8> = {
+    pub(crate) static ref VALID_NUCLEOTIDES: HashSet<u8> = {
         NUCLEOTIDES
             .iter()
             .chain(AMB_NUCLEOTIDES.iter().chain([GAP].iter()))
@@ -323,7 +323,7 @@ lazy_static! {
 
     /// Static conditional probability vectors for each nucleotide character, used in e.g. Felsenstein's
     /// pruning algorithm.
-    pub static ref NUCL_COND_PROBS: Vec<FreqVector> = {
+    pub(crate) static ref NUCL_COND_PROBS: Vec<FreqVector> = {
         let mut map = vec![frequencies!(&[0.0; 4]); 255];
         for (i, elem) in map.iter_mut().enumerate() {
             let char = i as u8;
@@ -333,7 +333,7 @@ lazy_static! {
     };
 
     /// Static parsimony sets for each nucleotide character, used in parsimony-based phylogenetic inference.
-    pub static ref NUCL_PARSIMONY_SETS: Vec<ParsimonySet> = {
+    pub(crate) static ref NUCL_PARSIMONY_SETS: Vec<ParsimonySet> = {
         let mut map: Vec<ParsimonySet> = vec![ParsimonySet::empty(); 255];
         for (i, elem) in map.iter_mut().enumerate() {
             let char = i as u8;
@@ -343,7 +343,7 @@ lazy_static! {
     };
 
     /// Static parsimony set for the gap character for e.g. Dollo parsimony.
-    pub static ref GAP_SET: ParsimonySet = ParsimonySet::from_slice(&[GAP]);
+    pub(crate) static ref GAP_SET: ParsimonySet = ParsimonySet::from_slice(&[GAP]);
 }
 
 /// Function used to precompute static conditional probability vectors for each nucleotide character.
@@ -404,7 +404,7 @@ lazy_static! {
 
     /// Static amino acid index mapping for quick lookup, mapping each character to its
     /// index in the protein alphabet.
-    pub static ref AMINOACID_INDEX: [usize; 255] = {
+    pub(crate) static ref AMINOACID_INDEX: [usize; 255] = {
         let mut index = [0; 255];
         for (i, &char) in AMINOACIDS.iter().enumerate() {
             index[char as usize] = i;
@@ -415,7 +415,7 @@ lazy_static! {
     };
 
     /// Static set of valid amino acid characters, including ambiguous amino acids and the gap character.
-    pub static ref VALID_AMINOACIDS: HashSet<u8> = {
+    pub(crate) static ref VALID_AMINOACIDS: HashSet<u8> = {
         AMINOACIDS
             .iter()
             .chain(AMB_AMINOACIDS.iter().chain([GAP].iter()))
@@ -425,7 +425,7 @@ lazy_static! {
 
     /// Static conditional probability vectors for each amino acid character, used in e.g. Felsenstein's
     /// pruning algorithm.
-    pub static ref AA_COND_PROBS: Vec<FreqVector> = {
+    pub(crate) static ref AA_COND_PROBS: Vec<FreqVector> = {
         let mut map: Vec<FreqVector> = vec![frequencies!(&[0.0; 20]); 255];
         for (i, elem) in map.iter_mut().enumerate() {
             let char = i as u8;
@@ -435,7 +435,7 @@ lazy_static! {
     };
 
     /// Static parsimony sets for each amino acid character, used in parsimony-based phylogenetic inference.
-    pub static ref AA_PARSIMONY_SETS: Vec<ParsimonySet> = {
+    pub(crate) static ref AA_PARSIMONY_SETS: Vec<ParsimonySet> = {
         let mut map: Vec<ParsimonySet> = vec![ParsimonySet::empty(); 255];
         for (i, elem) in map.iter_mut().enumerate() {
             let char = i as u8;
