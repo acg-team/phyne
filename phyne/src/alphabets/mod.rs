@@ -389,6 +389,7 @@ fn nucl_parsimony_set(char: &u8) -> ParsimonySet {
 }
 
 lazy_static! {
+    /// Static standard protein alphabet definition
     pub static ref PROTEIN_ALPHABET: Alphabet = Alphabet {
         name: "protein",
         symbols: AMINOACIDS,
@@ -398,6 +399,9 @@ lazy_static! {
         conditional_probs: &AA_COND_PROBS,
         parsimony_sets: &AA_PARSIMONY_SETS,
     };
+
+    /// Static amino acid index mapping for quick lookup, mapping each character to its
+    /// index in the protein alphabet.
     pub static ref AMINOACID_INDEX: [usize; 255] = {
         let mut index = [0; 255];
         for (i, &char) in AMINOACIDS.iter().enumerate() {
@@ -407,6 +411,8 @@ lazy_static! {
         index[GAP as usize] = 20;
         index
     };
+
+    /// Static set of valid amino acid characters, including ambiguous amino acids and the gap character.
     pub static ref VALID_AMINOACIDS: HashSet<u8> = {
         AMINOACIDS
             .iter()
@@ -414,6 +420,9 @@ lazy_static! {
             .cloned()
             .collect()
     };
+
+    /// Static conditional probability vectors for each amino acid character, used in e.g. Felsenstein's
+    /// pruning algorithm.
     pub static ref AA_COND_PROBS: Vec<FreqVector> = {
         let mut map: Vec<FreqVector> = vec![frequencies!(&[0.0; 20]); 255];
         for (i, elem) in map.iter_mut().enumerate() {
@@ -422,6 +431,8 @@ lazy_static! {
         }
         map
     };
+
+    /// Static parsimony sets for each amino acid character, used in parsimony-based phylogenetic inference.
     pub static ref AA_PARSIMONY_SETS: Vec<ParsimonySet> = {
         let mut map: Vec<ParsimonySet> = vec![ParsimonySet::empty(); 255];
         for (i, elem) in map.iter_mut().enumerate() {
