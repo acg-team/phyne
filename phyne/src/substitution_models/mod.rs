@@ -4,7 +4,7 @@ use std::marker::{PhantomData, Sized};
 use std::ops::Mul;
 
 use hashbrown::HashMap;
-use nalgebra::{DMatrix, SymmetricEigen};
+use nalgebra::DMatrix;
 
 use crate::alignment::Alignment;
 use crate::alphabets::Alphabet;
@@ -54,6 +54,66 @@ struct Decomposition {
     right: DMatrix<f64>,
     eigenvalues: FreqVector,
 }
+
+// Cyclic Jacobi rotations for the small symmetric matrices of reversible models.
+// Each rotation updates the matrix and its eigenvector basis together.
+fn jacobi_eigen(mut a: DMatrix<f64>) -> Option<(DMatrix<f64>, FreqVector)> {
+    let n = a.nrows();
+    if n == 0 || a.iter().any(|x| !x.is_finite()) {
+        return None;
+    }
+    let mut u = DMatrix::<f64>::identity(n, n);
+    let scale = a.amax();
+    if scale == 0.0 {
+        return Some((u, a.diagonal()));
+    }
+    for x in a.iter_mut() {
+        *x /= scale;
+    }
+
+    for _ in 0..64 {
+        let mut changed = false;
+        for p in 0..n {
+            for r in (p + 1)..n {
+                let b = a[(p, r)];
+                if b.abs() <= f64::EPSILON {
+                    continue;
+                }
+                changed = true;
+                let h = (a[(r, r)] - a[(p, p)]) * 0.5;
+                let t = b / (h + h.hypot(b).copysign(h));
+                let c = 1.0 / 1.0_f64.hypot(t);
+                let s = t * c;
+                a[(p, p)] -= t * b;
+                a[(r, r)] += t * b;
+                a[(p, r)] = 0.0;
+                a[(r, p)] = 0.0;
+
+                for i in 0..n {
+                    if i != p && i != r {
+                        let x = a[(i, p)];
+                        let y = a[(i, r)];
+                        let xp = c * x - s * y;
+                        let yr = s * x + c * y;
+                        a[(i, p)] = xp;
+                        a[(p, i)] = xp;
+                        a[(i, r)] = yr;
+                        a[(r, i)] = yr;
+                    }
+                    let x = u[(i, p)];
+                    let y = u[(i, r)];
+                    u[(i, p)] = c * x - s * y;
+                    u[(i, r)] = s * x + c * y;
+                }
+            }
+        }
+        if !changed {
+            return Some((u, a.diagonal() * scale));
+        }
+    }
+    None
+}
+
 fn decomp<Q: QMatrix>(qmatrix: &Q) -> Option<Decomposition> {
     let freqs = qmatrix.freqs();
     if freqs.iter().any(|&pi| !pi.is_finite() || pi <= 0.0) {
@@ -77,13 +137,12 @@ fn decomp<Q: QMatrix>(qmatrix: &Q) -> Option<Decomposition> {
         }
     }
 
-    let eig = SymmetricEigen::try_new(symmetric, f64::EPSILON, 10_000)?;
-    let u = eig.eigenvectors;
+    let (u, eigenvalues) = jacobi_eigen(symmetric)?;
 
     Some(Decomposition {
         left: DMatrix::from_fn(n, n, |i, k| u[(i, k)] / sqrt_pi[i]),
         right: DMatrix::from_fn(n, n, |k, j| u[(j, k)] * sqrt_pi[j]),
-        eigenvalues: eig.eigenvalues,
+        eigenvalues,
     })
 }
 
@@ -127,6 +186,9 @@ impl<Q: QMatrix + QMatrixMaker> SubstModel<Q> {
 
 impl<Q: QMatrix> EvoModel for SubstModel<Q> {
     fn p(&self, time: f64) -> ProbabilityMatrix {
+        if time == 0.0 {
+            return ProbabilityMatrix::identity(self.n(), self.n());
+        }
         let time = if time > MAX_BLEN { MAX_BLEN } else { time };
         // If time > 1e10f64 the matrix exponentiation breaks and stops converging, but before it breaks
         // starting with 1e5f64 it converges to the same result.
@@ -134,11 +196,24 @@ impl<Q: QMatrix> EvoModel for SubstModel<Q> {
             return (self.q().clone() * time).exp();
         };
 
+        // Near the identity, reconstruct P - I to preserve small transitions.
+        let near_identity = decomposition
+            .eigenvalues
+            .iter()
+            .all(|&lambda| (lambda * time).abs() <= 0.5);
         let mut scaled_left = decomposition.left.clone();
         for (k, &lambda) in decomposition.eigenvalues.iter().enumerate() {
-            scaled_left.column_mut(k).scale_mut((lambda * time).exp());
+            let x = lambda * time;
+            let factor = if near_identity { x.exp_m1() } else { x.exp() };
+            scaled_left.column_mut(k).scale_mut(factor);
         }
-        scaled_left * &decomposition.right
+        let mut transition = scaled_left * &decomposition.right;
+        if near_identity {
+            for i in 0..transition.nrows() {
+                transition[(i, i)] += 1.0;
+            }
+        }
+        transition
     }
 
     fn q(&self) -> &RateMatrix {
@@ -192,7 +267,7 @@ impl<Q: QMatrix, A: Alignment> SubstitutionCostBuilder<Q, A> {
             bail!(Alphabet, "alphabet mismatch between model and alignment");
         }
 
-        let tmp = RefCell::new(SubstModelInfo::new(&self.info, &self.model).unwrap());
+        let tmp = RefCell::new(SubstModelInfo::new(&self.info, &self.model)?);
         Ok(SubstitutionCost {
             model: self.model,
             info: self.info,
@@ -295,36 +370,51 @@ impl<Q: QMatrix, A: Alignment> SubstitutionCost<Q, A> {
         let tmp_values = self.tmp.borrow();
         debug_assert_eq!(info.tree.len(), tmp_values.node_info.len());
 
+        let root = usize::from(&info.tree.root);
         let likelihood = self
             .model
             .freqs()
             .transpose()
-            .mul(&tmp_values.node_info[usize::from(&info.tree.root)]);
-        drop(tmp_values);
+            .mul(&tmp_values.node_info[root]);
 
         debug_assert_eq!(likelihood.ncols(), info.msa.len());
         debug_assert_eq!(likelihood.nrows(), 1);
-        likelihood.map(|x| x.ln()).sum()
+        likelihood
+            .iter()
+            .zip(&tmp_values.log_scales[root])
+            .map(|(&p, &scale)| p.ln() + scale)
+            .sum()
     }
 
     fn set_internal(&self, tree: &Tree, node_idx: &NodeIdx) {
         let node = tree.node(node_idx);
-        let childx_info = self.tmp.borrow().node_info[usize::from(&node.children[0])].clone();
-        let childy_info = self.tmp.borrow().node_info[usize::from(&node.children[1])].clone();
-
         let idx = usize::from(node_idx);
-
         let mut tmp_values = self.tmp.borrow_mut();
-        if !tmp_values.node_info_valid[idx] || !tmp_values.node_models_valid[idx] {
-            tmp_values.node_models[idx] = self.model.p(node.blen);
-            tmp_values.node_models_valid[idx] = true;
-            tmp_values.node_info_valid[idx] = false;
-        }
-        if tmp_values.node_info_valid[idx] {
+        if tmp_values.node_info_valid[idx] && tmp_values.node_models_valid[idx] {
             return;
         }
-        tmp_values.node_info[idx] =
-            (&tmp_values.node_models[idx]).mul(childx_info.component_mul(&childy_info));
+        if !tmp_values.node_models_valid[idx] {
+            tmp_values.node_models[idx] = self.model.p(node.blen);
+            tmp_values.node_models_valid[idx] = true;
+        }
+        let left = usize::from(&node.children[0]);
+        let right = usize::from(&node.children[1]);
+        let product = tmp_values.node_info[left].component_mul(&tmp_values.node_info[right]);
+        let mut partial = &tmp_values.node_models[idx] * product;
+        for (site, mut column) in partial.column_iter_mut().enumerate() {
+            let scale = column.max();
+            let inherited = tmp_values.log_scales[left][site] + tmp_values.log_scales[right][site];
+            tmp_values.log_scales[idx][site] = if scale > 0.0 {
+                for value in column.iter_mut() {
+                    *value /= scale;
+                }
+                inherited + scale.ln()
+            } else {
+                // A zero column represents an impossible observation.
+                inherited
+            };
+        }
+        tmp_values.node_info[idx] = partial;
         tmp_values.node_info_valid[idx] = true;
         if let Some(parent_idx) = node.parent {
             tmp_values.node_info_valid[usize::from(parent_idx)] = false;
@@ -337,7 +427,7 @@ impl<Q: QMatrix, A: Alignment> SubstitutionCost<Q, A> {
         let node = tree.node(node_idx);
         let idx = usize::from(node_idx);
 
-        if !tmp_values.node_info_valid[idx] || !tmp_values.node_models_valid[idx] {
+        if !tmp_values.node_models_valid[idx] {
             tmp_values.node_models[idx] = self.model.p(node.blen);
             tmp_values.node_models_valid[idx] = true;
             tmp_values.node_info_valid[idx] = false;
@@ -355,12 +445,12 @@ impl<Q: QMatrix, A: Alignment> SubstitutionCost<Q, A> {
         drop(tmp_values);
     }
 }
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct SubstModelInfo<Q: QMatrix> {
     phantom: PhantomData<Q>,
     node_info: Vec<DMatrix<f64>>,
     node_info_valid: Vec<bool>,
+    log_scales: Vec<Vec<f64>>,
     node_models: Vec<RateMatrix>,
     node_models_valid: Vec<bool>,
     leaf_seq_info: HashMap<NodeIdx, DMatrix<f64>>,
@@ -390,6 +480,7 @@ impl<Q: QMatrix> SubstModelInfo<Q> {
             phantom: PhantomData,
             node_info: vec![DMatrix::<f64>::zeros(n, msa_length); node_count],
             node_info_valid: vec![false; node_count],
+            log_scales: vec![vec![0.0; msa_length]; node_count],
             node_models: vec![RateMatrix::zeros(n, n); node_count],
             node_models_valid: vec![false; node_count],
             leaf_seq_info,
@@ -422,3 +513,39 @@ impl<Q: QMatrix> ParsimonyModel for SubstModel<Q> {
 #[cfg(test)]
 #[cfg_attr(coverage, coverage(off))]
 mod tests;
+
+#[cfg(test)]
+mod spectral_regression {
+    use super::*;
+
+    #[test]
+    fn gtr_extreme_rates_reconstruct_the_generator_and_transition_matrix() {
+        let model = SubstModel::<GTR>::new(
+            &[0.25, 0.35, 0.3, 0.1],
+            &[
+                467.46771733483683,
+                0.07044148894930388,
+                1.053030992576237e-5,
+                0.47937347791908513,
+                0.2816632355494551,
+            ],
+        )
+        .unwrap();
+        let d = model
+            .decomposition
+            .as_ref()
+            .expect("GTR spectral decomposition");
+        let mut weighted = d.left.clone();
+        for (k, &lambda) in d.eigenvalues.iter().enumerate() {
+            weighted.column_mut(k).scale_mut(lambda);
+        }
+        let residual = (weighted * &d.right - model.q()).amax();
+        assert!(residual < 1e-12 * model.q().amax(), "Q residual={residual}");
+
+        let time = 0.056647;
+        let direct = (model.q().clone() * time).exp();
+        let spectral = model.p(time);
+        assert!((spectral[(0, 2)] - 1.9091842082338955e-5).abs() < 1e-14);
+        assert!((spectral - direct).amax() < 1e-13);
+    }
+}

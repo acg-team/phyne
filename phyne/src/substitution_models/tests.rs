@@ -12,6 +12,7 @@ use crate::likelihood::ModelSearchCost;
 use crate::parsimony::{DiagonalZeros as Z, ParsimonyModel, Rounding as R};
 use crate::phylo_info::{PhyloInfo, PhyloInfoBuilder as PIB};
 use crate::substitution_models::{
+    decomp,
     dna_models::{GTR, HKY, JC69, K80, TN93},
     protein_models::{BLOSUM, HIVB, WAG},
     QMatrix, QMatrixMaker, SubstModel, SubstitutionCostBuilder as SCB,
@@ -700,6 +701,7 @@ fn dna_cb_example_likelihood() {
             -0.097682355,
         ],
     );
+    model.decomposition = decomp(&model.qmatrix);
     let c = SCB::new(model, info).build().unwrap();
     assert_relative_eq!(c.cost(), -17.1035117087, epsilon = 1e-6);
 }
@@ -981,7 +983,7 @@ fn dna_gaps_against_phyml() {
     let c = SCB::new(jc69, info).build().unwrap();
 
     // Compare against value from PhyML
-    assert_relative_eq!(c.cost(), -9.70406054783923);
+    assert_relative_eq!(c.cost(), -9.70406054783923, epsilon = 1e-12);
 }
 
 #[test]
@@ -998,7 +1000,7 @@ fn dna_single_char_gaps_against_phyml() {
     ]);
     let info = MSA::from_aligned(seqs, tree.clone()).unwrap();
     let c = SCB::new(jc69.clone(), info).build().unwrap();
-    assert_relative_eq!(c.cost(), -2.920437792326963); // Compare against PhyML
+    assert_relative_eq!(c.cost(), -2.920437792326963, epsilon = 1e-12); // Compare against PhyML
 
     let seqs = Sequences::new_unchecked(vec![
         record!("A", b"X"),

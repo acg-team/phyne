@@ -142,10 +142,18 @@ impl<C: ModelSearchCost + Display + Clone> ModelOptimiser<C> {
         let res = Executor::new(optimiser, gss)
             .configure(|_| IterState::new().param(start_value).max_iters(500))
             .run()?;
-        let cost = -res.state().best_cost;
+        let state = res.state();
+        let value = state.best_param.ok_or_else(|| {
+            std::io::Error::other(format!(
+                "Brent returned no best parameter: param={param}, start={start_value:?}, \
+         bounds=[{min:?}, {max:?}], last_cost={:?}, best_cost={:?}",
+                state.cost, state.best_cost,
+            ))
+        })?;
+
         Ok(SingleValOptResult {
-            value: res.state().best_param.unwrap(),
-            final_cost: cost,
+            value,
+            final_cost: -state.best_cost,
         })
     }
 }
