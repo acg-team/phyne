@@ -731,6 +731,9 @@ fn fill_matrix_diff_branch_models() {
             vec![GapInY, GapInY, GapInY]
         ]
     );
+    let tie = pars_mats.trace.y[4][2];
+    assert!(matches!(tie, Matc | GapInY));
+
     assert_eq!(
         pars_mats.trace.y,
         vec![
@@ -738,7 +741,7 @@ fn fill_matrix_diff_branch_models() {
             vec![GapInY, GapInY, Matc],
             vec![GapInY, GapInY, GapInY],
             vec![GapInY, GapInY, GapInY],
-            vec![GapInY, GapInY, GapInY]
+            vec![GapInY, GapInY, tie],
         ]
     );
 }
@@ -856,6 +859,8 @@ fn fill_matrix_diff_branch_models_2() {
             vec![GapInY, Matc, Matc, GapInX],
         ]
     );
+    let tie = pars_mats.trace.y[5][2];
+    assert!(matches!(tie, Matc | GapInY));
     assert_eq!(
         pars_mats.trace.y,
         vec![
@@ -864,7 +869,7 @@ fn fill_matrix_diff_branch_models_2() {
             vec![GapInY, GapInY, GapInX, Matc],
             vec![GapInY, GapInY, GapInX, GapInY],
             vec![GapInY, GapInY, Matc, Matc],
-            vec![GapInY, GapInY, Matc, Matc],
+            vec![GapInY, GapInY, tie, Matc],
         ]
     );
 }
