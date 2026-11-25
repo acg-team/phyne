@@ -171,8 +171,7 @@ pub trait Alignment: Display + Clone + Debug {
 
     /// Checks if inputs are compatible, removes columns with only gaps and calls [`Self::from_aligned_unchecked`].
     ///
-    /// Tree is consumed and stored together with the alignment, because the alignment is only meaningful in the
-    /// context of the tree that it was built from.
+    /// The [`Tree`] object is consumed and stored together with the alignment as a [`PhyloInfo`] object.
     ///
     /// # Errors
     ///
@@ -191,8 +190,7 @@ pub trait Alignment: Display + Clone + Debug {
     /// [`Alignment::from_aligned`]. The caller must ensure that the sequences are aligned, that the sequence IDs are
     /// unique, and that the sequence IDs match the taxa IDs in the tree.
     ///
-    /// Tree is consumed and stored together with the alignment, because the alignment is only meaningful in the
-    /// context of the tree that it was built from.
+    /// The [`Tree`] object is consumed and stored together with the alignment as a [`PhyloInfo`] object.
     fn from_aligned_unchecked(sequences: Sequences, tree: Tree) -> PhyloInfo<Self>;
 }
 
