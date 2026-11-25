@@ -11,10 +11,10 @@
 //! [`AncestralAlignment`]. The [`MSA`] and [`MASA`] structs use [`Sequences`] to store the gapless sequence data
 //! and [`Mapping`] to store the alignment information.
 //!
-//! Both [`MSA`] and [`MASA`] structures are coupled with a [`Tree`] that represents the phylogenetic relationships
-//! among the sequences and are meaningless without the associated tree. Internally, the structures use tree node
-//! indices ([`NodeIdx`]) to associate sequences with tree nodes for faster lookup. Consequently, all methods that
-//! return an alignment will return [`PhyloInfo`] objects to maintain the association between sequences and tree nodes.
+//! Both [`MSA`] and [`MASA`] structures are usually coupled with a [`Tree`] that represents the phylogenetic
+//! relationships among the sequences. Internally, the structures use tree node indices ([`NodeIdx`]) to associate
+//! sequences with tree nodes for faster lookup. Consequently, all methods that return an alignment will return
+//! [`PhyloInfo`] objects to maintain the association between sequences and tree nodes.
 //!
 //! Finally, this module includes the [`Aligner`] trait that can be implemented for sequence alignment algorithms.
 //!
