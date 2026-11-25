@@ -308,8 +308,10 @@ pub trait AncestralAlignment: Alignment {
     /// aligned ancestral sequences. Is called by the default implementation of
     /// [`AncestralAlignment::from_msa_with_ancestral`].
     ///
-    /// The `PhyloInfo` (i.e., `Tree` and associated `MSA`) is consumed, the ancestral alignment and
-    /// corresponding tree are returned together, because the alignment is only meaningful in the context of the tree.
+    /// The [`PhyloInfo`] object (i.e., [`Tree`] and associated [`Alignment`]) is consumed, and stored together with
+    /// the ancestral alignment as a resulting [`PhyloInfo`] object, as the ancestral sequences are only meaningful
+    /// in the context of the tree they were reconstructed on (ancestral sequences are associated with the internal
+    /// nodes of the tree).
     fn from_msa_with_ancestral_unchecked(
         phylo: PhyloInfo<impl Alignment>,
         ancestral_seqs: Sequences,
@@ -358,8 +360,8 @@ pub fn surviving_columns_mask(ancestral_alignment: &impl AncestralAlignment) -> 
 ///
 /// This structure stores the sequences and their corresponding mappings for leaf nodes, as well as the internal
 /// alignments and a mapping from node indices in the tree to sequence IDs.
-/// Only valid in the context of the corresponding phylogenetic tree and should always be stored with it as a
-/// `PhyloInfo` instance.
+/// Only valid for phylogenetic inference in the context of the corresponding phylogenetic tree and should always
+/// be stored with it as a [`PhyloInfo`] instance.
 #[derive(Debug, Clone)]
 pub struct MSA {
     /// The gapless sequences corresponding to the leaf nodes in the phylogenetic tree.
@@ -590,8 +592,8 @@ impl Alignment for MSA {
 /// Represents a multiple ancestral sequence alignment (MASA) with associated leaf mappings and ancestral mappings.
 ///
 /// This structure stores the sequences and their corresponding mappings for all tree nodes and a mapping from node
-/// indices in the tree to sequence IDs. Only valid in the context of the corresponding phylogenetic tree and should
-/// always be stored with it as a `PhyloInfo` instance.
+/// indices in the tree to sequence IDs. Only valid for phylogenetic inference in the context of the corresponding
+/// phylogenetic tree and should always be stored with it as a [`PhyloInfo`] instance.
 #[derive(Debug, Clone)]
 pub struct MASA {
     /// The gapless sequences corresponding to the leaf nodes in the phylogenetic tree.
