@@ -111,7 +111,6 @@ impl PairwiseAlignment {
     /// Creates a new `PairwiseAlignment` with the given mappings for the two sequences or MSAs.
     ///
     /// # Panics
-    ///
     /// Panics if the lengths of the provided mappings are not equal.
     pub fn new(map_x: Mapping, map_y: Mapping) -> PairwiseAlignment {
         assert_eq!(
