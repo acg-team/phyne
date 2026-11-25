@@ -3,6 +3,7 @@ use std::fmt::{Debug, Display};
 use std::marker::{PhantomData, Sized};
 use std::ops::Mul;
 
+use faer;
 use hashbrown::HashMap;
 use nalgebra::DMatrix;
 
@@ -57,20 +58,17 @@ struct Decomposition {
 
 // Cyclic Jacobi rotations for the small symmetric matrices of reversible models.
 // Each rotation updates the matrix and its eigenvector basis together.
+// rotates coordinate axes until the matrix is diagonal
+// preseres accuracacy for low numbers
 fn jacobi_eigen(mut a: DMatrix<f64>) -> Option<(DMatrix<f64>, FreqVector)> {
     let n = a.nrows();
-    if n == 0 || a.iter().any(|x| !x.is_finite()) {
-        return None;
-    }
     let mut u = DMatrix::<f64>::identity(n, n);
     let scale = a.amax();
-    if scale == 0.0 {
-        return Some((u, a.diagonal()));
-    }
     for x in a.iter_mut() {
         *x /= scale;
     }
 
+    //maximum of 64 sweeps
     for _ in 0..64 {
         let mut changed = false;
         for p in 0..n {
@@ -108,10 +106,10 @@ fn jacobi_eigen(mut a: DMatrix<f64>) -> Option<(DMatrix<f64>, FreqVector)> {
             }
         }
         if !changed {
-            return Some((u, a.diagonal() * scale));
+            return Some((u, a.diagonal() * scale)); // return if change smaller epsilon
         }
     }
-    None
+    None // convergence has failed
 }
 
 fn decomp<Q: QMatrix>(qmatrix: &Q) -> Option<Decomposition> {
@@ -125,24 +123,17 @@ fn decomp<Q: QMatrix>(qmatrix: &Q) -> Option<Decomposition> {
     let n = freqs.len();
     let symmetric = DMatrix::from_fn(n, n, |i, j| q[(i, j)] * sqrt_pi[i] / sqrt_pi[j]);
 
-    // A reversible model gives a symmetric matrix, up to rounding.
-    for i in 0..n {
-        for j in 0..i {
-            let a = symmetric[(i, j)];
-            let b = symmetric[(j, i)];
-            let tolerance = 1e-12 * a.abs().max(b.abs());
-            if (a - b).abs() > tolerance {
-                return None;
-            }
-        }
-    }
+    let matrix = faer::Mat::from_fn(n, n, |i, j| symmetric[(i, j)]);
+    let eig =
+        faer::linalg::solvers::SelfAdjointEigen::new(matrix.as_ref(), faer::Side::Lower).ok()?;
 
-    let (u, eigenvalues) = jacobi_eigen(symmetric)?;
+    let u = eig.U();
+    let values = eig.S().column_vector();
 
     Some(Decomposition {
         left: DMatrix::from_fn(n, n, |i, k| u[(i, k)] / sqrt_pi[i]),
         right: DMatrix::from_fn(n, n, |k, j| u[(j, k)] * sqrt_pi[j]),
-        eigenvalues,
+        eigenvalues: FreqVector::from_iterator(n, (0..n).map(|k| values[k])),
     })
 }
 

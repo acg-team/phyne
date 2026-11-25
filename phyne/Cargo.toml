@@ -63,6 +63,7 @@ log = "0.4.19"
 # NOTE: mutli threaded kernels for matrix multiplication are available
 # through the matrixmultiply peer-dep
 nalgebra = "0.32.3"
+faer = { version = "0.24", default-features = false, features = ["std", "linalg"] }
 ntimestamp = "1.0.0"
 num_enum = "0.7.5"
 ordered-float = "3.7.0"
