@@ -404,8 +404,8 @@ impl Sequences {
 /// Detects the alphabet of the given sequences based on their content.
 /// Returns `Alphabet::dna()` if all sequences are valid DNA words, otherwise returns `Alphabet::protein()`.
 ///
-/// The `[Record]`s are read in by [`crate::io::read_sequences`] and should already be valid within the most generic
-/// available alphabet ([`crate::alphabets::Alphabet::protein()`]) within the library.
+/// The `[Record]`s are read in by `[phyne::io::read_sequences]` and should already be valid within the most generic
+/// available alphabet ([protein alphabet](`crate::alphabets::Alphabet::protein()`)) within the library.
 fn detect_alphabet(sequences: &[Record]) -> &'static Alphabet {
     let dna_alphabet = Alphabet::dna();
     for record in sequences.iter() {
