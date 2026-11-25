@@ -187,8 +187,6 @@ pub trait Alignment: Display + Clone + Debug {
         Ok(Self::from_aligned_unchecked(sequences, tree))
     }
 
-    /// Called by [`Alignment::from_aligned`].
-    ///
     /// Constructs a [`PhyloInfo`] from aligned sequences and a phylogenetic tree. Is called by
     /// [`Alignment::from_aligned`]. The caller must ensure that the sequences are aligned, that the sequence IDs are
     /// unique, and that the sequence IDs match the taxa IDs in the tree.
@@ -992,8 +990,6 @@ impl AncestralAlignment for MASA {
 }
 
 impl MASA {
-    /// Called by [`MASA::update_ancestral_map`].
-    ///
     /// This is needed because with the [TKF models](`crate::tkf_model::TKFModel`),
     /// we need to [re-estimate](`crate::tkf_model::reestimate::EdgeSeqsReestimator::reestimate`)
     /// the ancestral maps after a [tree move](crate::likelihood::TreeSearchCost::update_tree) was applied.
@@ -1001,6 +997,8 @@ impl MASA {
     /// presence of a character is maintained the actual character from the old sequence is
     /// taken. If a character is newly introduced (i.e., was a gap before), an ambiguous
     /// character is inserted.
+    ///
+    /// Called by [`MASA::update_ancestral_map`].
     fn update_ancestral_map_unchecked(&mut self, node_idx: &NodeIdx, new_map: Mapping) {
         let old_map = self.ancestral_maps.get_mut(node_idx).unwrap();
         let id = &self.idx_to_id[usize::from(*node_idx)];
