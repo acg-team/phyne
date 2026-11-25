@@ -224,8 +224,9 @@ pub trait AncestralAlignment: Alignment {
     /// - if sequence IDs match the node IDs in the tree ([`validate_ids_with_ancestors`])
     /// - removes columns with only gaps ([`Sequences::remove_gap_cols`])
     ///
-    /// Tree is consumed and stored together with the alignment, because the alignment is only
-    /// meaningful in the context of the tree that it was built from.
+    /// The [`Tree`] object is consumed and stored together with the ancestral alignment as a [`PhyloInfo`] object, as
+    /// the ancestral sequences are only meaningful in the context of the tree they were reconstructed on (ancestral
+    /// sequences are associated with the internal nodes of the tree).
     ///
     /// Only overwrite this method if absolutely necessary. The default implementation
     /// ensures that prerequisites are met. Overwriting and not ensuring these checks
@@ -246,8 +247,9 @@ pub trait AncestralAlignment: Alignment {
     /// phylogenetic tree. Is called by the default implementation of
     /// [`AncestralAlignment::from_aligned_with_ancestral`].
     ///
-    /// Tree is consumed and stored together with the alignment, because the alignment is only
-    /// meaningful in the context of the tree that it was built from.
+    /// The [`Tree`] object is consumed and stored together with the ancestral alignment as a [`PhyloInfo`] object, as
+    /// the ancestral sequences are only meaningful in the context of the tree they were reconstructed on (ancestral
+    /// sequences are associated with the internal nodes of the tree).
     fn from_aligned_with_ancestral_unchecked(all_seqs: Sequences, tree: Tree) -> PhyloInfo<Self>;
 
     /// Removes columns from the alignment where the ancestral character goes extinct, i.e. columns
@@ -264,8 +266,10 @@ pub trait AncestralAlignment: Alignment {
     /// - if ancestral sequences have the same length as the alignment
     /// - if internal node IDs are set and match the ancestralsequence IDs ([`validate_ancestor_ids`])
     ///
-    /// The `PhyloInfo` (i.e., `Tree` and associated `MSA`) is consumed, the ancestral alignment and
-    /// corresponding tree are returned together, because the alignment is only meaningful in the context of the tree.
+    /// The [`PhyloInfo`] object (i.e., [`Tree`] and associated [`Alignment`]) is consumed, and stored together with
+    /// the ancestral alignment as a resulting [`PhyloInfo`] object, as the ancestral sequences are only meaningful
+    /// in the context of the tree they were reconstructed on (ancestral sequences are associated with the internal
+    /// nodes of the tree).
     ///
     /// Only overwrite this method if absolutely necessary. The default implementation
     /// ensures that prerequisites are met. Overwriting and not ensuring these checks
@@ -774,6 +778,8 @@ impl AncestralAlignment for MASA {
         }
     }
 
+    /// See [`AncestralAlignment::from_aligned_with_ancestral_unchecked`] for more details.
+    ///
     /// # Example
     /// ```
     /// use phyne::alignment::{Alignment, AncestralAlignment, MASA, Sequences};
@@ -925,6 +931,8 @@ impl AncestralAlignment for MASA {
         }
     }
 
+    /// See [`AncestralAlignment::from_msa_with_ancestral_unchecked`] for more details.
+    ///
     /// # Example
     /// ```
     /// use phyne::alignment::{Alignment, AncestralAlignment, Sequences, MASA, MSA};
