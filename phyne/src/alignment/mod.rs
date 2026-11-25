@@ -215,7 +215,8 @@ pub trait AncestralAlignment: Alignment {
     fn ancestral_maps(&self) -> &SeqMaps;
 
     /// Updates the [`Mapping`] of the ancestral sequence associated with the given internal node by
-    /// its node index.
+    /// its node index. Is used by likelihood functions such as the [TKF models](`crate::tkf_model::TKFModel`) that
+    /// co-estimate homology paths.
     fn update_ancestral_map(&mut self, node_idx: &NodeIdx, map: Mapping) -> Result<()>;
 
     /// Checks if inputs are compatible and calls [`Self::from_aligned_with_ancestral_unchecked`].
