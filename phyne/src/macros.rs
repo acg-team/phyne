@@ -393,6 +393,23 @@ mod tests {
         let _ = site;
     }
 
+    #[test]
+    fn test_site_macro_with_alphabet() {
+        // Test that the macro compiles and creates sites correctly
+        let dna_n = site!(Alphabet::dna(), b"N", SiteFlag::NoGap);
+        let dna_x = site!(Alphabet::dna(), b"X", SiteFlag::NoGap);
+        let protein_n = site!(Alphabet::protein(), b"N", SiteFlag::NoGap);
+        let protein_x = site!(Alphabet::protein(), b"X", SiteFlag::NoGap);
+
+        // Test that sites are not equal (they have different alphabets)
+        assert_ne!(dna_n, protein_n);
+        assert_ne!(dna_x, protein_n);
+        assert_ne!(dna_x, protein_x);
+
+        // Test that sites with the same alphabet and content are equal
+        assert_eq!(dna_n, dna_x);
+    }
+
     // Test macros work in different contexts
     mod nested_module {
         use crate::parsimony::SiteFlag;
