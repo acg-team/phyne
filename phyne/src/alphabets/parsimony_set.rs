@@ -17,26 +17,12 @@ pub struct ParsimonySet {
 
 impl ParsimonySet {
     /// Creates a new empty parsimony set.
-    ///
-    /// # Example
-    /// ```
-    /// use phyne::alphabets::ParsimonySet;
-    /// let empty_set = ParsimonySet::empty();
-    /// assert!(empty_set.is_empty());
-    /// ```
-    pub fn empty() -> Self {
+    pub(crate) fn empty() -> Self {
         Self { s: HashSet::new() }
     }
 
     /// Creates a new parsimony set containing only the gap character.
-    ///
-    /// # Example
-    /// ```
-    /// use phyne::alphabets::ParsimonySet;
-    /// let gap_set = ParsimonySet::gap();
-    /// assert!(gap_set.contains(&b'-'));
-    /// ```
-    pub fn gap() -> Self {
+    pub(crate) fn gap() -> Self {
         Self {
             s: HashSet::from_iter([GAP]),
         }
@@ -45,7 +31,7 @@ impl ParsimonySet {
     /// Creates a new parsimony set from a slice of characters. Cannot be used to create valid sets with ambiguous
     /// symbols since their interpretation depends on the underlying alphabet and cannot be determined solely from
     /// the slice.
-    pub(crate) fn from_slice(slice: &[u8]) -> Self {
+    pub(super) fn from_slice(slice: &[u8]) -> Self {
         Self {
             s: HashSet::from_iter(slice.iter().copied()),
         }
