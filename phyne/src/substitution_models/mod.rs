@@ -56,62 +56,6 @@ struct Decomposition {
     eigenvalues: FreqVector,
 }
 
-// Cyclic Jacobi rotations for the small symmetric matrices of reversible models.
-// Each rotation updates the matrix and its eigenvector basis together.
-// rotates coordinate axes until the matrix is diagonal
-// preseres accuracacy for low numbers
-fn jacobi_eigen(mut a: DMatrix<f64>) -> Option<(DMatrix<f64>, FreqVector)> {
-    let n = a.nrows();
-    let mut u = DMatrix::<f64>::identity(n, n);
-    let scale = a.amax();
-    for x in a.iter_mut() {
-        *x /= scale;
-    }
-
-    //maximum of 64 sweeps
-    for _ in 0..64 {
-        let mut changed = false;
-        for p in 0..n {
-            for r in (p + 1)..n {
-                let b = a[(p, r)];
-                if b.abs() <= f64::EPSILON {
-                    continue;
-                }
-                changed = true;
-                let h = (a[(r, r)] - a[(p, p)]) * 0.5;
-                let t = b / (h + h.hypot(b).copysign(h));
-                let c = 1.0 / 1.0_f64.hypot(t);
-                let s = t * c;
-                a[(p, p)] -= t * b;
-                a[(r, r)] += t * b;
-                a[(p, r)] = 0.0;
-                a[(r, p)] = 0.0;
-
-                for i in 0..n {
-                    if i != p && i != r {
-                        let x = a[(i, p)];
-                        let y = a[(i, r)];
-                        let xp = c * x - s * y;
-                        let yr = s * x + c * y;
-                        a[(i, p)] = xp;
-                        a[(p, i)] = xp;
-                        a[(i, r)] = yr;
-                        a[(r, i)] = yr;
-                    }
-                    let x = u[(i, p)];
-                    let y = u[(i, r)];
-                    u[(i, p)] = c * x - s * y;
-                    u[(i, r)] = s * x + c * y;
-                }
-            }
-        }
-        if !changed {
-            return Some((u, a.diagonal() * scale)); // return if change smaller epsilon
-        }
-    }
-    None // convergence has failed
-}
-
 fn decomp<Q: QMatrix>(qmatrix: &Q) -> Option<Decomposition> {
     let freqs = qmatrix.freqs();
     if freqs.iter().any(|&pi| !pi.is_finite() || pi <= 0.0) {
@@ -123,6 +67,7 @@ fn decomp<Q: QMatrix>(qmatrix: &Q) -> Option<Decomposition> {
     let n = freqs.len();
     let symmetric = DMatrix::from_fn(n, n, |i, j| q[(i, j)] * sqrt_pi[i] / sqrt_pi[j]);
 
+    // more accurate for small values than the nalgebra version
     let matrix = faer::Mat::from_fn(n, n, |i, j| symmetric[(i, j)]);
     let eig =
         faer::linalg::solvers::SelfAdjointEigen::new(matrix.as_ref(), faer::Side::Lower).ok()?;
@@ -131,7 +76,7 @@ fn decomp<Q: QMatrix>(qmatrix: &Q) -> Option<Decomposition> {
     let values = eig.S().column_vector();
 
     Some(Decomposition {
-        left: DMatrix::from_fn(n, n, |i, k| u[(i, k)] / sqrt_pi[i]),
+        left: DMatrix::from_fn(n, n, |i: usize, k| u[(i, k)] / sqrt_pi[i]),
         right: DMatrix::from_fn(n, n, |k, j| u[(j, k)] * sqrt_pi[j]),
         eigenvalues: FreqVector::from_iterator(n, (0..n).map(|k| values[k])),
     })
@@ -177,34 +122,24 @@ impl<Q: QMatrix + QMatrixMaker> SubstModel<Q> {
 
 impl<Q: QMatrix> EvoModel for SubstModel<Q> {
     fn p(&self, time: f64) -> ProbabilityMatrix {
+        // If time > 1e10f64 the matrix exponentiation breaks and stops converging, but before it breaks
+        // starting with 1e5f64 it converges to the same result.
         if time == 0.0 {
             return ProbabilityMatrix::identity(self.n(), self.n());
         }
         let time = if time > MAX_BLEN { MAX_BLEN } else { time };
-        // If time > 1e10f64 the matrix exponentiation breaks and stops converging, but before it breaks
-        // starting with 1e5f64 it converges to the same result.
+
+        //fallback in case decomposition doesnt work
         let Some(decomposition) = &self.decomposition else {
             return (self.q().clone() * time).exp();
         };
 
-        // Near the identity, reconstruct P - I to preserve small transitions.
-        let near_identity = decomposition
-            .eigenvalues
-            .iter()
-            .all(|&lambda| (lambda * time).abs() <= 0.5);
+        //scale output with labmda time
         let mut scaled_left = decomposition.left.clone();
         for (k, &lambda) in decomposition.eigenvalues.iter().enumerate() {
-            let x = lambda * time;
-            let factor = if near_identity { x.exp_m1() } else { x.exp() };
-            scaled_left.column_mut(k).scale_mut(factor);
+            scaled_left.column_mut(k).scale_mut((lambda * time).exp());
         }
-        let mut transition = scaled_left * &decomposition.right;
-        if near_identity {
-            for i in 0..transition.nrows() {
-                transition[(i, i)] += 1.0;
-            }
-        }
-        transition
+        scaled_left * &decomposition.right
     }
 
     fn q(&self) -> &RateMatrix {
@@ -361,51 +296,36 @@ impl<Q: QMatrix, A: Alignment> SubstitutionCost<Q, A> {
         let tmp_values = self.tmp.borrow();
         debug_assert_eq!(info.tree.len(), tmp_values.node_info.len());
 
-        let root = usize::from(&info.tree.root);
         let likelihood = self
             .model
             .freqs()
             .transpose()
-            .mul(&tmp_values.node_info[root]);
+            .mul(&tmp_values.node_info[usize::from(&info.tree.root)]);
+        drop(tmp_values);
 
         debug_assert_eq!(likelihood.ncols(), info.msa.len());
         debug_assert_eq!(likelihood.nrows(), 1);
-        likelihood
-            .iter()
-            .zip(&tmp_values.log_scales[root])
-            .map(|(&p, &scale)| p.ln() + scale)
-            .sum()
+        likelihood.map(|x| x.ln()).sum()
     }
 
     fn set_internal(&self, tree: &Tree, node_idx: &NodeIdx) {
         let node = tree.node(node_idx);
+        let childx_info = self.tmp.borrow().node_info[usize::from(&node.children[0])].clone();
+        let childy_info = self.tmp.borrow().node_info[usize::from(&node.children[1])].clone();
+
         let idx = usize::from(node_idx);
+
         let mut tmp_values = self.tmp.borrow_mut();
-        if tmp_values.node_info_valid[idx] && tmp_values.node_models_valid[idx] {
-            return;
-        }
-        if !tmp_values.node_models_valid[idx] {
+        if !tmp_values.node_info_valid[idx] || !tmp_values.node_models_valid[idx] {
             tmp_values.node_models[idx] = self.model.p(node.blen);
             tmp_values.node_models_valid[idx] = true;
+            tmp_values.node_info_valid[idx] = false;
         }
-        let left = usize::from(&node.children[0]);
-        let right = usize::from(&node.children[1]);
-        let product = tmp_values.node_info[left].component_mul(&tmp_values.node_info[right]);
-        let mut partial = &tmp_values.node_models[idx] * product;
-        for (site, mut column) in partial.column_iter_mut().enumerate() {
-            let scale = column.max();
-            let inherited = tmp_values.log_scales[left][site] + tmp_values.log_scales[right][site];
-            tmp_values.log_scales[idx][site] = if scale > 0.0 {
-                for value in column.iter_mut() {
-                    *value /= scale;
-                }
-                inherited + scale.ln()
-            } else {
-                // A zero column represents an impossible observation.
-                inherited
-            };
+        if tmp_values.node_info_valid[idx] {
+            return;
         }
-        tmp_values.node_info[idx] = partial;
+        tmp_values.node_info[idx] =
+            (&tmp_values.node_models[idx]).mul(childx_info.component_mul(&childy_info));
         tmp_values.node_info_valid[idx] = true;
         if let Some(parent_idx) = node.parent {
             tmp_values.node_info_valid[usize::from(parent_idx)] = false;
@@ -418,7 +338,7 @@ impl<Q: QMatrix, A: Alignment> SubstitutionCost<Q, A> {
         let node = tree.node(node_idx);
         let idx = usize::from(node_idx);
 
-        if !tmp_values.node_models_valid[idx] {
+        if !tmp_values.node_info_valid[idx] || !tmp_values.node_models_valid[idx] {
             tmp_values.node_models[idx] = self.model.p(node.blen);
             tmp_values.node_models_valid[idx] = true;
             tmp_values.node_info_valid[idx] = false;
@@ -436,12 +356,12 @@ impl<Q: QMatrix, A: Alignment> SubstitutionCost<Q, A> {
         drop(tmp_values);
     }
 }
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SubstModelInfo<Q: QMatrix> {
     phantom: PhantomData<Q>,
     node_info: Vec<DMatrix<f64>>,
     node_info_valid: Vec<bool>,
-    log_scales: Vec<Vec<f64>>,
     node_models: Vec<RateMatrix>,
     node_models_valid: Vec<bool>,
     leaf_seq_info: HashMap<NodeIdx, DMatrix<f64>>,
@@ -471,7 +391,6 @@ impl<Q: QMatrix> SubstModelInfo<Q> {
             phantom: PhantomData,
             node_info: vec![DMatrix::<f64>::zeros(n, msa_length); node_count],
             node_info_valid: vec![false; node_count],
-            log_scales: vec![vec![0.0; msa_length]; node_count],
             node_models: vec![RateMatrix::zeros(n, n); node_count],
             node_models_valid: vec![false; node_count],
             leaf_seq_info,

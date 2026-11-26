@@ -3,6 +3,7 @@ use phyne::evolutionary_models::EvoModel;
 use phyne::substitution_models::{SubstModel, WAG};
 use std::hint::black_box;
 
+// cargo bench --bench decomposition_criterion to run
 fn decomposition_benchmark(c: &mut Criterion) {
     let model = SubstModel::<WAG>::default();
     let times = [0.001, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0];
