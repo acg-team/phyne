@@ -1219,4 +1219,12 @@ mod private_tests {
         let expected = PairwiseAlignment::new(align!(b"01-2"), align!(b"-012"));
         assert_eq!(cleared, expected);
     }
+
+    #[should_panic]
+    #[test]
+    fn clear_common_gaps_mismatched_lengths() {
+        let map_x = align!(b"-01--");
+        let map_y = align!(b"--01-2");
+        MSA::clear_common_gaps(&map_x, &map_y);
+    }
 }
