@@ -83,6 +83,8 @@ static ROUNDING_SAFETY_FACTOR: f64 = 8.0;
 /// For the function [u]: minimum `|A-B| / (A + B)` for trusting the direct `ln(C)` evaluation.
 /// Equal to [`ROUNDING_SAFETY_FACTOR`] * ([`f64::EPSILON`] / 2) / [`TAU_U`] (about 8.88e-9).
 static MIN_REL_SEPARATION: f64 = ROUNDING_SAFETY_FACTOR * (f64::EPSILON / 2.0) / TAU_U;
+/// Threshold for helper functions [`ln_g`] and [`ln_h`] to switch from direct evaluation to series expansion.
+static TAYLOR_SERIES_THRESHOLD: f64 = 1e-2;
 /// For the function [ln_n0]: threshold for numerical issues
 static NUMERICAL_ISSUE_N0_THRESHOLD: f64 = 1e-12;
 
@@ -752,7 +754,7 @@ pub(super) fn u(l: f64, m: f64, t: f64) -> f64 {
         (a - b).ln()
     } else {
         // C is at the rounding-noise level; avoid forming it by subtraction.
-        ln_b_stable(l, m, t)
+        ln_c_stable(l, m, t)
     };
 
     // m - l*e^{(l-m)*t}
@@ -767,53 +769,59 @@ pub(super) fn relative_separation(a: f64, b: f64) -> f64 {
     (a - b).abs() / (a + b)
 }
 
-/// `C` is at the rounding-noise level, so it must not be formed by the
-/// subtraction. With `delta = m - l`, `x = l*t` and `y = delta*t`:
-/// `C = delta*h(x) + l*e^{-x}*(expm1(-y) + y)` with `h(x) = 1 - (1+x)e^{-x}`,
-/// hence `ln C = ln(delta) + ln(h) + ln1p(correction)` where
-/// `correction = l*e^{-x}*(expm1(-y)+y) / (delta*h)`.
-///
-/// The helpers below are evaluated in log space, so that `h ~ x^2/2` and
-/// `expm1(-y)+y ~ y^2/2` do not underflow for very small `x` or `y`.
-pub(super) fn ln_b_stable(l: f64, m: f64, t: f64) -> f64 {
+/// C is at the rounding-noise level, so it must not be formed by the
+/// subtraction A - B, using this stable formula instead.
+pub(super) fn ln_c_stable(l: f64, m: f64, t: f64) -> f64 {
+    // This is achieved by rewriting C as the sum of two positive terms:
+    // C = delta * h(x) + l * e^{-x} * g(x) =: term1 + term2.
+    // Additionally, to avoid underflow in these summands (term1 & term2) we rewrite:
+    // ln(C) = ln(term1 + term2) = ln(term1) + ln(1 + term2 / term1) = ln(term1) + ln(1 + correction).
+    // Terms in the correction can still underflow, so we compute this in log space and use the
+    // stable ln_1p_exp function.
     let delta = m - l;
     let ln_delta = delta.ln();
     let ln_h = ln_h(l, t);
     let ln_g = ln_g(delta, t);
     let ln_correction = l.ln() - l * t + ln_g - ln_delta - ln_h;
-    // TODO: if we keep blens to at least epsilon then we could also use ln(delta h + l e^{-x} e)
+    // Note: if branch lengths were at least epsilon, then ln(delta h + l e^{-x} e) would be sufficient.
     ln_delta + ln_h + ln_1p_exp(ln_correction)
 }
 
 /// Returns `ln(h(x))` with `h(x) = 1 - (1+x)*e^{-x}` and `x = l*t`.
-///
-/// `h(x) = x^2 * (1/2 - x/3 + x^2/8 - x^3/30 + x^4/144 + O(x^5))`.
-/// The series is evaluated in log space so that `x^2` cannot underflow.
 fn ln_h(l: f64, t: f64) -> f64 {
     let x = l * t;
-    if x < 1e-2 {
-        // The direct expression would cancel for small x.
-        let x2 = x * x;
-        let series = 0.5 - x / 3.0 + x2 / 8.0 - x2 * x / 30.0 + x2 * x2 / 144.0;
-        2.0 * (l.ln() + t.ln()) + series.ln()
-    } else {
+    if x >= TAYLOR_SERIES_THRESHOLD {
+        // The direct expression is stable.
         (1.0 - (1.0 + x) * (-x).exp()).ln()
+    } else {
+        // The direct expression is not stable for small x.
+        // Using the Taylor series expansion instead.
+        // Factoring out the common factor x^2 for the series (it is the leading term).
+        let ln_common = 2.0 * (l.ln() + t.ln()); // = ln(x^2); avoids underflow for small x.
+        let x2 = x * x;
+        // If x^2 underflows it only causes a tiny relative error in the cofactor and the ln
+        // does not amplify the error since we are close to 0.5
+        let remaining_terms = 0.5 - x / 3.0 + x2 / 8.0 - x2 * x / 30.0 + x2 * x2 / 144.0;
+        ln_common + remaining_terms.ln()
     }
 }
 
 /// Returns `ln(g(y))` with `g(y) = expm1(-y) + y` and `y = delta*t`.
-///
-/// `g(y) = y^2 * (1/2 - y/6 + y^2/24 - y^3/120 + y^4/720 + O(y^5))`.
-/// The series is evaluated in log space so that `y^2` cannot underflow.
 fn ln_g(delta: f64, t: f64) -> f64 {
     let y = delta * t;
-    if y < 1e-2 {
-        // expm1(-y) + y would cancel for small y.
-        let y2 = y * y;
-        let series = 0.5 - y / 6.0 + y2 / 24.0 - y2 * y / 120.0 + y2 * y2 / 720.0;
-        2.0 * (delta.ln() + t.ln()) + series.ln()
-    } else {
+    if y >= TAYLOR_SERIES_THRESHOLD {
+        // The direct expression is stable.
         ((-y).exp_m1() + y).ln()
+    } else {
+        // The direct expression is not stable for small y.
+        // Using the Taylor series approximation instead.
+        // Factoring out the common factor y^2 for the series (it is the leading term).
+        let ln_common = 2.0 * (delta.ln() + t.ln()); // = ln(y^2); avoids underflow for small y.
+        let y2 = y * y;
+        // If y^2 underflows it only causes a tiny relative error in the cofactor and the ln
+        // does not amplify the error since we are close to 0.5
+        let cofactor = 0.5 - y / 6.0 + y2 / 24.0 - y2 * y / 120.0 + y2 * y2 / 720.0;
+        ln_common + cofactor.ln()
     }
 }
 
