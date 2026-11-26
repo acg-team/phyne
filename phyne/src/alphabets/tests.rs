@@ -213,3 +213,40 @@ fn protein_parsimony_sets_from_slice_all() {
     assert_eq!(set_slice_x, set_x);
     assert_eq!(set_all, set_x);
 }
+
+#[rstest]
+#[case(b'R', b"AG")]
+#[case(b'Y', b"CT")]
+#[case(b'S', b"CG")]
+#[case(b'W', b"AT")]
+#[case(b'K', b"GT")]
+#[case(b'M', b"AC")]
+#[case(b'B', b"CGT")]
+#[case(b'D', b"AGT")]
+#[case(b'H', b"ACT")]
+#[case(b'V', b"ACG")]
+#[case(b'N', b"ACGT")]
+#[case(b'X', b"ACGT")]
+#[case(b'Z', b"ACGT")]
+fn dna_parsimony_sets_from_slice_ambigs(#[case] char_code: u8, #[case] slice: &[u8]) {
+    let dna = Alphabet::dna();
+
+    let set_char = dna.parsimony_set(&char_code);
+    let set_slice = &dna.parsimony_set_from_slice(slice);
+
+    assert_eq!(set_char, set_slice);
+}
+
+#[rstest]
+#[case(b'B', b"DN")]
+#[case(b'Z', b"EQ")]
+#[case(b'J', b"IL")]
+#[case(b'X', &AMINOACIDS)]
+fn protein_parsimony_sets_from_slice_ambigs(#[case] char_code: u8, #[case] slice: &[u8]) {
+    let prot = Alphabet::protein();
+
+    let set_char = prot.parsimony_set(&char_code);
+    let set_slice = &prot.parsimony_set_from_slice(slice);
+
+    assert_eq!(set_char, set_slice);
+}
