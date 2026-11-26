@@ -404,7 +404,7 @@ impl MSA {
     /// E.g. for a `map_x = [None, Some(0), None, Some(1)]` and `map_y = [None, None, Some(0), Some(1)]`, the
     /// resulting stacked map will be `[None, Some(0), Some(1), Some(2)]`.
     fn stack_maps(map_x: &Mapping, map_y: &Mapping) -> Mapping {
-        debug_assert!(map_x.len() == map_y.len());
+        assert_eq!(map_x.len(), map_y.len());
         let mut map = Vec::with_capacity(map_x.len());
         let mut ind = 0usize;
         for (x, y) in map_x.iter().zip(map_y.iter()) {
