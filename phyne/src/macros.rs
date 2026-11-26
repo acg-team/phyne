@@ -134,10 +134,16 @@ macro_rules! frequencies {
 #[macro_export]
 #[doc(hidden)] // Hide from public documentation
 macro_rules! site {
-    ($s:expr, $f:expr) => {{
-        use $crate::alphabets::ParsimonySet;
+    ($a:expr, $s:expr, $f:expr) => {{
         use $crate::parsimony::ParsimonySite;
-        ParsimonySite::new(ParsimonySet::from_slice($s), $f)
+        ParsimonySite::new($a.parsimony_set_from_slice($s), $f)
+    }};
+    ($s:expr, $f:expr) => {{
+        use $crate::parsimony::ParsimonySite;
+        ParsimonySite::new(
+            $crate::alphabets::Alphabet::dna().parsimony_set_from_slice($s),
+            $f,
+        )
     }};
 }
 
