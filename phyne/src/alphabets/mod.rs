@@ -358,7 +358,7 @@ lazy_static! {
     };
 
     /// Static parsimony set for the gap character for e.g. Dollo parsimony.
-    pub(crate) static ref GAP_SET: ParsimonySet = ParsimonySet::from_slice(&[GAP]);
+    pub(crate) static ref GAP_SET: ParsimonySet = ParsimonySet::gap();
 }
 
 /// Function used to precompute static conditional probability vectors for each nucleotide character.
