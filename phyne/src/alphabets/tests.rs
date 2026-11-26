@@ -7,7 +7,7 @@ use crate::record_wo_desc as record;
 
 #[test]
 fn parsimony_set_iters() {
-    let set = ParsimonySet::from_slice(b"ACGT");
+    let set = Alphabet::dna().parsimony_set_from_slice(b"ACGT");
     let from_iter = set.iter().cloned().collect::<Vec<u8>>();
     assert_eq!(from_iter.len(), 4);
     let from_into_iter = set.into_iter().collect::<Vec<u8>>();
@@ -122,7 +122,7 @@ fn protein_characters() {
 #[case(b"QIFGWMNKSEYTVCPRAHLD", "ACDEFGHIKLMNPQRSTVWY")]
 
 fn test_parsimony_set_printing(#[case] input: &[u8], #[case] output: &str) {
-    let set = ParsimonySet::from_slice(input);
+    let set = Alphabet::protein().parsimony_set_from_slice(input);
     assert_eq!(format!("{set}"), format!("[{}]", output));
 }
 

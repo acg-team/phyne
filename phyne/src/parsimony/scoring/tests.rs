@@ -1,7 +1,7 @@
 use approx::assert_relative_eq;
 use rstest::rstest;
 
-use crate::alphabets::{ParsimonySet, AMINOACIDS, NUCLEOTIDES};
+use crate::alphabets::{Alphabet, ParsimonySet, AMINOACIDS, NUCLEOTIDES};
 use crate::parsimony::{
     DiagonalZeros as Z, GapCost, ModelScoringBuilder as MCB, ParsimonyScoring, Rounding as R,
     SimpleScoring,
@@ -309,13 +309,19 @@ fn min_match_model_template<Q: QMatrix + Default>(set1: &ParsimonySet, set2: &Pa
 }
 
 #[rstest]
+#[case(b"H", b"W")]
 #[case(b"ACT", b"AT")]
+#[case(b"Y", b"R")]
 #[case(b"TC", b"AG")]
+#[case(b"M", b"K")]
 #[case(b"AC", b"TG")]
+#[case(b"V", b"T")]
 #[case(b"AGC", b"T")]
 fn min_match_model_dna(#[case] set1: &[u8], #[case] set2: &[u8]) {
-    let set1 = &ParsimonySet::from_slice(set1);
-    let set2 = &ParsimonySet::from_slice(set2);
+    let dna = Alphabet::dna();
+    let set1 = &dna.parsimony_set_from_slice(set1);
+    let set2 = &dna.parsimony_set_from_slice(set2);
+
     min_match_model_template::<JC69>(set1, set2);
     min_match_model_template::<K80>(set1, set2);
     min_match_model_template::<HKY>(set1, set2);
@@ -329,8 +335,9 @@ fn min_match_model_dna(#[case] set1: &[u8], #[case] set2: &[u8]) {
 #[case(b"L", b"FP")]
 #[case(b"AGC", b"T")]
 fn min_match_model_protein(#[case] set1: &[u8], #[case] set2: &[u8]) {
-    let set1 = &ParsimonySet::from_slice(set1);
-    let set2 = &ParsimonySet::from_slice(set2);
+    let protein = Alphabet::protein();
+    let set1 = &protein.parsimony_set_from_slice(set1);
+    let set2 = &protein.parsimony_set_from_slice(set2);
     min_match_model_template::<WAG>(set1, set2);
     min_match_model_template::<HIVB>(set1, set2);
     min_match_model_template::<BLOSUM>(set1, set2);
@@ -350,8 +357,9 @@ fn min_match_basic(#[case] set1: &[u8], #[case] set2: &[u8]) {
         open: 2.5,
         ext: 0.5,
     };
-    let set1 = &ParsimonySet::from_slice(set1);
-    let set2 = &ParsimonySet::from_slice(set2);
+    let protein = Alphabet::protein();
+    let set1 = &protein.parsimony_set_from_slice(set1);
+    let set2 = &protein.parsimony_set_from_slice(set2);
     for &blen in &[0.1, 1.0, 3.5, 2.4, 50.0, 34.2] {
         let cost = SimpleScoring::new(mismatch, gap);
         let score = if (set1 & set2).is_empty() {
