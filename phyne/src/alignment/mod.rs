@@ -1186,6 +1186,14 @@ mod private_tests {
         assert_eq!(stacked, align!(b"012--345"));
     }
 
+    #[should_panic]
+    #[test]
+    fn stack_maps_mismatched_lengths() {
+        let map_x = align!(b"012---");
+        let map_y = align!(b"-----012");
+        MSA::stack_maps(&map_x, &map_y);
+    }
+
     #[test]
     fn stack_maps_example() {
         let map_x = Mapping::from_iter([None, Some(0), None, Some(1)]);
