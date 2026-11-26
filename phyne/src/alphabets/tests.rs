@@ -250,3 +250,14 @@ fn protein_parsimony_sets_from_slice_ambigs(#[case] char_code: u8, #[case] slice
 
     assert_eq!(set_char, set_slice);
 }
+
+#[test]
+fn dna_vs_protein_parsimony_sets() {
+    // Characters that could represent both a nucleotide and an amino acid, but have different parsimony sets.
+    let diff_chars = b"RNDHKMSWYVBJZX";
+    for char_code in diff_chars {
+        let dna_set = Alphabet::dna().parsimony_set(char_code);
+        let prot_set = Alphabet::protein().parsimony_set(char_code);
+        assert_ne!(dna_set, prot_set);
+    }
+}
