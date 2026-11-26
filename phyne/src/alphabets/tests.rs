@@ -6,6 +6,12 @@ use crate::alphabets::{
 use crate::record_wo_desc as record;
 
 #[test]
+fn alphabet_name() {
+    assert_eq!(Alphabet::dna().name(), "DNA");
+    assert_eq!(Alphabet::protein().name(), "protein");
+}
+
+#[test]
 fn parsimony_set_iters() {
     let set = Alphabet::dna().parsimony_set_from_slice(b"ACGT");
     let from_iter = set.iter().cloned().collect::<Vec<u8>>();
