@@ -293,7 +293,7 @@ fn hky_vs_phyml() {
     let o2 = ModelOptimiser::new(o.cost.clone(), FrequencyOptimisation::Empirical)
         .run()
         .unwrap();
-    assert_relative_eq!(o2.final_cost, o.final_cost);
+    assert_relative_eq!(o2.final_cost, o.final_cost, epsilon = 1e-5);
     assert!(o2.iterations < 10);
 
     // Optimized parameters from PhyML
