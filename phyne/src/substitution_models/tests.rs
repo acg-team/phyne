@@ -1501,3 +1501,34 @@ fn equal_freqs_protein() {
     equal_freqs_template::<HIVB>(&[]);
     equal_freqs_template::<BLOSUM>(&[]);
 }
+
+#[test]
+fn gtr_extreme_rates_reconstruct_the_generator_and_transition_matrix() {
+    let model = SubstModel::<GTR>::new(
+        &[0.25, 0.35, 0.3, 0.1],
+        &[
+            467.46771733483683,
+            0.07044148894930388,
+            1.053030992576237e-5,
+            0.47937347791908513,
+            0.2816632355494551,
+        ],
+    )
+    .unwrap();
+    let d = model
+        .decomposition
+        .as_ref()
+        .expect("GTR spectral decomposition");
+    let mut weighted = d.left.clone();
+    for (k, &lambda) in d.eigenvalues.iter().enumerate() {
+        weighted.column_mut(k).scale_mut(lambda);
+    }
+    let residual = (weighted * &d.right - model.q()).amax();
+    assert!(residual < 1e-12 * model.q().amax(), "Q residual={residual}");
+
+    let time = 0.056647;
+    let direct = (model.q().clone() * time).exp();
+    let spectral = model.p(time);
+    assert!((spectral[(0, 2)] - 1.9091842082338955e-5).abs() < 1e-14);
+    assert!((spectral - direct).amax() < 1e-13);
+}
