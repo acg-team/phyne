@@ -240,36 +240,51 @@ impl<Q: QMatrix, A: Alignment> SubstitutionCost<Q, A> {
         let tmp_values = self.tmp.borrow();
         debug_assert_eq!(info.tree.len(), tmp_values.node_info.len());
 
+        let root = usize::from(&info.tree.root);
         let likelihood = self
             .model
             .freqs()
             .transpose()
-            .mul(&tmp_values.node_info[usize::from(&info.tree.root)]);
-        drop(tmp_values);
+            .mul(&tmp_values.node_info[root]);
 
         debug_assert_eq!(likelihood.ncols(), info.msa.len());
         debug_assert_eq!(likelihood.nrows(), 1);
-        likelihood.map(|x| x.ln()).sum()
+        likelihood
+            .iter()
+            .zip(&tmp_values.log_scales[root])
+            .map(|(&p, &scale)| p.ln() + scale)
+            .sum()
     }
 
     fn set_internal(&self, tree: &Tree, node_idx: &NodeIdx) {
         let node = tree.node(node_idx);
-        let childx_info = self.tmp.borrow().node_info[usize::from(&node.children[0])].clone();
-        let childy_info = self.tmp.borrow().node_info[usize::from(&node.children[1])].clone();
-
         let idx = usize::from(node_idx);
-
         let mut tmp_values = self.tmp.borrow_mut();
-        if !tmp_values.node_info_valid[idx] || !tmp_values.node_models_valid[idx] {
-            tmp_values.node_models[idx] = self.model.p(node.blen);
-            tmp_values.node_models_valid[idx] = true;
-            tmp_values.node_info_valid[idx] = false;
-        }
-        if tmp_values.node_info_valid[idx] {
+        if tmp_values.node_info_valid[idx] && tmp_values.node_models_valid[idx] {
             return;
         }
-        tmp_values.node_info[idx] =
-            (&tmp_values.node_models[idx]).mul(childx_info.component_mul(&childy_info));
+        if !tmp_values.node_models_valid[idx] {
+            tmp_values.node_models[idx] = self.model.p(node.blen);
+            tmp_values.node_models_valid[idx] = true;
+        }
+        let left = usize::from(&node.children[0]);
+        let right = usize::from(&node.children[1]);
+        let product = tmp_values.node_info[left].component_mul(&tmp_values.node_info[right]);
+        let mut partial = &tmp_values.node_models[idx] * product;
+        for (site, mut column) in partial.column_iter_mut().enumerate() {
+            let scale = column.max();
+            let inherited = tmp_values.log_scales[left][site] + tmp_values.log_scales[right][site];
+            tmp_values.log_scales[idx][site] = if scale > 0.0 {
+                for value in column.iter_mut() {
+                    *value /= scale;
+                }
+                inherited + scale.ln()
+            } else {
+                // A zero column represents an impossible observation.
+                inherited
+            };
+        }
+        tmp_values.node_info[idx] = partial;
         tmp_values.node_info_valid[idx] = true;
         if let Some(parent_idx) = node.parent {
             tmp_values.node_info_valid[usize::from(parent_idx)] = false;
@@ -282,7 +297,7 @@ impl<Q: QMatrix, A: Alignment> SubstitutionCost<Q, A> {
         let node = tree.node(node_idx);
         let idx = usize::from(node_idx);
 
-        if !tmp_values.node_info_valid[idx] || !tmp_values.node_models_valid[idx] {
+        if !tmp_values.node_models_valid[idx] {
             tmp_values.node_models[idx] = self.model.p(node.blen);
             tmp_values.node_models_valid[idx] = true;
             tmp_values.node_info_valid[idx] = false;
@@ -300,12 +315,12 @@ impl<Q: QMatrix, A: Alignment> SubstitutionCost<Q, A> {
         drop(tmp_values);
     }
 }
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct SubstModelInfo<Q: QMatrix> {
     phantom: PhantomData<Q>,
     node_info: Vec<DMatrix<f64>>,
     node_info_valid: Vec<bool>,
+    log_scales: Vec<Vec<f64>>,
     node_models: Vec<RateMatrix>,
     node_models_valid: Vec<bool>,
     leaf_seq_info: HashMap<NodeIdx, DMatrix<f64>>,
@@ -335,6 +350,7 @@ impl<Q: QMatrix> SubstModelInfo<Q> {
             phantom: PhantomData,
             node_info: vec![DMatrix::<f64>::zeros(n, msa_length); node_count],
             node_info_valid: vec![false; node_count],
+            log_scales: vec![vec![0.0; msa_length]; node_count],
             node_models: vec![RateMatrix::zeros(n, n); node_count],
             node_models_valid: vec![false; node_count],
             leaf_seq_info,
