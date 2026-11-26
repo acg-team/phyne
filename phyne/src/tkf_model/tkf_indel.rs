@@ -801,8 +801,8 @@ fn ln_h(l: f64, t: f64) -> f64 {
         let x2 = x * x;
         // If x^2 underflows it only causes a tiny relative error in the cofactor and the ln
         // does not amplify the error since we are close to 0.5
-        let remaining_terms = 0.5 - x / 3.0 + x2 / 8.0 - x2 * x / 30.0 + x2 * x2 / 144.0;
-        ln_common + remaining_terms.ln()
+        let cofactor = 0.5 - x / 3.0 + x2 / 8.0 - x2 * x / 30.0 + x2 * x2 / 144.0;
+        ln_common + cofactor.ln()
     }
 }
 
