@@ -284,6 +284,23 @@ impl Alphabet {
     pub fn gap_set(&self) -> &ParsimonySet {
         &GAP_SET
     }
+
+    /// Returns the parsimony set representing the characters in the given slice within the respective alphabet.
+    ///
+    /// # Example:
+    /// ```
+    /// use phyne::alphabets::{Alphabet, ParsimonySet};
+    /// let set_all = Alphabet::dna().parsimony_set_from_slice(b"ACGT");
+    /// let set_amb = Alphabet::dna().parsimony_set_from_slice(b"X");
+    /// assert_eq!(format!("{set_all}"), "[ACGT]");
+    /// assert_eq!(format!("{set_amb}"), "[ACGT]");
+    /// ```
+    pub fn parsimony_set_from_slice(&self, slice: &[u8]) -> ParsimonySet {
+        slice
+            .iter()
+            .map(|&c| self.parsimony_set(&c))
+            .fold(ParsimonySet::empty(), |acc, x| &acc | x)
+    }
 }
 
 lazy_static! {
