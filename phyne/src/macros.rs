@@ -135,6 +135,7 @@ macro_rules! frequencies {
 #[doc(hidden)] // Hide from public documentation
 macro_rules! site {
     ($a:expr, $s:expr, $f:expr) => {{
+        use $crate::alphabets::Alphabet;
         use $crate::parsimony::ParsimonySite;
         ParsimonySite::new($a.parsimony_set_from_slice($s), $f)
     }};
