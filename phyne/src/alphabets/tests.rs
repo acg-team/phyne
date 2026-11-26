@@ -189,3 +189,27 @@ fn protein_alphabet_display() {
         assert!(other_symbol_display.contains(&(*char as char).to_string()));
     }
 }
+
+#[test]
+fn dna_parsimony_sets_from_slice_all() {
+    let dna = Alphabet::dna();
+    let set_all = &dna.parsimony_set_from_slice(NUCLEOTIDES);
+    let set_slice_x = &dna.parsimony_set_from_slice(b"X");
+    let set_n = dna.parsimony_set(&b'N');
+    let set_x = dna.parsimony_set(&b'X');
+
+    assert_eq!(set_slice_x, set_x);
+    assert_eq!(set_all, set_x);
+    assert_eq!(set_n, set_x);
+}
+
+#[test]
+fn protein_parsimony_sets_from_slice_all() {
+    let prot = Alphabet::protein();
+    let set_all = &prot.parsimony_set_from_slice(AMINOACIDS);
+    let set_slice_x = &prot.parsimony_set_from_slice(b"X");
+    let set_x = prot.parsimony_set(&b'X');
+
+    assert_eq!(set_slice_x, set_x);
+    assert_eq!(set_all, set_x);
+}
