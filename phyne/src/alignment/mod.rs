@@ -1,3 +1,47 @@
+//! Alignment module for handling sequences and alignments in phylogenetic analyses.
+//!
+//! This module provides the [`Sequences`] object for representing collections of sequences.
+//! The sequence IDs must be unique within the collection.
+//! The sequences stored in the object can be aligned or unaligned.
+//!
+//! Contains the [`Alignment`] and [`AncestralAlignment`] traits for representing and manipulating
+//! sequence alignments with or without ancestral sequences.
+//!
+//! Additionally, provides the [`MSA`] struct that implements [`Alignment`] and the [`MASA`] struct that implements
+//! [`AncestralAlignment`]. The [`MSA`] and [`MASA`] structs use [`Sequences`] to store the gapless sequence data
+//! and [`Mapping`] to store the alignment information.
+//!
+//! Both [`MSA`] and [`MASA`] structures are usually coupled with a [`Tree`] that represents the phylogenetic
+//! relationships among the sequences. Internally, the structures use tree node indices ([`NodeIdx`]) to associate
+//! sequences with tree nodes for faster lookup. Consequently, all methods that return an alignment will return
+//! [`PhyloInfo`] objects to maintain the association between sequences and tree nodes.
+//!
+//! Finally, this module includes the [`Aligner`] trait that can be implemented for sequence alignment algorithms.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use phyne::alignment::{Aligner, Alignment, Sequences, MSA};
+//! use phyne::parsimony::ParsimonyAligner;
+//! use phyne::phylo_info::PhyloInfo;
+//! use phyne::{record, tree};
+//!
+//! # use phyne::Result;
+//! # fn main() -> Result<()> {
+//! let seqs = Sequences::new(vec![
+//!         record!("A", None, b"AACT"),
+//!         record!("B", None, b"AC"),
+//!         record!("C", None, b"AACT"),
+//!     ])?;
+//! let tree = tree!("((A:1.0, B:1.0):1.0, C:2.0);");
+//! let aligner = ParsimonyAligner::default();
+//! let phylo_info: PhyloInfo<MSA> = aligner.align(seqs, tree)?;
+//! let alignment = phylo_info.msa;
+//! assert_eq!(alignment.seq_count(), 3);
+//! assert!(alignment.len() >= 4);
+//! # Ok(()) }
+//! ```
+
 use std::fmt::{Debug, Display};
 
 use fixedbitset::FixedBitSet;
@@ -17,27 +61,28 @@ use crate::random::RandomGenerator;
 use crate::tree::{NodeIdx, NodeIdx::Internal, NodeIdx::Leaf, Tree};
 use crate::{align, aligned_seq, bail, bug, record, Result};
 
+#[doc(hidden)]
 pub mod sequences;
+#[doc(inline)]
 pub use sequences::*;
+#[doc(hidden)]
 pub mod aligner;
+#[doc(inline)]
 pub use aligner::*;
 
 /// Represents an aligned position in a sequence. Used in [`Mapping`].
 pub type Position = Option<usize>;
-/// Represents aligned positions of a sequence.
-/// E.g. The `Mapping` for the sequence `A--T-` is `[Some(0), None, None, Some(1), None]`.
+/// Represents a mapping of an ungapped sequence to its aligned positions in the alignment.
+/// E.g. if the ungapped sequence is `AT` and the aligned sequence is `A--T-`, the `Mapping` would be
+/// `[Some(0), None, None, Some(1), None]`.
 pub type Mapping = Vec<Position>;
-/// For an internal node of the tree, represents the pairwise alignment of the two sub MSAs that
-/// correspond to the two children of that node.
+/// For an internal node of the tree, represents the pairwise alignment of the two sub MSAs that correspond to the two
+/// children of that node.
 pub type InternalAlignments = HashMap<NodeIdx, PairwiseAlignment>;
+/// Represents the mapping of sequences for nodes in the tree as a `hashbrown::HashMap` where the key is the node index
+/// (of type [`NodeIdx`], associated with a node in the [`Tree`] struct) and the value is the [`Mapping`] of the
+/// sequence for that node.
 pub type SeqMaps = HashMap<NodeIdx, Mapping>;
-
-/// Represents a pairwise alignment of two sequences or MSAs. Used in [`InternalAlignments`].
-#[derive(Clone, Debug, PartialEq)]
-pub struct PairwiseAlignment {
-    pub(crate) map_x: Mapping,
-    pub(crate) map_y: Mapping,
-}
 
 /// Translates a `Mapping` to a `FixedBitSet` where positions that are `Some` are set to `true`.
 /// E.g. for the mapping `[Some(0), None, Some(1)]`, the resulting `FixedBitSet` will have bits `101`.
@@ -51,7 +96,22 @@ pub(crate) fn mapping_to_bits(mapping: &Mapping) -> FixedBitSet {
     bits
 }
 
+/// Represents a pairwise alignment of two sequences or MSAs using [`Mapping`], which represents the
+/// aligned positions of the sequences or MSAs.
+/// Used in [`InternalAlignments`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct PairwiseAlignment {
+    /// [`Mapping`] of the first child sequence or MSA in the pairwise alignment.
+    pub(crate) map_x: Mapping,
+    /// [`Mapping`] of the second child sequence or MSA in the pairwise alignment.
+    pub(crate) map_y: Mapping,
+}
+
 impl PairwiseAlignment {
+    /// Creates a new `PairwiseAlignment` with the given mappings for the two sequences or MSAs.
+    ///
+    /// # Panics
+    /// Panics if the lengths of the provided mappings are not equal.
     pub fn new(map_x: Mapping, map_y: Mapping) -> PairwiseAlignment {
         assert_eq!(
             map_x.len(),
@@ -61,18 +121,25 @@ impl PairwiseAlignment {
         PairwiseAlignment { map_x, map_y }
     }
 
+    /// Returns the mapping of the first sequence or MSA in the pairwise alignment.
     pub fn map_x(&self) -> &Mapping {
         &self.map_x
     }
 
+    /// Returns the mapping of the second sequence or MSA in the pairwise alignment.
     pub fn map_y(&self) -> &Mapping {
         &self.map_y
     }
 
-    #[allow(clippy::len_without_is_empty)]
+    /// Returns the length of the pairwise alignment, which is the number of aligned positions.
     pub fn len(&self) -> usize {
         debug_assert_eq!(self.map_x.len(), self.map_y.len());
         self.map_x.len()
+    }
+
+    /// Checks if the pairwise alignment is empty (i.e. length is zero).
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 
@@ -82,20 +149,29 @@ impl PairwiseAlignment {
 pub trait Alignment: Display + Clone + Debug {
     /// Returns the alphabet of the sequences in the alignment.
     fn alphabet(&self) -> &'static Alphabet;
-    /// Returns the sequences without gaps
+
+    /// Returns the sequences without gaps.
     fn seqs(&self) -> &Sequences;
-    /// Returns the length of the sequences in the alignment
+
+    /// Returns the length of the alignment (number of columns).
     fn len(&self) -> usize;
-    /// Returns the number of sequences in the alignment. Should be equal to the number of leaves
-    /// in the tree.
+
+    /// Returns the number of sequences in the alignment. Should be equal to the number of leaves in the tree.
     fn seq_count(&self) -> usize;
+
+    /// Returns the [`Mapping`] of the leaf sequence corresponding to the given node index.
     fn leaf_map(&self, node: &NodeIdx) -> &Mapping;
+
+    /// Returns the [`Mapping`]s of all leaves in the alignment as a [`SeqMaps`] (`HashMap` of node indices to
+    /// mappings).
     fn leaf_maps(&self) -> &SeqMaps;
+
+    /// Returns a map of all the [`PairwiseAlignment`]s at the internal nodes.
     fn internal_alignments(&self) -> &InternalAlignments;
+
     /// Checks if inputs are compatible, removes columns with only gaps and calls [`Self::from_aligned_unchecked`].
     ///
-    /// Tree is consumed and stored together with the alignment, because the alignment is only
-    /// meaningful in the context of the tree that it was built from.
+    /// The [`Tree`] object is consumed and stored together with the alignment as a [`PhyloInfo`] object.
     ///
     /// # Errors
     ///
@@ -109,12 +185,12 @@ pub trait Alignment: Display + Clone + Debug {
         sequences.remove_gap_cols();
         Ok(Self::from_aligned_unchecked(sequences, tree))
     }
-    /// Constructs a [`PhyloInfo`] from aligned sequences and a phylogenetic tree. Is called
-    /// by [`Alignment::from_aligned`]. The caller must ensure that the sequences are aligned, that the
-    /// sequence IDs are unique, and that the sequence IDs match the taxa IDs in the tree.
+
+    /// Constructs a [`PhyloInfo`] from aligned sequences and a phylogenetic tree. Is called by
+    /// [`Alignment::from_aligned`]. The caller must ensure that the sequences are aligned, that the sequence IDs are
+    /// unique, and that the sequence IDs match the taxa IDs in the tree.
     ///
-    /// Tree is consumed and stored together with the alignment, because the alignment is only
-    /// meaningful in the context of the tree that it was built from.
+    /// The [`Tree`] object is consumed and stored together with the alignment as a [`PhyloInfo`] object.
     fn from_aligned_unchecked(sequences: Sequences, tree: Tree) -> PhyloInfo<Self>;
 }
 
@@ -126,18 +202,30 @@ pub trait Alignment: Display + Clone + Debug {
 /// implementation and make sure to call [`Tree::node_ids_are_unique`] in addition to checks
 /// your implementation requires.
 pub trait AncestralAlignment: Alignment {
+    /// Returns the ancestral sequences (sequences associated with internal nodes) without gaps.
     fn ancestral_seqs(&self) -> &Sequences;
+
+    /// Returns the [`Mapping`] of the ancestral sequence corresponding to the given internal node index.
     fn ancestral_map(&self, node_idx: &NodeIdx) -> &Mapping;
+
+    /// Returns the [`Mapping`]s of all ancestral sequences in the alignment as a [`SeqMaps`] (`HashMap` of node
+    /// indices to mappings).
     fn ancestral_maps(&self) -> &SeqMaps;
+
+    /// Updates the [`Mapping`] of the ancestral sequence associated with the given internal node by
+    /// its node index. Is used by likelihood functions such as the [TKF models](`crate::tkf_model::TKFModel`) that
+    /// co-estimate homology paths.
     fn update_ancestral_map(&mut self, node_idx: &NodeIdx, map: Mapping) -> Result<()>;
+
     /// Checks if inputs are compatible and calls [`Self::from_aligned_with_ancestral_unchecked`].
     /// Checks:
     /// - if sequences are aligned
     /// - if sequence IDs match the node IDs in the tree ([`validate_ids_with_ancestors`])
     /// - removes columns with only gaps ([`Sequences::remove_gap_cols`])
     ///
-    /// Tree is consumed and stored together with the alignment, because the alignment is only
-    /// meaningful in the context of the tree that it was built from.
+    /// The [`Tree`] object is consumed and stored together with the ancestral alignment as a [`PhyloInfo`] object, as
+    /// the ancestral sequences are only meaningful in the context of the tree they were reconstructed on (ancestral
+    /// sequences are associated with the internal nodes of the tree).
     ///
     /// Only overwrite this method if absolutely necessary. The default implementation
     /// ensures that prerequisites are met. Overwriting and not ensuring these checks
@@ -158,8 +246,9 @@ pub trait AncestralAlignment: Alignment {
     /// phylogenetic tree. Is called by the default implementation of
     /// [`AncestralAlignment::from_aligned_with_ancestral`].
     ///
-    /// Tree is consumed and stored together with the alignment, because the alignment is only
-    /// meaningful in the context of the tree that it was built from.
+    /// The [`Tree`] object is consumed and stored together with the ancestral alignment as a [`PhyloInfo`] object, as
+    /// the ancestral sequences are only meaningful in the context of the tree they were reconstructed on (ancestral
+    /// sequences are associated with the internal nodes of the tree).
     fn from_aligned_with_ancestral_unchecked(all_seqs: Sequences, tree: Tree) -> PhyloInfo<Self>;
 
     /// Removes columns from the alignment where the ancestral character goes extinct, i.e. columns
@@ -176,8 +265,10 @@ pub trait AncestralAlignment: Alignment {
     /// - if ancestral sequences have the same length as the alignment
     /// - if internal node IDs are set and match the ancestralsequence IDs ([`validate_ancestor_ids`])
     ///
-    /// The `PhyloInfo` (i.e., `Tree` and associated `MSA`) is consumed, the ancestral alignment and
-    /// corresponding tree are returned together, because the alignment is only meaningful in the context of the tree.
+    /// The [`PhyloInfo`] object (i.e., [`Tree`] and associated [`Alignment`]) is consumed, and stored together with
+    /// the ancestral alignment as a resulting [`PhyloInfo`] object, as the ancestral sequences are only meaningful
+    /// in the context of the tree they were reconstructed on (ancestral sequences are associated with the internal
+    /// nodes of the tree).
     ///
     /// Only overwrite this method if absolutely necessary. The default implementation
     /// ensures that prerequisites are met. Overwriting and not ensuring these checks
@@ -217,8 +308,10 @@ pub trait AncestralAlignment: Alignment {
     /// aligned ancestral sequences. Is called by the default implementation of
     /// [`AncestralAlignment::from_msa_with_ancestral`].
     ///
-    /// The `PhyloInfo` (i.e., `Tree` and associated `MSA`) is consumed, the ancestral alignment and
-    /// corresponding tree are returned together, because the alignment is only meaningful in the context of the tree.
+    /// The [`PhyloInfo`] object (i.e., [`Tree`] and associated [`Alignment`]) is consumed, and stored together with
+    /// the ancestral alignment as a resulting [`PhyloInfo`] object, as the ancestral sequences are only meaningful
+    /// in the context of the tree they were reconstructed on (ancestral sequences are associated with the internal
+    /// nodes of the tree).
     fn from_msa_with_ancestral_unchecked(
         phylo: PhyloInfo<impl Alignment>,
         ancestral_seqs: Sequences,
@@ -263,11 +356,22 @@ pub fn surviving_columns_mask(ancestral_alignment: &impl AncestralAlignment) -> 
     surviving
 }
 
+/// Represents a multiple sequence alignment (MSA) with associated leaf mappings and internal alignments.
+///
+/// This structure stores the sequences and their corresponding mappings for leaf nodes, as well as the internal
+/// alignments and a mapping from node indices in the tree to sequence IDs.
+/// Only valid for phylogenetic inference in the context of the corresponding phylogenetic tree and should always
+/// be stored with it as a [`PhyloInfo`] instance.
 #[derive(Debug, Clone)]
 pub struct MSA {
+    /// The gapless sequences corresponding to the leaf nodes in the phylogenetic tree.
     seqs: Sequences,
+    /// The `[Mapping]`s of leaf node sequences to their positions in the alignment (gap or character).
     leaf_maps: SeqMaps,
+    /// The `[PairwiseAlignment]`s corresponding to internal nodes in the tree, mapping the sequences or alignments of
+    /// the child nodes to gap/non-gap positions.
     internal_alignments: InternalAlignments,
+    /// The mapping from node indices in the tree to sequence IDs for faster sequence lookup.
     idx_to_id: Vec<String>,
 }
 
@@ -289,8 +393,19 @@ impl Display for MSA {
 }
 
 impl MSA {
-    fn stack_maps(msa_len: usize, map_x: &Mapping, map_y: &Mapping) -> Mapping {
-        let mut map = Vec::with_capacity(msa_len);
+    /// Stacks two mappings into a single mapping for the MSA.
+    ///
+    /// This function takes two mappings, and returns a new mapping where gaps in both input mappings are represented
+    /// as `None`, and positions that are present in either mapping are counted as a character in the resulting
+    /// mapping.
+    ///
+    /// The mappings should be of equal length.
+    ///
+    /// E.g. for a `map_x = [None, Some(0), None, Some(1)]` and `map_y = [None, None, Some(0), Some(1)]`, the
+    /// resulting stacked map will be `[None, Some(0), Some(1), Some(2)]`.
+    fn stack_maps(map_x: &Mapping, map_y: &Mapping) -> Mapping {
+        assert_eq!(map_x.len(), map_y.len());
+        let mut map = Vec::with_capacity(map_x.len());
         let mut ind = 0usize;
         for (x, y) in map_x.iter().zip(map_y.iter()) {
             if x.is_none() && y.is_none() {
@@ -303,9 +418,16 @@ impl MSA {
         map
     }
 
-    fn clear_common_gaps(msa_len: usize, map_x: &Mapping, map_y: &Mapping) -> PairwiseAlignment {
-        let mut upd_map_x = Vec::with_capacity(msa_len);
-        let mut upd_map_y = Vec::with_capacity(msa_len);
+    /// Clears columns in the MSA where both input mappings have gaps.
+    ///
+    /// The mappings should be of equal length.
+    ///
+    /// This function takes two [`Mapping`]s, and returns a [`PairwiseAlignment`] where columns that are gaps in both
+    /// input mappings are removed.
+    fn clear_common_gaps(map_x: &Mapping, map_y: &Mapping) -> PairwiseAlignment {
+        assert_eq!(map_x.len(), map_y.len());
+        let mut upd_map_x = Vec::with_capacity(map_x.len());
+        let mut upd_map_y = Vec::with_capacity(map_x.len());
         for (x, y) in map_x.iter().zip(map_y.iter()) {
             if x.is_some() || y.is_some() {
                 upd_map_x.push(*x);
@@ -430,7 +552,6 @@ impl Alignment for MSA {
     /// # Ok(()) }
     /// ```
     fn from_aligned_unchecked(seqs: Sequences, tree: Tree) -> PhyloInfo<MSA> {
-        let msa_len = seqs[0].seq().len();
         let mut stack = HashMap::<NodeIdx, Mapping>::with_capacity(tree.len());
         let mut internal_alignments = InternalAlignments::with_capacity(tree.n);
         let mut idx_to_id = vec![String::new(); tree.len()];
@@ -440,9 +561,8 @@ impl Alignment for MSA {
                     let childs = tree.children(node_idx);
                     let map_x = stack[&childs[0]].clone();
                     let map_y = stack[&childs[1]].clone();
-                    stack.insert(*node_idx, Self::stack_maps(msa_len, &map_x, &map_y));
-                    internal_alignments
-                        .insert(*node_idx, Self::clear_common_gaps(msa_len, &map_x, &map_y));
+                    stack.insert(*node_idx, Self::stack_maps(&map_x, &map_y));
+                    internal_alignments.insert(*node_idx, Self::clear_common_gaps(&map_x, &map_y));
                 }
                 Leaf(_) => {
                     let seq = seqs.record_by_id(tree.node_id(node_idx)).seq();
@@ -472,15 +592,27 @@ impl Alignment for MSA {
     }
 }
 
+/// Represents a multiple ancestral sequence alignment (MASA) with associated leaf mappings and ancestral mappings.
+///
+/// This structure stores the sequences and their corresponding mappings for all tree nodes and a mapping from node
+/// indices in the tree to sequence IDs. Only valid for phylogenetic inference in the context of the corresponding
+/// phylogenetic tree and should always be stored with it as a [`PhyloInfo`] instance.
 #[derive(Debug, Clone)]
 pub struct MASA {
+    /// The gapless sequences corresponding to the leaf nodes in the phylogenetic tree.
     leaf_seqs: Sequences,
+    /// The gapless sequences corresponding to the internal/ancestral nodes in the phylogenetic tree.
     ancestral_seqs: Sequences,
+    /// The `[Mapping]`s of leaf node sequences to their positions in the alignment (gap or character).
     leaf_maps: SeqMaps,
+    /// The `[Mapping]`s of internal/ancestral node sequences to their positions in the alignment (gap or character).
     ancestral_maps: SeqMaps,
+    /// The `[PairwiseAlignment]`s corresponding to internal nodes in the tree, mapping the sequences or alignments of
+    /// the child nodes to gap/non-gap positions.
     // TODO: this needs to be implemented
     //       see issue #150 https://github.com/acg-team/phyne/issues/150
     internal_alignments: InternalAlignments,
+    /// The mapping from node indices in the tree to sequence IDs for faster sequence lookup.
     idx_to_id: Vec<String>,
 }
 
@@ -535,6 +667,10 @@ impl Alignment for MASA {
         &self.leaf_maps
     }
 
+    /// Returns a map of all the [`PairwiseAlignment`]s at the internal nodes.
+    ///
+    /// Currently returns an empty map because the internal alignments for `MASA` are not implemented (see issue #150
+    /// https://github.com/acg-team/phyne/issues/150).
     fn internal_alignments(&self) -> &InternalAlignments {
         &self.internal_alignments
     }
@@ -650,6 +786,8 @@ impl AncestralAlignment for MASA {
         }
     }
 
+    /// See [`AncestralAlignment::from_aligned_with_ancestral_unchecked`] for more details.
+    ///
     /// # Example
     /// ```
     /// use phyne::alignment::{Alignment, AncestralAlignment, MASA, Sequences};
@@ -801,6 +939,8 @@ impl AncestralAlignment for MASA {
         }
     }
 
+    /// See [`AncestralAlignment::from_msa_with_ancestral_unchecked`] for more details.
+    ///
     /// # Example
     /// ```
     /// use phyne::alignment::{Alignment, AncestralAlignment, Sequences, MASA, MSA};
@@ -866,6 +1006,15 @@ impl AncestralAlignment for MASA {
 }
 
 impl MASA {
+    /// This is needed because with the [TKF models](`crate::tkf_model::TKFModel`),
+    /// we need to [re-estimate](`crate::tkf_model::reestimate::EdgeSeqsReestimator::reestimate`)
+    /// the ancestral maps after a [tree move](crate::likelihood::TreeSearchCost::update_tree) was applied.
+    /// Iterating through the aligned sequence (i.e., the old and new mappings), if the
+    /// presence of a character is maintained the actual character from the old sequence is
+    /// taken. If a character is newly introduced (i.e., was a gap before), an ambiguous
+    /// character is inserted.
+    ///
+    /// Called by [`MASA::update_ancestral_map`].
     fn update_ancestral_map_unchecked(&mut self, node_idx: &NodeIdx, new_map: Mapping) {
         let old_map = self.ancestral_maps.get_mut(node_idx).unwrap();
         let id = &self.idx_to_id[usize::from(*node_idx)];
@@ -995,3 +1144,91 @@ pub trait AlignmentSimulation<R: Rng + SeedableRng> {
 #[cfg(test)]
 #[cfg_attr(coverage, coverage(off))]
 mod tests;
+
+#[cfg(test)]
+#[cfg_attr(coverage, coverage(off))]
+mod private_tests {
+    use super::*;
+
+    #[test]
+    fn stack_maps_simple() {
+        let map_x = align!(b"01-2");
+        let map_y = align!(b"-012");
+        let stacked = MSA::stack_maps(&map_x, &map_y);
+        assert_eq!(stacked, align!(b"0123"));
+    }
+
+    #[test]
+    fn stack_maps_all_present_in_both() {
+        let map_x = align!(b"01234567");
+        let map_y = align!(b"01234567");
+        let stacked = MSA::stack_maps(&map_x, &map_y);
+        assert_eq!(stacked, align!(b"01234567"));
+    }
+
+    #[test]
+    fn stack_maps_all_present_in_one() {
+        let map_x = align!(b"01234567");
+        let map_y = align!(b"--------");
+        let stacked = MSA::stack_maps(&map_x, &map_y);
+        assert_eq!(stacked, align!(b"01234567"));
+    }
+
+    #[test]
+    fn stack_maps_all_present_in_one_or_other() {
+        let map_x = align!(b"0123----");
+        let map_y = align!(b"----0123");
+        let stacked = MSA::stack_maps(&map_x, &map_y);
+        assert_eq!(stacked, align!(b"01234567"));
+    }
+
+    #[test]
+    fn stack_maps_common_gaps() {
+        let map_x = align!(b"012-----");
+        let map_y = align!(b"-----012");
+        let stacked = MSA::stack_maps(&map_x, &map_y);
+        assert_eq!(stacked, align!(b"012--345"));
+    }
+
+    #[should_panic]
+    #[test]
+    fn stack_maps_mismatched_lengths() {
+        let map_x = align!(b"012---");
+        let map_y = align!(b"-----012");
+        MSA::stack_maps(&map_x, &map_y);
+    }
+
+    #[test]
+    fn stack_maps_example() {
+        let map_x = Mapping::from_iter([None, Some(0), None, Some(1)]);
+        let map_y = Mapping::from_iter([None, None, Some(0), Some(1)]);
+        let stacked = MSA::stack_maps(&map_x, &map_y);
+        assert_eq!(stacked, [None, Some(0), Some(1), Some(2)]);
+    }
+
+    #[test]
+    fn clear_common_gaps_no_gaps() {
+        let map_x = align!(b"01-2");
+        let map_y = align!(b"-012");
+        let cleared = MSA::clear_common_gaps(&map_x, &map_y);
+        let expected = PairwiseAlignment::new(map_x, map_y);
+        assert_eq!(cleared, expected);
+    }
+
+    #[test]
+    fn clear_common_gaps_with_gaps() {
+        let map_x = align!(b"-01--2");
+        let map_y = align!(b"--01-2");
+        let cleared = MSA::clear_common_gaps(&map_x, &map_y);
+        let expected = PairwiseAlignment::new(align!(b"01-2"), align!(b"-012"));
+        assert_eq!(cleared, expected);
+    }
+
+    #[should_panic]
+    #[test]
+    fn clear_common_gaps_mismatched_lengths() {
+        let map_x = align!(b"-01--");
+        let map_y = align!(b"--01-2");
+        MSA::clear_common_gaps(&map_x, &map_y);
+    }
+}
