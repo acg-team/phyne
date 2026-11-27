@@ -171,6 +171,13 @@ mod tests {
     }
 
     #[test]
+    fn levenshtein_symmetrical() {
+        let a = record!("a", b"ARNDCQ");
+        let b = record!("b", b"RNPCG");
+        assert_relative_eq!(Levenshtein.dist(&a, &b), Levenshtein.dist(&b, &a));
+    }
+
+    #[test]
     fn levenshtein_dna_corrected_same() {
         let dna_corr = LevenshteinDNACorrected {};
 
@@ -237,6 +244,16 @@ mod tests {
     }
 
     #[test]
+    fn levenshtein_dna_corrected_symmetrical() {
+        let a = record!("a", b"TCAAAAAGGGAC");
+        let b = record!("b", b"CTAGAGA");
+        assert_relative_eq!(
+            LevenshteinDNACorrected.dist(&a, &b),
+            LevenshteinDNACorrected.dist(&b, &a)
+        );
+    }
+
+    #[test]
     fn levenshtein_protein_corrected_same() {
         let prot_corr = LevenshteinProteinCorrected {};
 
@@ -296,5 +313,15 @@ mod tests {
         assert!(prot_corr.dist(&s3, &s4) < prot_corr.dist(&s2, &s4));
         assert_relative_eq!(prot_corr.dist(&s1, &s4), prot_corr.dist(&s2, &s4));
         assert!(prot_corr.dist(&s1, &s4) > prot_corr.dist(&s3, &s4));
+    }
+
+    #[test]
+    fn levenshtein_protein_corrected_symmetrical() {
+        let a = record!("a", b"ARNDCQ");
+        let b = record!("b", b"RNPCG");
+        assert_relative_eq!(
+            LevenshteinProteinCorrected.dist(&a, &b),
+            LevenshteinProteinCorrected.dist(&b, &a)
+        );
     }
 }
