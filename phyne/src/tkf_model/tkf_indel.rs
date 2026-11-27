@@ -76,10 +76,15 @@ pub(super) fn valid_r(r: f64) -> Result<()> {
     Ok(())
 }
 
-/// For the function [u]: only if the time is shorter than this threshold, we use the Taylor approximation.
-static SHORT_TIME_U: f64 = 1e-5;
-/// For the function [u]: the critical threshold used for condition 4. Only necessary for x86 CPUs.
-static X86_CRITICAL_THRESHOLD_U: f64 = 1e-11;
+/// For the function [u]: target absolute accuracy of the result.
+static TAU_U: f64 = 1e-7;
+/// For the function [u]: safety factor on the rounding-error bound `eps * (3/R + 1)`.
+static ROUNDING_SAFETY_FACTOR: f64 = 8.0;
+/// For the function [u]: minimum `|A-B| / (A + B)` for trusting the direct `ln(C)` evaluation.
+/// Equal to [`ROUNDING_SAFETY_FACTOR`] * ([`f64::EPSILON`] / 2) / [`TAU_U`] (about 8.88e-9).
+static MIN_REL_SEPARATION: f64 = ROUNDING_SAFETY_FACTOR * (f64::EPSILON / 2.0) / TAU_U;
+/// Threshold for helper functions [`ln_g`] and [`ln_h`] to switch from direct evaluation to series expansion.
+static TAYLOR_SERIES_THRESHOLD: f64 = 1e-2;
 /// For the function [ln_n0]: threshold for numerical issues
 static NUMERICAL_ISSUE_N0_THRESHOLD: f64 = 1e-12;
 
@@ -630,6 +635,20 @@ fn update_reason(prev_tree: &Tree, new_tree: &Tree, dirty_nodes: &[usize]) -> Tr
     }
 }
 
+/// Given the right exclusive block borders, returns the lengths of the blocks.
+/// For example, given [3, 5, 8], the block lengths are [3, 2, 3].
+pub(super) fn get_block_lengths(blocks: &[usize]) -> Vec<usize> {
+    let mut block_lens = vec![0; blocks.len()];
+    for (i, block) in blocks.iter().enumerate() {
+        block_lens[i] = if i == 0 {
+            *block
+        } else {
+            block - blocks[i - 1]
+        };
+    }
+    block_lens
+}
+
 /// Returns `ln(1 - exp(x))` in a numerically stable way.
 ///
 /// This function handles two regions to avoid precision loss or underflow:
@@ -656,7 +675,11 @@ pub(crate) fn ln1mexp(x: f64) -> f64 {
 pub(super) fn ln_beta(lambda: f64, mu: f64, time: f64) -> f64 {
     let expo = (lambda - mu) * time;
     let term1 = ln1mexp(expo);
-    let ln_ratio = expo + lambda.ln() - mu.ln();
+    // ln_ratio = expo + ln(lambda) - ln(mu)
+    //          = expo + ln1p((lambda - mu) / mu)
+    // The `ln1p` form avoids the cancellation of `ln(lambda) - ln(mu)` when
+    // lambda ~ mu, which would otherwise be amplified by `ln1mexp`.
+    let ln_ratio = expo + ((lambda - mu) / mu).ln_1p();
     let term2 = mu.ln() + ln1mexp(ln_ratio);
     term1 - term2
 }
@@ -713,43 +736,101 @@ pub(super) fn eta(l: f64, m: f64, ln_beta: f64, t: f64) -> f64 {
 }
 
 /// Returns ln(1 - e^{-m*t} - m*beta).
+///
 /// Is only used in [`crate::tkf_model::tkf_indel::eta`] and was just extracted to make the code cleaner.
+///
+/// Split as `u = term1 + term2 + term3` with
+/// * `term1 = (l-m)*t`,
+/// * `term2 = ln(C)`, with `C = m*(1-e^{-l*t}) - l*(1-e^{-m*t})`
+/// * `term3 = -ln(D)`, with `D = m - l*e^{(l-m)*t}`
 pub(super) fn u(l: f64, m: f64, t: f64) -> f64 {
     // See https://github.com/MattesMrzik/tkf_mathematica for how this was found.
-    let critical_condition_1 = (-l * t).exp() == 1.0;
-    let critical_condition_2 = (-m * t).exp() == 1.0;
-    let critical_condition_3 = ((l - m) * t).exp() == 1.0;
-    // The tkf_numerical_test passed on macOS (M-series) with a threshold of 0.
-    // However, the same tests failed on Linux x86. Using this threshold ensures they pass on both platforms.
-    let critical_condition_4 =
-        ((m - l) - m * (-l * t).exp() + l * (-m * t).exp()).abs() <= X86_CRITICAL_THRESHOLD_U;
-
-    let critical_condition = critical_condition_1
-        || critical_condition_2
-        || critical_condition_3
-        || critical_condition_4;
-
-    if critical_condition && t < SHORT_TIME_U {
-        // using the Taylor expansion around t = 0 and for small times t
-        return l.ln() + m.ln() + 2.0 * t.ln() - 2.0f64.ln() + (-(l + 4.0 * m) * t / 3.0).ln_1p();
-    }
+    let a = m * (-(-l * t).exp_m1());
+    let b = l * (-(-m * t).exp_m1());
 
     let term1 = (l - m) * t;
-    let term2 = ((m - l) - m * (-l * t).exp() + l * (-m * t).exp()).ln();
-    let term3 = -(m - l * ((l - m) * t).exp()).ln();
+    let term2 = if relative_separation(a, b) >= MIN_REL_SEPARATION {
+        // C is well separated from the rounding noise of A and B.
+        (a - b).ln()
+    } else {
+        // C is at the rounding-noise level; avoid forming it by subtraction.
+        ln_c_stable(l, m, t)
+    };
+
+    // m - l*e^{(l-m)*t}
+    let term3 = -((m - l) - l * ((l - m) * t).exp_m1()).ln();
+
     term1 + term2 + term3
 }
 
-/// Given the right exclusive block borders, returns the lengths of the blocks.
-/// For example, given [3, 5, 8], the block lengths are [3, 2, 3].
-pub(super) fn get_block_lengths(blocks: &[usize]) -> Vec<usize> {
-    let mut block_lens = vec![0; blocks.len()];
-    for (i, block) in blocks.iter().enumerate() {
-        block_lens[i] = if i == 0 {
-            *block
-        } else {
-            block - blocks[i - 1]
-        };
+/// Returns `R = |A-B| / (A + B)`. `1/R` is the relative condition number of
+/// the subtraction `A - B`, so the relative error of `C` is about `eps / R`.
+pub(super) fn relative_separation(a: f64, b: f64) -> f64 {
+    (a - b).abs() / (a + b)
+}
+
+/// C is at the rounding-noise level, so it must not be formed by the
+/// subtraction A - B, using this stable formula instead.
+pub(super) fn ln_c_stable(l: f64, m: f64, t: f64) -> f64 {
+    // This is achieved by rewriting C as the sum of two positive terms:
+    // C = delta * h(x) + l * e^{-x} * g(x) =: term1 + term2.
+    // Additionally, to avoid underflow in these summands (term1 & term2) we rewrite:
+    // ln(C) = ln(term1 + term2) = ln(term1) + ln(1 + term2 / term1) = ln(term1) + ln(1 + correction).
+    // Terms in the correction can still underflow, so we compute this in log space and use the
+    // stable ln_1p_exp function.
+    let delta = m - l;
+    let ln_delta = delta.ln();
+    let ln_h = ln_h(l, t);
+    let ln_g = ln_g(delta, t);
+    let ln_correction = l.ln() - l * t + ln_g - ln_delta - ln_h;
+    // Note: if branch lengths were at least epsilon, then ln(delta h + l e^{-x} e) would be sufficient.
+    ln_delta + ln_h + ln_1p_exp(ln_correction)
+}
+
+/// Returns `ln(h(x))` with `h(x) = 1 - (1+x)*e^{-x}` and `x = l*t`.
+fn ln_h(l: f64, t: f64) -> f64 {
+    let x = l * t;
+    if x >= TAYLOR_SERIES_THRESHOLD {
+        // The direct expression is stable.
+        (1.0 - (1.0 + x) * (-x).exp()).ln()
+    } else {
+        // The direct expression is not stable for small x.
+        // Using the Taylor series expansion instead.
+        // Factoring out the common factor x^2 for the series (it is the leading term).
+        let ln_common = 2.0 * (l.ln() + t.ln()); // = ln(x^2); avoids underflow for small x.
+        let x2 = x * x;
+        // If x^2 underflows it only causes a tiny relative error in the cofactor and the ln
+        // does not amplify the error since we are close to 0.5
+        let cofactor = 0.5 - x / 3.0 + x2 / 8.0 - x2 * x / 30.0 + x2 * x2 / 144.0;
+        ln_common + cofactor.ln()
     }
-    block_lens
+}
+
+/// Returns `ln(g(y))` with `g(y) = expm1(-y) + y` and `y = delta*t`.
+fn ln_g(delta: f64, t: f64) -> f64 {
+    let y = delta * t;
+    if y >= TAYLOR_SERIES_THRESHOLD {
+        // The direct expression is stable.
+        ((-y).exp_m1() + y).ln()
+    } else {
+        // The direct expression is not stable for small y.
+        // Using the Taylor series approximation instead.
+        // Factoring out the common factor y^2 for the series (it is the leading term).
+        let ln_common = 2.0 * (delta.ln() + t.ln()); // = ln(y^2); avoids underflow for small y.
+        let y2 = y * y;
+        // If y^2 underflows it only causes a tiny relative error in the cofactor and the ln
+        // does not amplify the error since we are close to 0.5
+        let cofactor = 0.5 - y / 6.0 + y2 / 24.0 - y2 * y / 120.0 + y2 * y2 / 720.0;
+        ln_common + cofactor.ln()
+    }
+}
+
+/// Returns `ln(1 + e^ln_c)` without overflow.
+/// Underflow only causes absolute error smaller than epsilon in the additive space, so it is not a problem.
+fn ln_1p_exp(ln_c: f64) -> f64 {
+    if ln_c > 0.0 {
+        ln_c + (-ln_c).exp().ln_1p()
+    } else {
+        ln_c.exp().ln_1p()
+    }
 }

@@ -160,14 +160,6 @@ impl TKFModel for TKF92IndelModel {
     }
 
     fn block_prob(&self, ln_tree_event_factor: f64, block_len: usize) -> f64 {
-        // TODO: For the underflow of exp(ln_tree_event_factor):
-        // - True underflow (< -745): not a concern, f64 lacks precision at that scale anyway.
-        //   (when adding to the other terms)
-        // - Near machine epsilon (< -36): the approximation
-        //     m * ln(1 + x) approx ln((1 + x)^m) approx ln(1 + m*x) approx m*x
-        //   recovers log(m)  bits of precision, at the cost of two linearization
-        //   errors. Whether the net gain is positive requires further investigation.
-        //   See issue https://github.com/acg-team/phyne/issues/174.
         ln_tree_event_factor
             + (block_len as f64 - 1.0) * (ln_tree_event_factor.exp()).ln_1p()
             + (block_len as f64) * self.ln_r

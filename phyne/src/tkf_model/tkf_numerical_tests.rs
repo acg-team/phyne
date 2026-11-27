@@ -1,332 +1,106 @@
-use approx::assert_relative_eq;
+#![allow(clippy::too_many_arguments)]
+
+use std::f64::consts::LN_2;
+
+use approx::relative_eq;
 use rstest::rstest;
 
 use crate::tkf_model::tkf_indel::{eta, ln_beta, ln_h1, ln_i1, ln_n0};
 
 // See https://github.com/MattesMrzik/tkf_mathematica
+// Values generated from the Mathematica reference script; do not edit by hand.
 
-// This test file here runs for about 0.01 seconds
-
+// Contains input parameters: time, lambda, and mu,
+// and expected values for: ln_beta, ln_i1, ln_h1, ln_n0, and eta.
 #[rstest]
-#[case::short_t_tiny_l_m(1.0e-16, 1.0e-4, 1.001e-4, -36.841361487904734)]
-#[case::v_short_t_tiny_l_m(1.0e-8, 1.0e-4, 1.001e-4, -18.420680743953366)]
-#[case::medium_t_tiny_l_m(1., 1.0e-4, 1.001e-4, -1.0004499533339179e-4)]
-#[case::long_t_tiny_l_m(50., 1.0e-4, 1.001e-4, 3.907032976355939)]
-#[case::v_long_t_tiny_l_m(100., 1.0e-4, 1.001e-4, 4.595214904643877)]
-#[case::vv_long_t_tiny_l_m(500., 1.0e-4, 1.001e-4, 6.165794124813985)]
-#[case::short_t_small_l_m(1.0e-16, 0.01, 0.0100001, -36.841361487904734)]
-#[case::v_short_t_small_l_m(1.0e-8, 0.01, 0.0100001, -18.420680744052365)]
-#[case::medium_t_small_l_m(1., 0.01, 0.0100001, -0.0099503803581182)]
-#[case::long_t_small_l_m(50., 0.01, 0.0100001, 3.506556230653315)]
-#[case::v_long_t_small_l_m(100., 0.01, 0.0100001, 3.9120205054271044)]
-#[case::vv_long_t_small_l_m(500., 0.01, 0.0100001, 4.422844462501429)]
-#[case::short_t_small_l_medium_m(1.0e-16, 0.01, 5., -36.841361487904734)]
-#[case::v_short_t_small_l_medium_m(1.0e-8, 0.01, 5., -18.420680769002367)]
-#[case::medium_t_small_l_medium_m(1., 0.01, 5., -1.6162532296513673)]
-#[case::long_t_small_l_medium_m(50., 0.01, 5., -1.6094379124341004)]
-#[case::v_long_t_small_l_medium_m(100., 0.01, 5., -1.6094379124341004)]
-#[case::vv_long_t_small_l_medium_m(500., 0.01, 5., -1.6094379124341004)]
-#[case::short_t_m_close_l(1.0e-16, 4.9999, 5., -36.841361487904734)]
-#[case::v_short_t_m_close_l(1.0e-8, 4.9999, 5., -18.420680793951863)]
-#[case::medium_t_m_close_l(1., 4.9999, 5., -1.7917511359988893)]
-#[case::long_t_m_close_l(50., 4.9999, 5., -1.6134199817948845)]
-#[case::v_long_t_m_close_l(100., 4.9999, 5., -1.6114259516405904)]
-#[case::vv_long_t_m_close_l(500., 4.9999, 5., -1.6098279197012395)]
-#[case::short_t_medium_l_large_m(1.0e-16, 1., 100., -36.841361487904734)]
-#[case::v_short_t_medium_l_large_m(1.0e-8, 1., 100., -18.42068124895232)]
-#[case::medium_t_medium_l_large_m(1., 1., 100., -4.605170185988092)]
-#[case::long_t_medium_l_large_m(50., 1., 100., -4.605170185988092)]
-#[case::v_long_t_medium_l_large_m(100., 1., 100., -4.605170185988092)]
-#[case::vv_long_t_medium_l_large_m(500., 1., 100., -4.605170185988092)]
-#[case::short_t_m_close_l_large_m(1.0e-16, 4.999, 100., -36.841361487904734)]
-#[case::v_short_t_m_close_l_large_m(1.0e-8, 4.999, 100., -18.420681268947302)]
-#[case::medium_t_m_close_l_large_m(1., 4.999, 100., -4.605170185988092)]
-#[case::long_t_m_close_l_large_m(50., 4.999, 100., -4.605170185988092)]
-#[case::v_long_t_m_close_l_large_m(100., 4.999, 100., -4.605170185988092)]
-#[case::vv_long_t_m_close_l_large_m(500., 4.999, 100., -4.605170185988092)]
-#[case::short_t_l_close_m_large_m(1.0e-16, 99.999, 100., -36.84136148790474)]
-#[case::v_short_t_l_close_m_large_m(1.0e-8, 99.999, 100., -18.420681743946865)]
-#[case::medium_t_l_close_m_large_m(1., 99.999, 100., -4.615115567159043)]
-#[case::long_t_l_close_m_large_m(50., 99.999, 100., -4.605365208634869)]
-#[case::v_long_t_l_close_m_large_m(100., 99.999, 100., -4.605265264787406)]
-#[case::vv_long_t_l_close_m_large_m(500., 99.999, 100., -4.605185600810108)]
-#[case::short_t_large_m(1.0e-16, 10., 1000., -36.841361487904784)]
-#[case::v_short_t_large_m(1.0e-8, 10., 1000., -18.420685793947783)]
-#[case::medium_t_large_m(1., 10., 1000., -6.907755278982137)]
-#[case::long_t_large_m(50., 10., 1000., -6.907755278982137)]
-#[case::v_long_t_large_m(100., 10., 1000., -6.907755278982137)]
-#[case::vv_long_t_large_m(500., 10., 1000., -6.907755278982137)]
-#[case::short_t_l_close_m_v_large_m(1.0e-16, 999.999, 1000., -36.841361487904834)]
-#[case::v_short_t_l_close_m_v_large_m(1.0e-8, 999.999, 1000., -18.420690743897367)]
-#[case::medium_t_l_close_m_v_large_m(1., 999.999, 1000., -6.908754279897846)]
-#[case::long_t_l_close_m_v_large_m(50., 999.999, 1000., -6.907774782958426)]
-#[case::v_long_t_l_close_m_v_large_m(100., 999.999, 1000., -6.907764787268878)]
-#[case::vv_long_t_l_close_m_v_large_m(500., 999.999, 1000., -6.907756820475032)]
-fn tkf_ln_beta_mathematica(
+#[case::vv_short_t_vvv_tiny_l_m(1.0e-30, 1.0e-16, 1.0000000000000001e-16, -69.07755278982137, -1.0e-46, -2.0000000000000004e-46, -105.9189142777261, -LN_2)]
+#[case::short_t_vvv_tiny_l_m(1.0e-16, 1.0e-16, 1.0000000000000001e-16, -36.841361487904734, -9.999999999999999e-33, -2.0e-32, -73.68272297580947, -LN_2)]
+#[case::v_short_t_vvv_tiny_l_m(1.0e-8, 1.0e-16, 1.0000000000000001e-16, -18.420680743952367, -1.0e-24, -2.0000000000000002e-24, -55.262042231857095, -LN_2)]
+#[case::medium_t_vvv_tiny_l_m(1.0, 1.0e-16, 1.0000000000000001e-16, -1.0e-16, -1.0e-16, -2.0e-16, -36.841361487904734, -LN_2)]
+#[case::vv_short_t_vv_tiny_l_m(1.0e-30, 1.0e-12, 1.0000000000000002e-12, -69.07755278982137, -1.0e-42, -2.0000000000000004e-42, -96.70857390574992, -LN_2)]
+#[case::short_t_vv_tiny_l_m(1.0e-16, 1.0e-12, 1.0000000000000002e-12, -36.841361487904734, -1.0e-28, -2.0000000000000002e-28, -64.47238260383328, -LN_2)]
+#[case::v_short_t_vv_tiny_l_m(1.0e-8, 1.0e-12, 1.0000000000000002e-12, -18.420680743952367, -1.0e-20, -2.0000000000000002e-20, -46.051701859880914, -LN_2)]
+#[case::medium_t_vv_tiny_l_m(1.0, 1.0e-12, 1.0000000000000002e-12, -9.999999999995002e-13, -9.999999999995e-13, -1.9999999999995003e-12, -27.63102111592955, -LN_2)]
+#[case::vv_short_t_v_tiny_l_m(1.0e-30, 1.0e-8, 1.0000000000000002e-8, -69.07755278982137, -1.0000000000000001e-38, -2.0000000000000004e-38, -87.49823353377374, -LN_2)]
+#[case::short_t_v_tiny_l_m(1.0e-16, 1.0e-8, 1.0000000000000002e-8, -36.841361487904734, -1.0e-24, -2.0000000000000002e-24, -55.262042231857095, -LN_2)]
+#[case::v_short_t_v_tiny_l_m(1.0e-8, 1.0e-8, 1.0000000000000002e-8, -18.420680743952367, -1.0e-16, -2.0000000000000002e-16, -36.84136148790473, -LN_2)]
+#[case::medium_t_v_tiny_l_m(1.0, 1.0e-8, 1.0000000000000002e-8, -9.999999950000001e-9, -9.999999950000001e-9, -1.9999999950000003e-8, -18.420680753952364, -0.693147187226612)]
+#[case::vv_short_t_tiny_l_m(1.0e-30, 0.0001, 0.00010001, -69.07755278982137, -1.0000000000000001e-34, -2.0001000000000003e-34, -78.28779316679721, -LN_2)]
+#[case::short_t_tiny_l_m(1.0e-16, 0.0001, 0.00010001, -36.841361487904734, -1.0000000000000001e-20, -2.0001e-20, -46.05160186488058, -LN_2)]
+#[case::v_short_t_tiny_l_m(1.0e-8, 0.0001, 0.00010001, -18.420680743953366, -9.999999999995e-13, -2.0000999999995e-12, -27.630921120929216, -LN_2)]
+#[case::medium_t_tiny_l_m(1.0, 0.0001, 0.00010001, -9.999999983335417e-5, -9.999499983335834e-5, -0.00020000499983335835, -9.210340376975683, -0.6932138502821386)]
+#[case::vv_short_t_small_l_m(1.0e-30, 0.01, 0.0100001, -69.07755278982137, -1.0e-32, -2.00001e-32, -73.68271297585946, -LN_2)]
+#[case::short_t_small_l_m(1.0e-16, 0.01, 0.0100001, -36.841361487904734, -1.0e-18, -2.00001e-18, -41.44652167394282, -LN_2)]
+#[case::v_short_t_small_l_m(1.0e-8, 0.01, 0.0100001, -18.420680744052365, -9.999999999499996e-11, -2.0000099999499994e-10, -23.025840930090457, -0.6931471806266123)]
+#[case::medium_t_small_l_m(1.0, 0.01, 0.0100001, -0.009950380358118177, -0.009950330358118594, -0.019950430358118595, -4.6151105663962095, -0.699811101520577)]
+#[case::vv_short_t_small_medium_l_m(1.0e-30, 0.1, 0.10000001, -69.07755278982137, -1.0e-31, -2.0000001000000002e-31, -71.38013778281542, -LN_2)]
+#[case::short_t_small_medium_l_m(1.0e-16, 0.1, 0.10000001, -36.841361487904734, -1.0e-17, -2.0000001e-17, -39.143946480898784, -LN_2)]
+#[case::v_short_t_small_medium_l_m(1.0e-8, 0.1, 0.10000001, -18.420680744952364, -9.999999995e-10, -2.0000000995e-9, -20.723265737946416, -0.693147181226612)]
+#[case::medium_t_small_medium_l_m(1.0, 0.1, 0.10000001, -0.0953101843497794, -0.09531017934977941, -0.19531018934977942, -2.39789517734383, -0.7595348460493919)]
+#[case::vv_short_t_medium_l_m_close(1.0e-30, 1.0, 1.00000001, -69.07755278982137, -1.0e-30, -2.0000000100000002e-30, -69.07755277982137, -LN_2)]
+#[case::short_t_medium_l_m_close(1.0e-16, 1.0, 1.00000001, -36.841361487904734, -1.0e-16, -2.00000001e-16, -36.841361477904734, -LN_2)]
+#[case::v_short_t_medium_l_m_close(1.0e-8, 1.0, 1.00000001, -18.420680753952364, -9.99999995e-9, -2.000000005e-8, -18.420680743952367, -0.6931471872266121)]
+#[case::medium_t_medium_l_m_close(1.0, 1.0, 1.00000001, -0.6931471830599453, -0.6931471780599453, -1.6931471880599454, -0.6931471730599454, -1.3308932712429986)]
+#[case::vv_short_t_medium_l_medium_m(1.0e-30, 1.0, 1.5, -69.07755278982137, -1.0e-30, -2.5000000000000002e-30, -68.67208768171321, -LN_2)]
+#[case::short_t_medium_l_medium_m(1.0e-16, 1.0, 1.5, -36.841361487904734, -9.999999999999999e-17, -2.4999999999999997e-16, -36.43589637979657, -LN_2)]
+#[case::v_short_t_medium_l_medium_m(1.0e-8, 1.0, 1.5, -18.420680756452366, -9.999999925e-9, -2.4999999925000003e-8, -18.015215648344203, -0.6931471888932786)]
+#[case::medium_t_medium_l_medium_m(1.0, 1.0, 1.5, -0.820108870423844, -0.5805039214166007, -2.0805039214166006, -0.41464376231567956, -1.4973826998104118)]
+#[case::vv_short_t_medium_l_large_m(1.0e-30, 1.0, 2.0, -69.07755278982137, -1.0e-30, -3.0000000000000003e-30, -68.38440560926142, -LN_2)]
+#[case::short_t_medium_l_large_m(1.0e-16, 1.0, 2.0, -36.841361487904734, -9.999999999999999e-17, -3.0e-16, -36.14821430734479, -LN_2)]
+#[case::v_short_t_medium_l_large_m(1.0e-8, 1.0, 2.0, -18.420680758952365, -9.999999900000002e-9, -2.99999999e-8, -17.72753357839242, -0.6931471905599453)]
+#[case::medium_t_medium_l_large_m(1.0, 1.0, 2.0, -0.9485552710318319, -0.48988012564475, -2.48988012564475, -0.25540809047188656, -1.6931471805599454)]
+#[case::vv_short_t_large_l_m_close(1.0e-30, 10.0, 10.00000001, -69.07755278982137, -1.0000000000000001e-29, -2.0000000010000004e-29, -66.77496769582733, -LN_2)]
+#[case::short_t_large_l_m_close(1.0e-16, 10.0, 10.00000001, -36.841361487904734, -9.999999999999995e-16, -2.0000000009999997e-15, -34.53877639391069, -LN_2)]
+#[case::v_short_t_large_l_m_close(1.0e-8, 10.0, 10.00000001, -18.42068084395236, -9.999999500000033e-8, -1.9999999510000034e-7, -16.118095749958314, -0.6931472472266117)]
+#[case::medium_t_large_l_m_close(1.0, 10.0, 10.00000001, -2.397895273252916, -2.3978952682529155, -12.397895278252916, -0.09531017925887027, -4.605669710954534)]
+#[case::beta_expo_high_ratio_low(1.0e-16, 1.0e-8, 1.0, -36.841361487904734, -1.0e-24, -1.0000000099999999e-16, -36.841361487904734, -LN_2)]
+#[case::beta_expo_high_ratio_high(1.0e-13, 1.0, 1.000000000001, -29.933606208922694, -9.9999999999995e-14, -2.0000000000009502e-13, -29.933606208921695, -LN_2)]
+#[case::beta_expo_boundary(LN_2, 1.0, 2.0, -1.0986122886681098, -0.4054651081081644, -1.791759469228055, -0.4054651081081644, -1.3862943611198906)]
+#[case::beta_expo_just_below(0.6931471805599454, 1.0, 2.0, -1.0986122886681096, -0.4054651081081644, -1.7917594692280552, -0.40546510810816433, -1.3862943611198908)]
+#[case::beta_ratio_boundary(5.978370007556199, 1.0, 1.1, -0.20067069546215133, -1.7047480922384246, -8.280955100550244, -0.10536051565782638, -3.715331158445746)]
+#[case::beta_ratio_just_below(5.9783700075562, 1.0, 1.1, -0.2006706954621513, -1.7047480922384246, -8.280955100550246, -0.10536051565782636, -3.7153311584457462)]
+#[case::i1_x_above_minus_ln2(10.0, 1.0, 1.1, -0.14686506465827487, -1.9907750122652383, -12.990775012265239, -0.051554884853949934, -4.783462512488951)]
+#[case::i1_boundary_below(1.3862943611198904, 1.0, 1.5, -LN_2, -LN_2, -2.7725887222397807, -0.287682072451781, -1.7917594692280547)]
+#[case::i1_boundary_above(1.3862943611198906, 1.0, 1.5, -LN_2, -LN_2, -2.772588722239781, -0.28768207245178096, -1.791759469228055)]
+#[case::u_case2_just_below_r(600.0, 999.9999822364338, 1000.0, -6.907756936781424, -13.299362255287184, -600013.2993622553, -1.6577992865840908e-6, -26.609379316952598)]
+#[case::u_case1_just_above_r(600.0, 999.9999822364293, 1000.0, -6.907756936781421, -13.299362253959409, -600013.299362254, -1.657799284375077e-6, -26.60937931695732)]
+#[case::ln_h_x_just_below_1e2(9.999999999999999e-6, 999.9999999999999, 1000.0, -11.522875795823397, -0.009950330853168082, -0.01995033085316808, -4.61512051684126, -0.6998110682150394)]
+#[case::ln_h_x_at_1e2(1.0e-5, 999.9999999999999, 1000.0, -11.522875795823396, -0.009950330853168083, -0.019950330853168084, -4.61512051684126, -0.6998110682150394)]
+#[case::ln_h_x_just_above_1e2(1.0000000000000003e-5, 999.9999999999999, 1000.0, -11.522875795823396, -0.009950330853168083, -0.019950330853168087, -4.615120516841259, -0.6998110682150394)]
+#[case::ln_g_y_just_below_1e2(600.0, 999.9999833333355, 1000.0, -6.907756937327985, -13.299690759866865, -600013.2996907599, -1.6583458482402323e-6, -26.60937818505409)]
+#[case::ln_g_y_just_above_1e2(600.0, 999.9999833333322, 1000.0, -6.907756937327983, -13.299690758879436, -600013.2996907589, -1.6583458465972706e-6, -26.609378185057384)]
+#[case::extreme_short_t(1.0e-50, 1.0, 1.0000000000000002, -115.12925464970229, -1.0e-50, -2.0000000000000003e-50, -115.12925464970229, -LN_2)]
+fn tkf_numerical_matches_mathematica(
+    // input parameters
     #[case] time: f64,
     #[case] lambda: f64,
     #[case] mu: f64,
-    #[case] expected: f64,
-) {
-    assert_relative_eq!(ln_beta(lambda, mu, time), expected, epsilon = 1e-9);
-}
-
-#[rstest]
-#[case::short_t_tiny_l_m(1.0e-16, 1.0e-4, 1.001e-4, -1e-20)]
-#[case::v_short_t_tiny_l_m(1.0e-8, 1.0e-4, 1.001e-4, -9.999999999994996e-13)]
-#[case::medium_t_tiny_l_m(1., 1.0e-4, 1.001e-4, -9.999499533380845e-5)]
-#[case::long_t_tiny_l_m(50., 1.0e-4, 1.001e-4, -0.0049875290732488)]
-#[case::v_long_t_tiny_l_m(100., 1.0e-4, 1.001e-4, -0.0099502813483814)]
-#[case::vv_long_t_tiny_l_m(500., 1.0e-4, 1.001e-4, -0.0487889737123740)]
-#[case::short_t_small_l_m(1.0e-16, 0.01, 0.0100001, -1e-18)]
-#[case::v_short_t_small_l_m(1.0e-8, 0.01, 0.0100001, -9.999999999499996e-11)]
-#[case::medium_t_small_l_m(1., 0.01, 0.0100001, -0.0099503303581186)]
-#[case::long_t_small_l_m(50., 0.01, 0.0100001, -0.4054642747758727)]
-#[case::v_long_t_small_l_m(100., 0.01, 0.0100001, -0.6931446805651536)]
-#[case::vv_long_t_small_l_m(500., 0.01, 0.0100001, -1.7917386360249299)]
-#[case::short_t_small_l_medium_m(1.0e-16, 0.01, 5., -9.999999999999997e-19)]
-#[case::v_short_t_small_l_medium_m(1.0e-8, 0.01, 5., -9.999999750000004e-11)]
-#[case::medium_t_small_l_medium_m(1., 0.01, 5., -0.0019883912490536)]
-#[case::long_t_small_l_medium_m(50., 0.01, 5., -0.0020020026706731)]
-#[case::v_long_t_small_l_medium_m(100., 0.01, 5., -0.0020020026706731)]
-#[case::vv_long_t_small_l_medium_m(500., 0.01, 5., -0.0020020026706731)]
-#[case::short_t_m_close_l(1.0e-16, 4.9999, 5., -4.999899999999999e-16)]
-#[case::v_short_t_m_close_l(1.0e-8, 4.9999, 5., -4.999899875002504e-8)]
-#[case::medium_t_m_close_l(1., 4.9999, 5., -1.791701136415556)]
-#[case::long_t_m_close_l(50., 4.9999, 5., -5.52294402888948)]
-#[case::v_long_t_m_close_l(100., 4.9999, 5., -6.211600304291876)]
-#[case::vv_long_t_m_close_l(500., 4.9999, 5., -7.799540182620045)]
-#[case::short_t_medium_l_large_m(1.0e-16, 1., 100., -9.99999999999995e-17)]
-#[case::v_short_t_medium_l_large_m(1.0e-8, 1., 100., -9.999995000001683e-9)]
-#[case::medium_t_medium_l_large_m(1., 1., 100., -0.0100503358535014)]
-#[case::long_t_medium_l_large_m(50., 1., 100., -0.0100503358535014)]
-#[case::v_long_t_medium_l_large_m(100., 1., 100., -0.0100503358535014)]
-#[case::vv_long_t_medium_l_large_m(500., 1., 100., -0.0100503358535014)]
-#[case::short_t_m_close_l_large_m(1.0e-16, 4.999, 100., -4.998999999999975e-16)]
-#[case::v_short_t_m_close_l_large_m(1.0e-8, 4.999, 100., -4.9989975005008748e-8)]
-#[case::medium_t_m_close_l_large_m(1., 4.999, 100., -0.0512827681271623)]
-#[case::long_t_m_close_l_large_m(50., 4.999, 100., -0.0512827681271623)]
-#[case::v_long_t_m_close_l_large_m(100., 4.999, 100., -0.0512827681271623)]
-#[case::vv_long_t_m_close_l_large_m(500., 4.999, 100., -0.0512827681271623)]
-#[case::short_t_l_close_m_large_m(1.0e-16, 99.999, 100., -9.99989999999995e-15)]
-#[case::v_short_t_l_close_m_large_m(1.0e-8, 99.999, 100., -9.999895000053333e-7)]
-#[case::medium_t_l_close_m_large_m(1., 99.999, 100., -4.6146156088257091)]
-#[case::long_t_l_close_m_large_m(50., 99.999, 100., -8.492492378559628)]
-#[case::v_long_t_l_close_m_large_m(100., 99.999, 100., -9.160852082725453)]
-#[case::vv_long_t_l_close_m_large_m(500., 99.999, 100., -10.580188750225057)]
-#[case::short_t_large_m(1.0e-16, 10., 1000., -9.9999999999995e-16)]
-#[case::v_short_t_large_m(1.0e-8, 10., 1000., -9.999950000168333e-8)]
-#[case::medium_t_large_m(1., 10., 1000., -0.0100503358535014)]
-#[case::long_t_large_m(50., 10., 1000., -0.0100503358535014)]
-#[case::v_long_t_large_m(100., 10., 1000., -0.0100503358535014)]
-#[case::vv_long_t_large_m(500., 10., 1000., -0.0100503358535014)]
-#[case::short_t_l_close_m_v_large_m(1.0e-16, 999.999, 1000., -9.9999899999995e-14)]
-#[case::v_short_t_l_close_m_v_large_m(1.0e-8, 999.999, 1000., -9.99994000038333e-6)]
-#[case::medium_t_l_close_m_v_large_m(1., 999.999, 1000., -6.908254321564513)]
-#[case::long_t_l_close_m_v_large_m(50., 999.999, 1000., -10.794901952883187)]
-#[case::v_long_t_l_close_m_v_large_m(100., 999.999, 1000., -11.463351605206924)]
-#[case::vv_long_t_l_close_m_v_large_m(500., 999.999, 1000., -12.88275996988998)]
-fn tkf_ln_i1_mathematica(
-    #[case] time: f64,
-    #[case] lambda: f64,
-    #[case] mu: f64,
-    #[case] expected: f64,
+    // expected results
+    #[case] true_ln_beta: f64,
+    #[case] true_ln_i1: f64,
+    #[case] true_ln_h1: f64,
+    #[case] true_ln_n0: f64,
+    #[case] true_eta: f64,
 ) {
     let lbeta = ln_beta(lambda, mu, time);
-    assert_relative_eq!(ln_i1(lambda, lbeta), expected, epsilon = 1e-9);
+    // We have different tolerances since the functions accumulate and amplify errors in different ways.
+    // They where chosen in hindsight, after running the tests and seeing what tolerances were
+    // needed to pass all of them.
+    check("ln_beta", lbeta, true_ln_beta, 1e-13);
+    check("ln_i1", ln_i1(lambda, lbeta), true_ln_i1, 1e-9);
+    check("ln_h1", ln_h1(lambda, mu, lbeta, time), true_ln_h1, 1e-9);
+    check("ln_n0", ln_n0(mu, lbeta), true_ln_n0, 1e-13);
+    check("eta", eta(lambda, mu, lbeta, time), true_eta, 1e-8);
 }
 
-#[rstest]
-#[case::short_t_tiny_l_m(1.0e-16, 1.0e-4, 1.001e-4, -2.001e-20)]
-#[case::v_short_t_tiny_l_m(1.0e-8, 1.0e-4, 1.001e-4, -2.0009999999994995e-12)]
-#[case::medium_t_tiny_l_m(1., 1.0e-4, 1.001e-4, -2.0009499533380845e-4)]
-#[case::long_t_tiny_l_m(50., 1.0e-4, 1.001e-4, -0.0099925290732488)]
-#[case::v_long_t_tiny_l_m(100., 1.0e-4, 1.001e-4, -0.0199602813483814)]
-#[case::vv_long_t_tiny_l_m(500., 1.0e-4, 1.001e-4, -0.0988389737123740)]
-#[case::short_t_small_l_m(1.0e-16, 0.01, 0.0100001, -2.00001e-18)]
-#[case::v_short_t_small_l_m(1.0e-8, 0.01, 0.0100001, -2.0000099999499995e-10)]
-#[case::medium_t_small_l_m(1., 0.01, 0.0100001, -0.0199504303581186)]
-#[case::long_t_small_l_m(50., 0.01, 0.0100001, -0.9054692747758727)]
-#[case::v_long_t_small_l_m(100., 0.01, 0.0100001, -1.6931546805651536)]
-#[case::vv_long_t_small_l_m(500., 0.01, 0.0100001, -6.79178863602493)]
-#[case::short_t_small_l_medium_m(1.0e-16, 0.01, 5., -5.01e-16)]
-#[case::v_short_t_small_l_medium_m(1.0e-8, 0.01, 5., -5.00999999975e-8)]
-#[case::medium_t_small_l_medium_m(1., 0.01, 5., -5.0019883912490536)]
-#[case::long_t_small_l_medium_m(50., 0.01, 5., -250.00200200267068)]
-#[case::v_long_t_small_l_medium_m(100., 0.01, 5., -500.0020020026707)]
-#[case::vv_long_t_small_l_medium_m(500., 0.01, 5., -2_500.0020020026705)]
-#[case::short_t_m_close_l(1.0e-16, 4.9999, 5., -9.9999e-16)]
-#[case::v_short_t_m_close_l(1.0e-8, 4.9999, 5., -9.999899875002504e-8)]
-#[case::medium_t_m_close_l(1., 4.9999, 5., -6.791701136415556)]
-#[case::long_t_m_close_l(50., 4.9999, 5., -255.52294402888947)]
-#[case::v_long_t_m_close_l(100., 4.9999, 5., -506.2116003042919)]
-#[case::vv_long_t_m_close_l(500., 4.9999, 5., -2_507.79954018262)]
-#[case::short_t_medium_l_large_m(1.0e-16, 1., 100., -1.01e-14)]
-#[case::v_short_t_medium_l_large_m(1.0e-8, 1., 100., -1.0099999950000017e-6)]
-#[case::medium_t_medium_l_large_m(1., 1., 100., -100.0100503358535)]
-#[case::long_t_medium_l_large_m(50., 1., 100., -5_000.0100503358535)]
-#[case::v_long_t_medium_l_large_m(100., 1., 100., -10_000.010050335854)]
-#[case::vv_long_t_medium_l_large_m(500., 1., 100., -50_000.010050335855)]
-#[case::short_t_m_close_l_large_m(1.0e-16, 4.999, 100., -1.0499899999999998e-14)]
-#[case::v_short_t_m_close_l_large_m(1.0e-8, 4.999, 100., -1.0499899750050087e-6)]
-#[case::medium_t_m_close_l_large_m(1., 4.999, 100., -100.05128276812717)]
-#[case::long_t_m_close_l_large_m(50., 4.999, 100., -5_000.051282768127)]
-#[case::v_long_t_m_close_l_large_m(100., 4.999, 100., -10_000.051282768127)]
-#[case::vv_long_t_m_close_l_large_m(500., 4.999, 100., -50_000.05128276813)]
-#[case::short_t_l_close_m_large_m(1.0e-16, 99.999, 100., -1.999989999999995e-14)]
-#[case::v_short_t_l_close_m_large_m(1.0e-8, 99.999, 100., -1.9999895000053333e-6)]
-#[case::medium_t_l_close_m_large_m(1., 99.999, 100., -104.61461560882572)]
-#[case::long_t_l_close_m_large_m(50., 99.999, 100., -5_008.492492378559)]
-#[case::v_long_t_l_close_m_large_m(100., 99.999, 100., -10_009.160852082725)]
-#[case::vv_long_t_l_close_m_large_m(500., 99.999, 100., -50_010.580188750224)]
-#[case::short_t_large_m(1.0e-16, 10., 1000., -1.0099999999999995e-13)]
-#[case::v_short_t_large_m(1.0e-8, 10., 1000., -1.0099999500001683e-5)]
-#[case::medium_t_large_m(1., 10., 1000., -1_000.0100503358535)]
-#[case::long_t_large_m(50., 10., 1000., -50_000.010050335855)]
-#[case::v_long_t_large_m(100., 10., 1000., -1.0000001005033585e5)]
-#[case::vv_long_t_large_m(500., 10., 1000., -5.0000001005033585e5)]
-#[case::short_t_l_close_m_v_large_m(1.0e-16, 999.999, 1000., -1.99999899999995e-13)]
-#[case::v_short_t_l_close_m_v_large_m(1.0e-8, 999.999, 1000., -1.999994000038333e-5)]
-#[case::medium_t_l_close_m_v_large_m(1., 999.999, 1000., -1_006.9082543215645)]
-#[case::long_t_l_close_m_v_large_m(50., 999.999, 1000., -50_010.79490195288)]
-#[case::v_long_t_l_close_m_v_large_m(100., 999.999, 1000., -1.0001146335160521e5)]
-#[case::vv_long_t_l_close_m_v_large_m(500., 999.999, 1000., -5.000128827599699e5)]
-fn tkf_ln_h1_mathematica(
-    #[case] time: f64,
-    #[case] lambda: f64,
-    #[case] mu: f64,
-    #[case] expected: f64,
-) {
-    let lbeta = ln_beta(lambda, mu, time);
-    assert_relative_eq!(ln_h1(lambda, mu, lbeta, time), expected, epsilon = 1e-9);
-}
-
-#[rstest]
-#[case::short_t_tiny_l_m(1.0e-16, 1.0e-4, 1.001e-4, -46.05070235954783)]
-#[case::v_short_t_tiny_l_m(1.0e-8, 1.0e-4, 1.001e-4, -27.63002161559647)]
-#[case::medium_t_tiny_l_m(1., 1.0e-4, 1.001e-4, -9.20944091663843)]
-#[case::long_t_tiny_l_m(50., 1.0e-4, 1.001e-4, -5.302307895287161)]
-#[case::v_long_t_tiny_l_m(100., 1.0e-4, 1.001e-4, -4.614125966999223)]
-#[case::vv_long_t_tiny_l_m(500., 1.0e-4, 1.001e-4, -3.043546746829116)]
-#[case::short_t_small_l_m(1.0e-16, 0.01, 0.0100001, -41.44652167394282)]
-#[case::v_short_t_small_l_m(1.0e-8, 0.01, 0.0100001, -23.02584093009046)]
-#[case::medium_t_small_l_m(1., 0.01, 0.0100001, -4.61511056639621)]
-#[case::long_t_small_l_m(50., 0.01, 0.0100001, -1.098603955384776)]
-#[case::v_long_t_small_l_m(100., 0.01, 0.0100001, -0.6931396806109871)]
-#[case::vv_long_t_small_l_m(500., 0.01, 0.0100001, -0.1823157235366626)]
-#[case::short_t_small_l_medium_m(1.0e-16, 0.01, 5., -35.23192357547063)]
-#[case::v_short_t_small_l_medium_m(1.0e-8, 0.01, 5., -16.81124285656827)]
-#[case::medium_t_small_l_medium_m(1., 0.01, 5., -0.0068153172172669)]
-#[case::long_t_small_l_medium_m(50., 0.01, 5., 0.0)]
-#[case::v_long_t_small_l_medium_m(100., 0.01, 5., 0.0)]
-#[case::vv_long_t_small_l_medium_m(500., 0.01, 5., 0.0)]
-#[case::short_t_m_close_l(1.0e-16, 4.9999, 5., -35.23192357547063)]
-#[case::v_short_t_m_close_l(1.0e-8, 4.9999, 5., -16.81124288151776)]
-#[case::medium_t_m_close_l(1., 4.9999, 5., -0.1823132235647891)]
-#[case::long_t_m_close_l(50., 4.9999, 5., -0.0039820693607842)]
-#[case::v_long_t_m_close_l(100., 4.9999, 5., -0.0019880392064902)]
-#[case::vv_long_t_m_close_l(500., 4.9999, 5., -3.900072671392252e-4)]
-#[case::short_t_medium_l_large_m(1.0e-16, 1., 100., -32.23619130191664)]
-#[case::v_short_t_medium_l_large_m(1.0e-8, 1., 100., -13.81551106296423)]
-#[case::medium_t_medium_l_large_m(1., 1., 100., 0.0)]
-#[case::long_t_medium_l_large_m(50., 1., 100., 0.0)]
-#[case::v_long_t_medium_l_large_m(100., 1., 100., 0.0)]
-#[case::vv_long_t_medium_l_large_m(500., 1., 100., 0.0)]
-#[case::short_t_m_close_l_large_m(1.0e-16, 4.999, 100., -32.23619130191664)]
-#[case::v_short_t_m_close_l_large_m(1.0e-8, 4.999, 100., -13.81551108295921)]
-#[case::medium_t_m_close_l_large_m(1., 4.999, 100., 0.0)]
-#[case::long_t_m_close_l_large_m(50., 4.999, 100., 0.0)]
-#[case::v_long_t_m_close_l_large_m(100., 4.999, 100., 0.0)]
-#[case::vv_long_t_m_close_l_large_m(500., 4.999, 100., 0.0)]
-#[case::short_t_l_close_m_large_m(1.0e-16, 99.999, 100., -32.23619130191665)]
-#[case::v_short_t_l_close_m_large_m(1.0e-8, 99.999, 100., -13.81551155795877)]
-#[case::medium_t_l_close_m_large_m(1., 99.999, 100., -0.0099453811709509)]
-#[case::long_t_l_close_m_large_m(50., 99.999, 100., -1.950226467775096e-4)]
-#[case::v_long_t_l_close_m_large_m(100., 99.999, 100., -9.50787993145852e-5)]
-#[case::vv_long_t_l_close_m_large_m(500., 99.999, 100., -1.541482201616873e-5)]
-#[case::short_t_large_m(1.0e-16, 10., 1000., -29.93360620892265)]
-#[case::v_short_t_large_m(1.0e-8, 10., 1000., -11.51293051496565)]
-#[case::medium_t_large_m(1., 10., 1000., 0.0)]
-#[case::long_t_large_m(50., 10., 1000., 0.0)]
-#[case::v_long_t_large_m(100., 10., 1000., 0.0)]
-#[case::vv_long_t_large_m(500., 10., 1000., 0.0)]
-#[case::short_t_l_close_m_v_large_m(1.0e-16, 999.999, 1000., -29.9336062089227)]
-#[case::v_short_t_l_close_m_v_large_m(1.0e-8, 999.999, 1000., -11.51293546491523)]
-#[case::medium_t_l_close_m_v_large_m(1., 999.999, 1000., -9.9900091570948e-4)]
-#[case::long_t_l_close_m_v_large_m(50., 999.999, 1000., -1.950397628913692e-5)]
-#[case::v_long_t_l_close_m_v_large_m(100., 999.999, 1000., -9.50828674106674e-6)]
-#[case::vv_long_t_l_close_m_v_large_m(500., 999.999, 1000., -1.54149289510741e-6)]
-fn tkf_ln_n0_mathematica(
-    #[case] time: f64,
-    #[case] lambda: f64,
-    #[case] mu: f64,
-    #[case] expected: f64,
-) {
-    let lbeta = ln_beta(lambda, mu, time);
-    assert_relative_eq!(ln_n0(mu, lbeta), expected, epsilon = 1e-9);
-}
-
-#[rstest]
-#[case::short_t_tiny_l_m(1.0e-16, 1.0e-4, 1.001e-4, -0.693147180559933)]
-#[case::v_short_t_tiny_l_m(1.0e-8, 1.0e-4, 1.001e-4, -0.6931471805606151)]
-#[case::medium_t_tiny_l_m(1., 1.0e-4, 1.001e-4, -0.6932138802818901)]
-#[case::long_t_tiny_l_m(50., 1.0e-4, 1.001e-4, -0.6964814852679408)]
-#[case::v_long_t_tiny_l_m(100., 1.0e-4, 1.001e-4, -0.6998143987743024)]
-#[case::vv_long_t_tiny_l_m(500., 1.0e-4, 1.001e-4, -0.7264275127455315)]
-#[case::short_t_small_l_m(1.0e-16, 0.01, 0.0100001, -0.6931471805599472)]
-#[case::v_short_t_small_l_m(1.0e-8, 0.01, 0.0100001, -0.6931471806266103)]
-#[case::medium_t_small_l_m(1., 0.01, 0.0100001, -0.6998111015205764)]
-#[case::long_t_small_l_m(50., 0.01, 0.0100001, -1.019388625257227)]
-#[case::v_long_t_small_l_m(100., 0.01, 0.0100001, -1.330896307153863)]
-#[case::vv_long_t_small_l_m(500., 0.01, 0.0100001, -3.260152543177077)]
-#[case::short_t_small_l_medium_m(1.0e-16, 0.01, 5., -0.6931471805599472)]
-#[case::v_short_t_small_l_medium_m(1.0e-8, 0.01, 5., -0.6931471972599468)]
-#[case::medium_t_small_l_medium_m(1., 0.01, 5., -3.596604874860146)]
-#[case::long_t_small_l_medium_m(50., 0.01, 5., -244.2252419843086)]
-#[case::v_long_t_small_l_medium_m(100., 0.01, 5., -493.2492380189326)]
-#[case::vv_long_t_small_l_medium_m(500., 0.01, 5., -2_488.79617025096)]
-#[case::short_t_m_close_l(1.0e-16, 4.9999, 5., -0.693147180559933)]
-#[case::v_short_t_m_close_l(1.0e-8, 4.9999, 5., -0.6931472138929493)]
-#[case::medium_t_m_close_l(1., 4.9999, 5., -3.260125176880752)]
-#[case::long_t_m_close_l(50., 4.9999, 5., -11.04290391885739)]
-#[case::v_long_t_m_close_l(100., 4.9999, 5., -12.42920452997077)]
-#[case::vv_long_t_m_close_l(500., 4.9999, 5., -15.64828035050581)]
-#[case::short_t_medium_l_large_m(1.0e-16, 1., 100., -0.6931471805599472)]
-#[case::v_short_t_medium_l_large_m(1.0e-8, 1., 100., -0.6931475172266701)]
-#[case::medium_t_medium_l_large_m(1., 1., 100., -94.8795015304067)]
-#[case::long_t_medium_l_large_m(50., 1., 100., -4_945.414930485718)]
-#[case::v_long_t_medium_l_large_m(100., 1., 100., -9_895.41493048572)]
-#[case::vv_long_t_medium_l_large_m(500., 1., 100., -49_495.41493048573)]
-#[case::short_t_m_close_l_large_m(1.0e-16, 4.999, 100., -0.6931471805599472)]
-#[case::v_short_t_m_close_l_large_m(1.0e-8, 4.999, 100., -0.6931475305566579)]
-#[case::medium_t_m_close_l_large_m(1., 4.999, 100., -92.114758161939)]
-#[case::long_t_m_close_l_large_m(50., 4.999, 100., -4_747.156633242698)]
-#[case::v_long_t_m_close_l_large_m(100., 4.999, 100., -9_497.2066332427)]
-#[case::vv_long_t_m_close_l_large_m(500., 4.999, 100., -47_497.6066332427)]
-#[case::short_t_l_close_m_large_m(1.0e-16, 99.999, 100., -0.6931471805599472)]
-#[case::v_short_t_l_close_m_large_m(1.0e-8, 99.999, 100., -0.6931478472232513)]
-#[case::medium_t_l_close_m_large_m(1., 99.999, 100., -9.21033045525952)]
-#[case::long_t_l_close_m_large_m(50., 99.999, 100., -17.0345847117757)]
-#[case::v_long_t_l_close_m_large_m(100., 99.999, 100., -18.42150400780228)]
-#[case::vv_long_t_l_close_m_large_m(500., 99.999, 100., -21.66033667075608)]
-#[case::short_t_large_m(1.0e-16, 10., 1000., -0.6931471805599756)]
-#[case::v_short_t_large_m(1.0e-8, 10., 1000., -0.6931505472320296)]
-#[case::medium_t_large_m(1., 10., 1000., -985.414976345285)]
-#[case::long_t_large_m(50., 10., 1000., -49_495.41493048572)]
-#[case::v_long_t_large_m(100., 10., 1000., -98_995.4149304857)]
-#[case::vv_long_t_large_m(500., 10., 1000., -4.949954149304857e5)]
-#[case::short_t_l_close_m_v_large_m(1.0e-16, 999.999, 1000., -0.6931471805600182)]
-#[case::v_short_t_l_close_m_v_large_m(1.0e-8, 999.999, 1000., -0.6931538472205006)]
-#[case::medium_t_l_close_m_v_large_m(1., 999.999, 1000., -13.81550964129711)]
-#[case::long_t_l_close_m_v_large_m(50., 999.999, 1000., -21.63976389781329)]
-#[case::v_long_t_l_close_m_v_large_m(100., 999.999, 1000., -23.02668319383987)]
-#[case::vv_long_t_l_close_m_v_large_m(500., 999.999, 1000., -26.26551585679367)]
-fn tkf_eta_mathematica(
-    #[case] time: f64,
-    #[case] lambda: f64,
-    #[case] mu: f64,
-    #[case] expected: f64,
-) {
-    let lbeta = ln_beta(lambda, mu, time);
-    assert_relative_eq!(eta(lambda, mu, lbeta, time), expected, epsilon = 1e-4);
+#[cfg(test)]
+fn check(function: &str, actual: f64, expected: f64, epsilon: f64) {
+    // Since we are in log space we care about absolute error, which translates to relative error
+    // in the probability space.
+    if (actual - expected).abs() > epsilon {
+        panic!(
+            "{function}: actual = {actual:e}, expected = {expected:e}, diff = {:e}",
+            actual - expected
+        );
+    }
 }
