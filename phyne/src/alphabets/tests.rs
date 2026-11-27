@@ -1,7 +1,8 @@
 use rstest::*;
 
 use crate::alphabets::{
-    Alphabet, ParsimonySet, AMB_AMINOACIDS, AMB_NUCLEOTIDES, AMINOACIDS, NUCLEOTIDES, POSSIBLE_GAPS,
+    Alphabet, ParsimonySet, AMB_AMINOACIDS, AMB_CHAR, AMB_NUCLEOTIDES, AMINOACIDS, NUCLEOTIDES,
+    POSSIBLE_GAPS,
 };
 use crate::record_wo_desc as record;
 
@@ -207,6 +208,23 @@ fn dna_parsimony_sets_from_slice_all() {
     assert_eq!(set_slice_x, set_x);
     assert_eq!(set_all, set_x);
     assert_eq!(set_n, set_x);
+}
+
+#[rstest]
+#[case(NUCLEOTIDES, AMB_NUCLEOTIDES)]
+#[case(AMINOACIDS, AMB_AMINOACIDS)]
+fn parsimony_sets_from_slice_repeated(#[case] chars: &[u8], #[case] ambig_chars: &[u8]) {
+    let dna = Alphabet::dna();
+    let all_chars = chars
+        .iter()
+        .chain(ambig_chars.iter())
+        .cloned()
+        .collect::<Vec<u8>>();
+
+    let set_all_repeated = &dna.parsimony_set_from_slice(&all_chars);
+    let set_x = dna.parsimony_set(&AMB_CHAR);
+
+    assert_eq!(set_all_repeated, set_x);
 }
 
 #[test]
