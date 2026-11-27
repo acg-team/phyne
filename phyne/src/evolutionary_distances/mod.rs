@@ -1,3 +1,17 @@
+//! Defines the evolutionary-distance trait and implementations for raw
+//! Levenshtein distance and model-corrected DNA or protein distances.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use phyne::evolutionary_distances::{EvolutionaryDistance, Levenshtein};
+//! use phyne::record;
+//!
+//! let a = record!("a", None, b"AGT");
+//! let b = record!("b", None, b"ACTT");
+//! assert_eq!(Levenshtein.dist(&a, &b), 2.0);
+//! ```
+
 use bio::{alignment::distance::levenshtein, io::fasta::Record};
 use nalgebra::max;
 
