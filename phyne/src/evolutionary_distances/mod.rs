@@ -237,13 +237,18 @@ mod tests {
     }
 
     #[test]
-    fn levenshtein_protein_corrected_corners() {
+    fn levenshtein_protein_corrected_same() {
         let prot_corr = LevenshteinProteinCorrected {};
 
         let s1 = record!("s1", b"PPPPPPPP");
         let s2 = record!("s2", b"PPPPPPPP");
         assert_relative_eq!(prot_corr.dist(&s1, &s2), 0.0);
         assert_relative_eq!(prot_corr.dist(&s1, &s1), 0.0);
+    }
+
+    #[test]
+    fn levenshtein_protein_corrected_max_distance() {
+        let prot_corr = LevenshteinProteinCorrected {};
 
         let max_proportion = 19.0 / 20.0;
         let max_distance =
