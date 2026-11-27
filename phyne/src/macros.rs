@@ -134,10 +134,17 @@ macro_rules! frequencies {
 #[macro_export]
 #[doc(hidden)] // Hide from public documentation
 macro_rules! site {
-    ($s:expr, $f:expr) => {{
-        use $crate::alphabets::ParsimonySet;
+    ($a:expr, $s:expr, $f:expr) => {{
+        use $crate::alphabets::Alphabet;
         use $crate::parsimony::ParsimonySite;
-        ParsimonySite::new(ParsimonySet::from_slice($s), $f)
+        ParsimonySite::new($a.parsimony_set_from_slice($s), $f)
+    }};
+    ($s:expr, $f:expr) => {{
+        use $crate::parsimony::ParsimonySite;
+        ParsimonySite::new(
+            $crate::alphabets::Alphabet::dna().parsimony_set_from_slice($s),
+            $f,
+        )
     }};
 }
 
@@ -384,6 +391,23 @@ mod tests {
         // Just test that it compiles and creates a site
         // We can't easily test the internal state since fields are private
         let _ = site;
+    }
+
+    #[test]
+    fn test_site_macro_with_alphabet() {
+        // Test that the macro compiles and creates sites correctly
+        let dna_n = site!(Alphabet::dna(), b"N", SiteFlag::NoGap);
+        let dna_x = site!(Alphabet::dna(), b"X", SiteFlag::NoGap);
+        let protein_n = site!(Alphabet::protein(), b"N", SiteFlag::NoGap);
+        let protein_x = site!(Alphabet::protein(), b"X", SiteFlag::NoGap);
+
+        // Test that sites are not equal (they have different alphabets)
+        assert_ne!(dna_n, protein_n);
+        assert_ne!(dna_x, protein_n);
+        assert_ne!(dna_x, protein_x);
+
+        // Test that sites with the same alphabet and content are equal
+        assert_eq!(dna_n, dna_x);
     }
 
     // Test macros work in different contexts

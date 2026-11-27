@@ -1,3 +1,22 @@
+//! Module for handling biological sequence alphabets in phylogenetic analyses.
+//!
+//! Contains definitions for a generic alphabet, as well as specific alphabets for DNA
+//! and protein sequences. The specific alphabets include cached conditional probabilities and
+//! parsimony sets to speed up likelihood and parsimony score calculations.
+//!
+//! The DNA and protein alphabets can be accessed as static instances using `Alphabet::dna()`
+//! and `Alphabet::protein()`.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use phyne::alphabets::Alphabet;
+//!
+//! let dna = Alphabet::dna();
+//! assert_eq!(dna.name(), "DNA");
+//! assert!(dna.is_word(b"aCgT"));
+//! ```
+
 use std::fmt::Display;
 
 use hashbrown::HashSet;
@@ -7,27 +26,59 @@ use nalgebra::DVector;
 use crate::evolutionary_models::FreqVector;
 use crate::frequencies;
 
+#[doc(hidden)]
 pub mod parsimony_set;
+#[doc(inline)]
 pub use parsimony_set::*;
 
-type ConditionalProbs = DVector<f64>;
+/// Type alias for conditional probability vectors.
+/// E.g. for the DNA alphabet, the R character (a purine) would have a conditional probability vector of
+/// `[0.0, 0.0, 1.0, 1.0]`, indicating the probabilities for each nucleotide (T, C, A, G) respectively.
+pub type ConditionalProbs = DVector<f64>;
 
+/// All single-letter symbols for valid non-ambiguous amino acids used in the alphabet.
 pub static AMINOACIDS: &[u8] = b"ARNDCQEGHILKMFPSTWYV";
+
+/// All single-letter symbols for ambiguous amino acids used in the alphabet.
 pub static AMB_AMINOACIDS: &[u8] = b"BJZX";
-pub static NUCLEOTIDES: &[u8] = b"TCAG"; // This is legacy sorting, i.e., conforming with tools like RaXML and PhyML
+
+/// All single-letter symbols for valid non-ambiguous nucleotides used in the alphabet.
+/// This is legacy sorting, i.e., conforming with tools like RaXML and PhyML, and is used also to maintain the order
+/// of rows/columns in substitution matrices.
+pub static NUCLEOTIDES: &[u8] = b"TCAG";
+
+/// All single-letter symbols for ambiguous nucleotides used in the alphabet.
 pub static AMB_NUCLEOTIDES: &[u8] = b"RYSWKMBDHVNZX";
+
+/// The character representing an ambiguous symbol in both the amino acid and nucleotide alphabets.
 pub static AMB_CHAR: u8 = b'X';
+
+/// The character representing a gap in an [`MSA`](`crate::alignment::MSA`) or [`MASA`](`crate::alignment::MASA`).
 pub static GAP: u8 = b'-';
+
+/// All possible characters that could represent a gap in an MSA, included for compatibility with other tools.
 pub static POSSIBLE_GAPS: &[u8] = b"_*-";
 
+/// Represents a biological sequence alphabet, including valid symbols, ambiguous symbols, and
+/// precomputed data for efficient sequence analysis (conditional probabilities and parsimony set
+/// definitions for each valid symbol).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Alphabet {
+    /// Human-readable name of the alphabet.
     name: &'static str,
+    /// Unambiguous symbols in the alphabet in the same order as used in substitution matrices (e.g. for DNA, the order
+    /// is [`TCAG`](`NUCLEOTIDES`), and the rate of change from A to C will be stored in the instantaneous rate matrix
+    /// at `Q[2][1]`).
     symbols: &'static [u8],
+    /// Symbols that represent more than one unambiguous symbol.
     ambiguous: &'static [u8],
+    /// Mapping from ASCII character codes to symbol indices for efficient lookups.
     index: &'static [usize; 255],
+    /// Symbols accepted by the alphabet, including ambiguous symbols and gaps.
     valid_symbols: &'static HashSet<u8>,
+    /// Conditional probability vectors indexed by character code.
     conditional_probs: &'static [FreqVector],
+    /// Parsimony sets indexed by character code.
     parsimony_sets: &'static [ParsimonySet],
 }
 
@@ -68,21 +119,49 @@ impl Display for Alphabet {
 }
 
 impl Alphabet {
-    /// Returns the DNA alphabet as a static reference.
+    /// Returns the name of the alphabet.
+    ///
+    /// # Example:
+    /// ```
+    /// use phyne::alphabets::Alphabet;
+    /// assert_eq!(Alphabet::dna().name(), "DNA");
+    /// assert_eq!(Alphabet::protein().name(), "protein");
+    /// ```
+    pub fn name(&self) -> &str {
+        self.name
+    }
+
+    /// Returns the DNA alphabet as a static reference (`&'static Alphabet`)
+    ///
+    /// # Example:
+    /// ```
+    /// use phyne::alphabets::Alphabet;
+    /// let alphabet = Alphabet::dna();
+    /// assert_eq!(alphabet.len(), 4);
+    /// assert_eq!(alphabet.name(), "DNA");
+    /// ```
     pub fn dna() -> &'static Self {
         &DNA_ALPHABET
     }
 
-    /// Returns the protein alphabet as a static reference.
+    /// Returns the protein alphabet as a static reference (`&'static Alphabet`).
+    ///
+    /// # Example:
+    /// ```
+    /// use phyne::alphabets::Alphabet;
+    /// let alphabet = Alphabet::protein();
+    /// assert_eq!(alphabet.len(), 20);
+    /// assert_eq!(alphabet.name(), "protein");
+    /// ```
     pub fn protein() -> &'static Self {
         &PROTEIN_ALPHABET
     }
 
     /// Checks if a word is valid in this alphabet, case-insensitive.
     ///
-    /// Example:
+    /// # Example:
     /// ```
-    /// # use phyne::alphabets::Alphabet;
+    /// use phyne::alphabets::Alphabet;
     /// assert!(Alphabet::dna().is_word(b"ACGT"));
     /// assert!(Alphabet::dna().is_word(b"aCgTx"));
     /// assert!(Alphabet::protein().is_word(b"ACGTFTH"));
@@ -96,9 +175,9 @@ impl Alphabet {
 
     /// Returns the valid and unambiguous symbols of the alphabet.
     ///
-    /// Example:
+    /// # Example:
     /// ```
-    /// # use phyne::alphabets::Alphabet;
+    /// use phyne::alphabets::Alphabet;
     /// assert_eq!(Alphabet::dna().symbols(), b"TCAG");
     /// assert_eq!(Alphabet::protein().symbols(), b"ARNDCQEGHILKMFPSTWYV");
     /// ```
@@ -108,9 +187,9 @@ impl Alphabet {
 
     /// Returns the ambiguous symbols of the alphabet.
     ///
-    /// Example:
+    /// # Example:
     /// ```
-    /// # use phyne::alphabets::Alphabet;
+    /// use phyne::alphabets::Alphabet;
     /// assert_eq!(Alphabet::dna().ambiguous(), b"RYSWKMBDHVNZX");
     /// assert_eq!(Alphabet::protein().ambiguous(), b"BJZX");
     /// ```
@@ -120,9 +199,9 @@ impl Alphabet {
 
     /// Returns the number of symbols in the alphabet, not including ambiguous characters or gaps.
     ///
-    /// Example:
+    /// # Example:
     /// ```
-    /// # use phyne::alphabets::Alphabet;
+    /// use phyne::alphabets::Alphabet;
     /// assert_eq!(Alphabet::dna().len(), 4);
     /// assert_eq!(Alphabet::protein().len(), 20);
     /// ```
@@ -135,9 +214,9 @@ impl Alphabet {
     /// The index maps ASCII character codes to their respective indices in the alphabet, case-insensitive.
     /// Used to maintain consistent ordering in frequency vectors and substitution matrices.
     ///
-    /// Example:
+    /// # Example:
     /// ```
-    /// # use phyne::alphabets::Alphabet;
+    /// use phyne::alphabets::Alphabet;
     /// assert_eq!(Alphabet::dna().index(&b'T'), 0);
     /// assert_eq!(Alphabet::dna().index(&b'c'), 1);
     /// assert_eq!(Alphabet::dna().index(&b'A'), 2);
@@ -152,14 +231,13 @@ impl Alphabet {
     /// Returns the conditional probability vector for a given character in the alphabet.
     /// The vector represents the conditional probabilities of observing each symbol in the alphabet given the specified character.
     ///
-    /// Example:
+    /// # Example:
     /// ```
-    /// # use phyne::alphabets::Alphabet;
-    /// # use nalgebra::dvector;
+    /// use phyne::alphabets::{Alphabet, ConditionalProbs};
     /// let t_probs = Alphabet::dna().char_encoding(b'T');
-    /// assert_eq!(t_probs, &dvector![1.0, 0.0, 0.0, 0.0]);
+    /// assert_eq!(t_probs, &ConditionalProbs::from_vec(vec![1.0, 0.0, 0.0, 0.0]));
     /// let amb_probs = Alphabet::dna().char_encoding(b'X');
-    /// assert_eq!(amb_probs, &dvector![1.0, 1.0, 1.0, 1.0]);
+    /// assert_eq!(amb_probs, &ConditionalProbs::from_vec(vec![1.0, 1.0, 1.0, 1.0]));
     /// ```
     pub fn char_encoding(&self, char: u8) -> &ConditionalProbs {
         &self.conditional_probs[char.to_ascii_uppercase() as usize]
@@ -167,12 +245,11 @@ impl Alphabet {
 
     /// Returns the conditional probability vector for the gap character in the alphabet, encoded as missing data.
     ///
-    /// Example:
+    /// # Example:
     /// ```
-    /// # use phyne::alphabets::Alphabet;
-    /// # use nalgebra::dvector;
+    /// # use phyne::alphabets::{Alphabet, ConditionalProbs};
     /// let gap_probs = Alphabet::dna().missing_char_encoding();
-    /// assert_eq!(gap_probs, &dvector![1.0, 1.0, 1.0, 1.0]);
+    /// assert_eq!(gap_probs, &ConditionalProbs::from_vec(vec![1.0, 1.0, 1.0, 1.0]));
     /// let amb_probs = Alphabet::dna().char_encoding(b'X');
     /// assert_eq!(gap_probs, amb_probs);
     /// ```
@@ -184,10 +261,9 @@ impl Alphabet {
     /// The parsimony set represents the set of unambiguous symbols that the character can represent.
     /// For example, in the DNA alphabet, the character 'R' represents the set {'A', 'G'}.
     ///
-    /// Example:
+    /// # Example:
     /// ```
-    /// # use phyne::alphabets::Alphabet;
-    /// # use phyne::alphabets::ParsimonySet;
+    /// use phyne::alphabets::{Alphabet, ParsimonySet};
     /// let r_set = Alphabet::dna().parsimony_set(&b'R');
     /// assert_eq!(format!("{r_set}"), "[AG]");
     /// let z_set = Alphabet::protein().parsimony_set(&b'Z');
@@ -199,19 +275,37 @@ impl Alphabet {
 
     /// Returns the parsimony set representing a gap character in the alphabet.
     ///
-    /// Example:
+    /// # Example:
     /// ```
-    /// # use phyne::alphabets::Alphabet;
-    /// # use phyne::alphabets::ParsimonySet;
+    /// use phyne::alphabets::{Alphabet, ParsimonySet};
     /// let gap_set = Alphabet::dna().gap_set();
     /// assert_eq!(format!("{gap_set}"), "[-]");
     /// ```
     pub fn gap_set(&self) -> &ParsimonySet {
         &GAP_SET
     }
+
+    /// Returns the parsimony set representing the characters in the given slice within the respective alphabet.
+    ///
+    /// # Example:
+    /// ```
+    /// use phyne::alphabets::{Alphabet, ParsimonySet};
+    /// let set_all = Alphabet::dna().parsimony_set_from_slice(b"CGAT");
+    /// let set_amb = Alphabet::dna().parsimony_set_from_slice(b"X");
+    /// assert_eq!(set_all, set_amb);
+    /// let set_incomplete = Alphabet::dna().parsimony_set_from_slice(b"CG");
+    /// assert_ne!(set_all, set_incomplete);
+    /// ```
+    pub fn parsimony_set_from_slice(&self, slice: &[u8]) -> ParsimonySet {
+        slice
+            .iter()
+            .map(|&c| self.parsimony_set(&c))
+            .fold(ParsimonySet::empty(), |acc, x| &acc | x)
+    }
 }
 
 lazy_static! {
+    /// Static standard DNA alphabet definition
     pub static ref DNA_ALPHABET: Alphabet = Alphabet {
         name: "DNA",
         symbols: NUCLEOTIDES,
@@ -221,16 +315,10 @@ lazy_static! {
         conditional_probs: &NUCL_COND_PROBS,
         parsimony_sets: &NUCL_PARSIMONY_SETS,
     };
-    pub static ref PROTEIN_ALPHABET: Alphabet = Alphabet {
-        name: "protein",
-        symbols: AMINOACIDS,
-        ambiguous: AMB_AMINOACIDS,
-        index: &AMINOACID_INDEX,
-        valid_symbols: &VALID_AMINOACIDS,
-        conditional_probs: &AA_COND_PROBS,
-        parsimony_sets: &AA_PARSIMONY_SETS,
-    };
-    pub static ref NUCLEOTIDE_INDEX: [usize; 255] = {
+
+    /// Static nucleotide index mapping for quick lookup, mapping each nucleotide character to its
+    /// index in the DNA alphabet.
+    pub(crate) static ref NUCLEOTIDE_INDEX: [usize; 255] = {
         let mut index = [0; 255];
         for (i, char) in NUCLEOTIDES.iter().enumerate() {
             index[*char as usize] = i;
@@ -239,14 +327,19 @@ lazy_static! {
         index[GAP as usize] = 4;
         index
     };
-    pub static ref VALID_NUCLEOTIDES: HashSet<u8> = {
+
+    /// Static set of valid nucleotide characters, including ambiguous nucleotides and the gap character.
+    pub(crate) static ref VALID_NUCLEOTIDES: HashSet<u8> = {
         NUCLEOTIDES
             .iter()
             .chain(AMB_NUCLEOTIDES.iter().chain([GAP].iter()))
             .cloned()
             .collect()
     };
-    pub static ref NUCL_COND_PROBS: Vec<FreqVector> = {
+
+    /// Static conditional probability vectors for each nucleotide character, used in e.g. Felsenstein's
+    /// pruning algorithm.
+    pub(crate) static ref NUCL_COND_PROBS: Vec<FreqVector> = {
         let mut map = vec![frequencies!(&[0.0; 4]); 255];
         for (i, elem) in map.iter_mut().enumerate() {
             let char = i as u8;
@@ -254,7 +347,9 @@ lazy_static! {
         }
         map
     };
-    pub static ref NUCL_PARSIMONY_SETS: Vec<ParsimonySet> = {
+
+    /// Static parsimony sets for each nucleotide character, used in parsimony-based phylogenetic inference.
+    pub(crate) static ref NUCL_PARSIMONY_SETS: Vec<ParsimonySet> = {
         let mut map: Vec<ParsimonySet> = vec![ParsimonySet::empty(); 255];
         for (i, elem) in map.iter_mut().enumerate() {
             let char = i as u8;
@@ -262,23 +357,12 @@ lazy_static! {
         }
         map
     };
-    pub static ref GAP_SET: ParsimonySet = ParsimonySet::from_slice(&[GAP]);
+
+    /// Static parsimony set for the gap character for e.g. Dollo parsimony.
+    pub(crate) static ref GAP_SET: ParsimonySet = ParsimonySet::gap();
 }
 
-#[cfg(test)]
-lazy_static! {
-    pub static ref EMPTY_SYMBOLS: HashSet<u8> = HashSet::new();
-    pub static ref UNKNOWN_ALPHABET: Alphabet = Alphabet {
-        name: "unknown",
-        symbols: &[],
-        ambiguous: &[],
-        index: &[0; 255],
-        valid_symbols: &EMPTY_SYMBOLS,
-        conditional_probs: &[],
-        parsimony_sets: &[]
-    };
-}
-
+/// Function used to precompute static conditional probability vectors for each nucleotide character.
 fn nucl_cond_probs(char: u8) -> FreqVector {
     let char = char.to_ascii_uppercase();
     match char {
@@ -300,6 +384,7 @@ fn nucl_cond_probs(char: u8) -> FreqVector {
     }
 }
 
+/// Function used to precompute static parsimony sets for each nucleotide character.
 fn nucl_parsimony_set(char: &u8) -> ParsimonySet {
     let char = char.to_ascii_uppercase();
     if NUCLEOTIDES.contains(&char) {
@@ -322,7 +407,20 @@ fn nucl_parsimony_set(char: &u8) -> ParsimonySet {
 }
 
 lazy_static! {
-    pub static ref AMINOACID_INDEX: [usize; 255] = {
+    /// Static standard protein alphabet definition
+    pub static ref PROTEIN_ALPHABET: Alphabet = Alphabet {
+        name: "protein",
+        symbols: AMINOACIDS,
+        ambiguous: AMB_AMINOACIDS,
+        index: &AMINOACID_INDEX,
+        valid_symbols: &VALID_AMINOACIDS,
+        conditional_probs: &AA_COND_PROBS,
+        parsimony_sets: &AA_PARSIMONY_SETS,
+    };
+
+    /// Static amino acid index mapping for quick lookup, mapping each character to its
+    /// index in the protein alphabet.
+    pub(crate) static ref AMINOACID_INDEX: [usize; 255] = {
         let mut index = [0; 255];
         for (i, &char) in AMINOACIDS.iter().enumerate() {
             index[char as usize] = i;
@@ -331,14 +429,19 @@ lazy_static! {
         index[GAP as usize] = 20;
         index
     };
-    pub static ref VALID_AMINOACIDS: HashSet<u8> = {
+
+    /// Static set of valid amino acid characters, including ambiguous amino acids and the gap character.
+    pub(crate) static ref VALID_AMINOACIDS: HashSet<u8> = {
         AMINOACIDS
             .iter()
             .chain(AMB_AMINOACIDS.iter().chain([GAP].iter()))
             .cloned()
             .collect()
     };
-    pub static ref AA_COND_PROBS: Vec<FreqVector> = {
+
+    /// Static conditional probability vectors for each amino acid character, used in e.g. Felsenstein's
+    /// pruning algorithm.
+    pub(crate) static ref AA_COND_PROBS: Vec<FreqVector> = {
         let mut map: Vec<FreqVector> = vec![frequencies!(&[0.0; 20]); 255];
         for (i, elem) in map.iter_mut().enumerate() {
             let char = i as u8;
@@ -346,7 +449,9 @@ lazy_static! {
         }
         map
     };
-    pub static ref AA_PARSIMONY_SETS: Vec<ParsimonySet> = {
+
+    /// Static parsimony sets for each amino acid character, used in parsimony-based phylogenetic inference.
+    pub(crate) static ref AA_PARSIMONY_SETS: Vec<ParsimonySet> = {
         let mut map: Vec<ParsimonySet> = vec![ParsimonySet::empty(); 255];
         for (i, elem) in map.iter_mut().enumerate() {
             let char = i as u8;
@@ -356,6 +461,7 @@ lazy_static! {
     };
 }
 
+/// Function used to precompute static conditional probability vectors for each amino acid character.
 fn aa_cond_probs(char: u8) -> FreqVector {
     let char = char.to_ascii_uppercase();
     let index = &AMINOACID_INDEX;
@@ -389,6 +495,7 @@ fn aa_cond_probs(char: u8) -> FreqVector {
     }
 }
 
+/// Function used to precompute static parsimony sets for each amino acid character.
 fn aa_parsimony_set(char: &u8) -> ParsimonySet {
     let char = char.to_ascii_uppercase();
     if AMINOACIDS.contains(&char) {
@@ -401,6 +508,24 @@ fn aa_parsimony_set(char: &u8) -> ParsimonySet {
         b'J' => ParsimonySet::from_slice(b"IL"),
         _ => ParsimonySet::from_slice(AMINOACIDS),
     }
+}
+
+#[cfg(test)]
+lazy_static! {
+    /// Static empty set of symbols, used for the unknown alphabet.
+    static ref EMPTY_SYMBOLS: HashSet<u8> = HashSet::new();
+
+    /// Static definition of an unknown alphabet, can be used as a fallback when the alphabet of a
+    /// sequence is not known (currently only used for testing).
+    pub static ref UNKNOWN_ALPHABET: Alphabet = Alphabet {
+        name: "unknown",
+        symbols: &[],
+        ambiguous: &[],
+        index: &[0; 255],
+        valid_symbols: &EMPTY_SYMBOLS,
+        conditional_probs: &[],
+        parsimony_sets: &[]
+    };
 }
 
 #[cfg(test)]

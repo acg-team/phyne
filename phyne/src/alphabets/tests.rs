@@ -1,19 +1,26 @@
 use rstest::*;
 
 use crate::alphabets::{
-    Alphabet, ParsimonySet, AMB_AMINOACIDS, AMB_NUCLEOTIDES, AMINOACIDS, NUCLEOTIDES, POSSIBLE_GAPS,
+    Alphabet, ParsimonySet, AMB_AMINOACIDS, AMB_CHAR, AMB_NUCLEOTIDES, AMINOACIDS, NUCLEOTIDES,
+    POSSIBLE_GAPS,
 };
 use crate::record_wo_desc as record;
 
 #[test]
+fn alphabet_name() {
+    assert_eq!(Alphabet::dna().name(), "DNA");
+    assert_eq!(Alphabet::protein().name(), "protein");
+}
+
+#[test]
 fn parsimony_set_iters() {
-    let set = ParsimonySet::from_slice(b"ACGT");
+    let set = Alphabet::dna().parsimony_set_from_slice(b"ACGT");
     let from_iter = set.iter().cloned().collect::<Vec<u8>>();
     assert_eq!(from_iter.len(), 4);
     let from_into_iter = set.into_iter().collect::<Vec<u8>>();
     assert_eq!(from_into_iter.len(), 4);
 
-    let set = Alphabet::dna().parsimony_set(&b'X').clone();
+    let set = Alphabet::dna().parsimony_set(&AMB_CHAR).clone();
     let from_iter = set.iter().cloned().collect::<Vec<u8>>();
     assert_eq!(from_iter.len(), 4);
     let from_into_iter = set.into_iter().collect::<Vec<u8>>();
@@ -62,17 +69,17 @@ fn protein_sets() {
 #[test]
 fn dna_characters() {
     let dna = Alphabet::dna();
-    assert_eq!(dna.parsimony_set(&b'N'), dna.parsimony_set(&b'X'));
+    assert_eq!(dna.parsimony_set(&b'N'), dna.parsimony_set(&AMB_CHAR));
     assert_eq!(
         &(dna.parsimony_set(&b'A') | dna.parsimony_set(&b'C'))
             | &(dna.parsimony_set(&b'G') | dna.parsimony_set(&b'T')),
-        *dna.parsimony_set(&b'X')
+        *dna.parsimony_set(&AMB_CHAR)
     );
     assert_eq!(dna.parsimony_set(&b'-'), &ParsimonySet::gap());
     assert!(dna
         .parsimony_set(&b'-')
-        .is_disjoint(dna.parsimony_set(&b'X')));
-    assert!((dna.parsimony_set(&b'-') & dna.parsimony_set(&b'X')).is_empty());
+        .is_disjoint(dna.parsimony_set(&AMB_CHAR)));
+    assert!((dna.parsimony_set(&b'-') & dna.parsimony_set(&AMB_CHAR)).is_empty());
     assert_eq!(dna.parsimony_set(&b'E'), dna.parsimony_set(&b'E'));
     assert_eq!(dna.parsimony_set(&b'T'), dna.parsimony_set(&b'T'));
     assert!((dna.parsimony_set(&b'V') & dna.parsimony_set(&b'T')).is_empty());
@@ -93,12 +100,12 @@ fn dna_characters() {
 #[test]
 fn protein_characters() {
     let prot = Alphabet::protein();
-    assert_eq!(prot.parsimony_set(&b'X'), prot.parsimony_set(&b'O'));
+    assert_eq!(prot.parsimony_set(&AMB_CHAR), prot.parsimony_set(&b'O'));
     assert_eq!(prot.parsimony_set(&b'-'), &ParsimonySet::gap());
     assert!(prot
         .parsimony_set(&b'-')
-        .is_disjoint(prot.parsimony_set(&b'X')));
-    assert!((prot.parsimony_set(&b'-') & prot.parsimony_set(&b'X')).is_empty());
+        .is_disjoint(prot.parsimony_set(&AMB_CHAR)));
+    assert!((prot.parsimony_set(&b'-') & prot.parsimony_set(&AMB_CHAR)).is_empty());
     assert_eq!(prot.parsimony_set(&b'E'), prot.parsimony_set(&b'E'));
     assert_eq!(prot.parsimony_set(&b'N'), prot.parsimony_set(&b'N'));
     assert_eq!(
@@ -122,14 +129,14 @@ fn protein_characters() {
 #[case(b"QIFGWMNKSEYTVCPRAHLD", "ACDEFGHIKLMNPQRSTVWY")]
 
 fn test_parsimony_set_printing(#[case] input: &[u8], #[case] output: &str) {
-    let set = ParsimonySet::from_slice(input);
+    let set = Alphabet::protein().parsimony_set_from_slice(input);
     assert_eq!(format!("{set}"), format!("[{}]", output));
 }
 
 #[test]
 fn ambiguous_sets() {
     let dna = Alphabet::dna();
-    let full_set = dna.parsimony_set(&b'X');
+    let full_set = dna.parsimony_set(&AMB_CHAR);
     assert_eq!(full_set, dna.parsimony_set(&b'N'));
     for char in NUCLEOTIDES.iter() {
         assert!(full_set.contains(char));
@@ -139,7 +146,7 @@ fn ambiguous_sets() {
     }
 
     let prot = Alphabet::protein();
-    let full_set = prot.parsimony_set(&b'X');
+    let full_set = prot.parsimony_set(&AMB_CHAR);
     for char in AMINOACIDS.iter() {
         assert!(full_set.contains(char));
     }
@@ -187,5 +194,94 @@ fn protein_alphabet_display() {
     let other_symbol_display = lines.collect::<String>();
     for char in AMB_AMINOACIDS.iter().chain(POSSIBLE_GAPS.iter()) {
         assert!(other_symbol_display.contains(&(*char as char).to_string()));
+    }
+}
+
+#[test]
+fn dna_parsimony_sets_from_slice_all() {
+    let dna = Alphabet::dna();
+    let set_all = &dna.parsimony_set_from_slice(NUCLEOTIDES);
+    let set_slice_x = &dna.parsimony_set_from_slice(&[AMB_CHAR]);
+    let set_n = dna.parsimony_set(&b'N');
+    let set_x = dna.parsimony_set(&AMB_CHAR);
+
+    assert_eq!(set_slice_x, set_x);
+    assert_eq!(set_all, set_x);
+    assert_eq!(set_n, set_x);
+}
+
+#[rstest]
+#[case(NUCLEOTIDES, AMB_NUCLEOTIDES)]
+#[case(AMINOACIDS, AMB_AMINOACIDS)]
+fn parsimony_sets_from_slice_repeated(#[case] chars: &[u8], #[case] ambig_chars: &[u8]) {
+    let dna = Alphabet::dna();
+    let all_chars = chars
+        .iter()
+        .chain(ambig_chars.iter())
+        .cloned()
+        .collect::<Vec<u8>>();
+
+    let set_all_repeated = &dna.parsimony_set_from_slice(&all_chars);
+    let set_x = dna.parsimony_set(&AMB_CHAR);
+
+    assert_eq!(set_all_repeated, set_x);
+}
+
+#[test]
+fn protein_parsimony_sets_from_slice_all() {
+    let prot = Alphabet::protein();
+    let set_all = &prot.parsimony_set_from_slice(AMINOACIDS);
+    let set_slice_x = &prot.parsimony_set_from_slice(&[AMB_CHAR]);
+    let set_x = prot.parsimony_set(&AMB_CHAR);
+
+    assert_eq!(set_slice_x, set_x);
+    assert_eq!(set_all, set_x);
+}
+
+#[rstest]
+#[case(b'R', b"AG")]
+#[case(b'Y', b"CT")]
+#[case(b'S', b"CG")]
+#[case(b'W', b"AT")]
+#[case(b'K', b"GT")]
+#[case(b'M', b"AC")]
+#[case(b'B', b"CGT")]
+#[case(b'D', b"AGT")]
+#[case(b'H', b"ACT")]
+#[case(b'V', b"ACG")]
+#[case(b'N', b"ACGT")]
+#[case(b'Z', b"ACGT")]
+#[case(AMB_CHAR, b"ACGT")]
+fn dna_parsimony_sets_from_slice_ambigs(#[case] char_code: u8, #[case] slice: &[u8]) {
+    let dna = Alphabet::dna();
+
+    let set_char = dna.parsimony_set(&char_code);
+    let set_slice = &dna.parsimony_set_from_slice(slice);
+
+    assert_eq!(set_char, set_slice);
+}
+
+#[rstest]
+#[case(b'B', b"DN")]
+#[case(b'Z', b"EQ")]
+#[case(b'J', b"IL")]
+#[case(AMB_CHAR, &AMINOACIDS)]
+fn protein_parsimony_sets_from_slice_ambigs(#[case] char_code: u8, #[case] slice: &[u8]) {
+    let prot = Alphabet::protein();
+
+    let set_char = prot.parsimony_set(&char_code);
+    let set_slice = &prot.parsimony_set_from_slice(slice);
+
+    assert_eq!(set_char, set_slice);
+}
+
+#[test]
+fn dna_vs_protein_parsimony_sets() {
+    // Characters that could represent both a nucleotide and an amino acid, but have different parsimony sets.
+    let diff_chars = b"RNDHKMSWYVBJZX";
+    for char_code in diff_chars {
+        let dna_set = Alphabet::dna().parsimony_set(char_code);
+        let prot_set = Alphabet::protein().parsimony_set(char_code);
+        assert_ne!(dna_set, prot_set);
     }
 }
