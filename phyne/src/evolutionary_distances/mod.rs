@@ -13,7 +13,6 @@
 //! ```
 
 use bio::{alignment::distance::levenshtein, io::fasta::Record};
-use nalgebra::max;
 
 /// A trait representing evolutionary distance measures between two biological sequences,
 /// e.g. DNA or protein sequences.
@@ -39,7 +38,7 @@ impl EvolutionaryDistance for LevenshteinDNACorrected {
         let seq_j = b.seq();
         let dist = levenshtein(seq_i, seq_j) as f64;
         let p = f64::min(
-            dist / (max(seq_i.len(), seq_j.len()) as f64),
+            dist / (seq_i.len().max(seq_j.len()) as f64),
             3.0 / 4.0 - f64::EPSILON,
         );
         -(3.0 / 4.0) * (1.0 - (4.0 / 3.0) * p).ln()
@@ -63,7 +62,7 @@ impl EvolutionaryDistance for LevenshteinProteinCorrected {
         let seq_j = b.seq();
         let dist = levenshtein(seq_i, seq_j) as f64;
         let p = f64::min(
-            dist / (max(seq_i.len(), seq_j.len()) as f64),
+            dist / (seq_i.len().max(seq_j.len()) as f64),
             19.0 / 20.0 - f64::EPSILON,
         );
         -(19.0 / 20.0) * (1.0 - (20.0 / 19.0) * p).ln()
