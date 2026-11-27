@@ -102,12 +102,26 @@ impl EvolutionaryDistance for LevenshteinProteinCorrected {
     }
 }
 
+/// Levenshtein distance measure for any sequences (raw edit metric)
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, PartialOrd, Ord)]
-/// Simple Levenshtein distance without any correction, meaningful for both DNA
-/// and protein sequences
 pub struct Levenshtein;
 
 impl EvolutionaryDistance for Levenshtein {
+    /// Calculate the evolutionary distance between two sequences using the raw Levenshtein distance.
+    ///
+    /// The Levenshtein distance is the minimum number of single-character edits (insertions, deletions, or
+    /// substitutions) required to transform one sequence into the other (e.g. the raw Levenshtein distance between
+    /// `ARNDCQ` and `RNPCG` is 3).
+    ///
+    /// # Example:
+    /// ```
+    /// use phyne::evolutionary_distances::{EvolutionaryDistance, Levenshtein};
+    /// use phyne::record;
+    ///
+    /// let a = record!("a", None, b"ARNDCQ");
+    /// let b = record!("b", None, b"RNPCG");
+    /// assert_eq!(Levenshtein.dist(&a, &b), 3.0);
+    /// ```
     fn dist(&self, a: &Record, b: &Record) -> f64 {
         let seq_i = a.seq();
         let seq_j = b.seq();
