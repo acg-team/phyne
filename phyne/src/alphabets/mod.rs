@@ -290,10 +290,11 @@ impl Alphabet {
     /// # Example:
     /// ```
     /// use phyne::alphabets::{Alphabet, ParsimonySet};
-    /// let set_all = Alphabet::dna().parsimony_set_from_slice(b"ACGT");
+    /// let set_all = Alphabet::dna().parsimony_set_from_slice(b"CGAT");
     /// let set_amb = Alphabet::dna().parsimony_set_from_slice(b"X");
-    /// assert_eq!(format!("{set_all}"), "[ACGT]");
-    /// assert_eq!(format!("{set_amb}"), "[ACGT]");
+    /// assert_eq!(set_all, set_amb);
+    /// let set_incomplete = Alphabet::dna().parsimony_set_from_slice(b"CG");
+    /// assert_ne!(set_all, set_incomplete);
     /// ```
     pub fn parsimony_set_from_slice(&self, slice: &[u8]) -> ParsimonySet {
         slice
