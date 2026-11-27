@@ -132,6 +132,8 @@ impl EvolutionaryDistance for Levenshtein {
 #[cfg(test)]
 #[cfg_attr(coverage, coverage(off))]
 mod tests {
+    use approx::assert_relative_eq;
+
     use super::*;
 
     use crate::record_wo_desc as record;
@@ -142,30 +144,30 @@ mod tests {
 
         let s1 = record!("s1", b"AAAAAAAA");
         let s2 = record!("s2", b"AAAAAAAA");
-        assert_eq!(dna_corr.dist(&s1, &s2), 0.0);
-        assert_eq!(dna_corr.dist(&s1, &s1), 0.0);
+        assert_relative_eq!(dna_corr.dist(&s1, &s2), 0.0);
+        assert_relative_eq!(dna_corr.dist(&s1, &s1), 0.0);
 
         let s1 = record!("s1", b"AAAAAAAA");
         let s2 = record!("s2", b"TTTTTTTT");
-        assert_eq!(dna_corr.dist(&s1, &s2), s1.seq().len() as f64);
+        assert_relative_eq!(dna_corr.dist(&s1, &s2), s1.seq().len() as f64);
 
         let s1 = record!("s1", b"AAAAAAAAAAAAAAAA");
         let s2 = record!("s2", b"AAAAA");
-        assert_eq!(
+        assert_relative_eq!(
             dna_corr.dist(&s1, &s2),
             (s1.seq().len() - s2.seq().len()) as f64
         );
 
         let s1 = record!("s1", b"AAAAATAACAAAGTAAA");
         let s2 = record!("s2", b"AAAAATCAGT");
-        assert_eq!(
+        assert_relative_eq!(
             dna_corr.dist(&s1, &s2),
             (s1.seq().len() - s2.seq().len()) as f64
         );
 
         let s1 = record!("s1", b"AAAAAAAAAAAAAAAA");
         let s2 = record!("s2", b"TTTTT");
-        assert_eq!(dna_corr.dist(&s1, &s2), s1.seq().len() as f64);
+        assert_relative_eq!(dna_corr.dist(&s1, &s2), s1.seq().len() as f64);
     }
 
     #[test]
@@ -174,22 +176,22 @@ mod tests {
 
         let s1 = record!("s1", b"AAAAAAAA");
         let s2 = record!("s2", b"AAAAAAAA");
-        assert_eq!(dna_corr.dist(&s1, &s2), 0.0);
-        assert_eq!(dna_corr.dist(&s1, &s1), 0.0);
+        assert_relative_eq!(dna_corr.dist(&s1, &s2), 0.0);
+        assert_relative_eq!(dna_corr.dist(&s1, &s1), 0.0);
 
         let max_proportion = 3.0 / 4.0;
         let max_distance =
             -max_proportion * (1.0 - 1.0 / max_proportion * (max_proportion - f64::EPSILON)).ln();
         // Max distance possible between sequences (all chars are different), computed with Python
-        assert_eq!(max_distance, 26.728641210756745);
+        assert_relative_eq!(max_distance, 26.728641210756745);
 
         let s1 = record!("s1", b"AAAAAAAA");
         let s2 = record!("s2", b"TTTTTTTT");
-        assert_eq!(dna_corr.dist(&s1, &s2), max_distance);
+        assert_relative_eq!(dna_corr.dist(&s1, &s2), max_distance);
 
         let s1 = record!("s1", b"AAAAAAAA");
         let s2 = record!("s2", b"");
-        assert_eq!(dna_corr.dist(&s1, &s2), max_distance);
+        assert_relative_eq!(dna_corr.dist(&s1, &s2), max_distance);
     }
 
     #[test]
@@ -199,12 +201,12 @@ mod tests {
         let s1 = record!("s1", b"AAAAAAAA");
         let s2 = record!("s2", b"AAAAAAAT");
         // Levenshtein distance is 1, proportion is 1/8=0.125, distance computed with Python
-        assert_eq!(dna_corr.dist(&s1, &s2), 0.13674116759546595);
+        assert_relative_eq!(dna_corr.dist(&s1, &s2), 0.13674116759546595);
 
         let s1 = record!("s1", b"AAAAATAACAAAGTAAA");
         let s2 = record!("s2", b"AAAAATCAGT");
         // Levenshtein distance is 7, proportion is 7/17=0.4117647058823529, distance computed with Python
-        assert_eq!(dna_corr.dist(&s1, &s2), 0.5972485625963819);
+        assert_relative_eq!(dna_corr.dist(&s1, &s2), 0.5972485625963819);
     }
 
     #[test]
@@ -220,13 +222,13 @@ mod tests {
         assert!(dna_corr.dist(&s1, &s2) < dna_corr.dist(&s1, &s4));
         assert!(dna_corr.dist(&s1, &s3) < dna_corr.dist(&s1, &s4));
         assert!(dna_corr.dist(&s2, &s3) < dna_corr.dist(&s2, &s4));
-        assert_eq!(dna_corr.dist(&s1, &s4), dna_corr.dist(&s2, &s4));
+        assert_relative_eq!(dna_corr.dist(&s1, &s4), dna_corr.dist(&s2, &s4));
         assert!(dna_corr.dist(&s3, &s4) < dna_corr.dist(&s2, &s4));
 
         let s5 = record!("seq5", b"GGGGGGGGGGGGGG");
-        assert_eq!(dna_corr.dist(&s1, &s5), dna_corr.dist(&s2, &s5));
-        assert_eq!(dna_corr.dist(&s1, &s5), dna_corr.dist(&s3, &s5));
-        assert_eq!(dna_corr.dist(&s1, &s5), dna_corr.dist(&s4, &s5));
+        assert_relative_eq!(dna_corr.dist(&s1, &s5), dna_corr.dist(&s2, &s5));
+        assert_relative_eq!(dna_corr.dist(&s1, &s5), dna_corr.dist(&s3, &s5));
+        assert_relative_eq!(dna_corr.dist(&s1, &s5), dna_corr.dist(&s4, &s5));
     }
 
     #[test]
@@ -235,22 +237,22 @@ mod tests {
 
         let s1 = record!("s1", b"PPPPPPPP");
         let s2 = record!("s2", b"PPPPPPPP");
-        assert_eq!(prot_corr.dist(&s1, &s2), 0.0);
-        assert_eq!(prot_corr.dist(&s1, &s1), 0.0);
+        assert_relative_eq!(prot_corr.dist(&s1, &s2), 0.0);
+        assert_relative_eq!(prot_corr.dist(&s1, &s1), 0.0);
 
         let max_proportion = 19.0 / 20.0;
         let max_distance =
             -max_proportion * (1.0 - 1.0 / max_proportion * (max_proportion - f64::EPSILON)).ln();
         // Max distance possible between sequences (all chars are different), computed with Python
-        assert_eq!(max_distance, 33.85627886695854);
+        assert_relative_eq!(max_distance, 33.85627886695854);
 
         let s1 = record!("s1", b"PPPPPPPP");
         let s2 = record!("s2", b"NNNNNNNN");
-        assert_eq!(prot_corr.dist(&s1, &s2), max_distance);
+        assert_relative_eq!(prot_corr.dist(&s1, &s2), max_distance);
 
         let s1 = record!("s1", b"PPPPPPPP");
         let s2 = record!("s2", b"");
-        assert_eq!(prot_corr.dist(&s1, &s2), max_distance);
+        assert_relative_eq!(prot_corr.dist(&s1, &s2), max_distance);
     }
 
     #[test]
@@ -260,12 +262,12 @@ mod tests {
         let s1 = record!("s1", b"AAAAAAAA");
         let s2 = record!("s2", b"AAAAAAAT");
         // Levenshtein distance is 1, proportion is 1/8=0.125, distance computed with Python
-        assert_eq!(prot_corr.dist(&s1, &s2), 0.1340246683469102);
+        assert_relative_eq!(prot_corr.dist(&s1, &s2), 0.1340246683469102);
 
         let s1 = record!("s1", b"AAAAATAACAAAGTAAA");
         let s2 = record!("s2", b"AAAAATCAGT");
         // Levenshtein distance is 7, proportion is 7/17=0.4117647058823529, distance computed with Python
-        assert_eq!(prot_corr.dist(&s1, &s2), 0.5397578618621736);
+        assert_relative_eq!(prot_corr.dist(&s1, &s2), 0.5397578618621736);
     }
 
     #[test]
@@ -282,7 +284,7 @@ mod tests {
         assert!(prot_corr.dist(&s1, &s3) < prot_corr.dist(&s1, &s4));
         assert!(prot_corr.dist(&s2, &s3) < prot_corr.dist(&s2, &s4));
         assert!(prot_corr.dist(&s3, &s4) < prot_corr.dist(&s2, &s4));
-        assert_eq!(prot_corr.dist(&s1, &s4), prot_corr.dist(&s2, &s4));
+        assert_relative_eq!(prot_corr.dist(&s1, &s4), prot_corr.dist(&s2, &s4));
         assert!(prot_corr.dist(&s1, &s4) > prot_corr.dist(&s3, &s4));
     }
 }
