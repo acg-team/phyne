@@ -171,13 +171,18 @@ mod tests {
     }
 
     #[test]
-    fn levenshtein_dna_corrected_corners() {
+    fn levenshtein_dna_corrected_same() {
         let dna_corr = LevenshteinDNACorrected {};
 
         let s1 = record!("s1", b"AAAAAAAA");
         let s2 = record!("s2", b"AAAAAAAA");
         assert_relative_eq!(dna_corr.dist(&s1, &s2), 0.0);
         assert_relative_eq!(dna_corr.dist(&s1, &s1), 0.0);
+    }
+
+    #[test]
+    fn levenshtein_dna_corrected_max_distance() {
+        let dna_corr = LevenshteinDNACorrected {};
 
         let max_proportion = 3.0 / 4.0;
         let max_distance =
