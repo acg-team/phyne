@@ -15,7 +15,11 @@
 use bio::{alignment::distance::levenshtein, io::fasta::Record};
 use nalgebra::max;
 
+/// A trait representing evolutionary distance measures between two biological sequences,
+/// e.g. DNA or protein sequences.
 pub trait EvolutionaryDistance {
+    /// Calculate the evolutionary distance between two FASTA sequences as defined by the distance measure that
+    /// implements this trait.
     fn dist(&self, a: &Record, b: &Record) -> f64;
 }
 
