@@ -208,8 +208,8 @@ pub trait AncestralAlignment: Alignment {
     /// Returns the [`Mapping`] of the ancestral sequence corresponding to the given internal node index.
     fn ancestral_map(&self, node_idx: &NodeIdx) -> &Mapping;
 
-    /// Returns the [`Mapping`]s of all leaves in the alignment as a [`SeqMaps`] (`HashMap` of node indices to
-    /// mappings).
+    /// Returns the [`Mapping`]s of all ancestral sequences in the alignment as a [`SeqMaps`] (`HashMap` of node
+    /// indices to mappings).
     fn ancestral_maps(&self) -> &SeqMaps;
 
     /// Updates the [`Mapping`] of the ancestral sequence associated with the given internal node by
