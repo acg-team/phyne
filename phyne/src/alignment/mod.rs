@@ -667,6 +667,10 @@ impl Alignment for MASA {
         &self.leaf_maps
     }
 
+    /// Returns a map of all the [`PairwiseAlignment`]s at the internal nodes.
+    ///
+    /// Currently returns an empty map because the internal alignments for `MASA` are not implemented (see issue #150
+    /// https://github.com/acg-team/phyne/issues/150).
     fn internal_alignments(&self) -> &InternalAlignments {
         &self.internal_alignments
     }
