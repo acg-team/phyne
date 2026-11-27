@@ -22,18 +22,35 @@ pub trait EvolutionaryDistance {
     fn dist(&self, a: &Record, b: &Record) -> f64;
 }
 
+/// Levenshtein distance measure for DNA sequences with Jukes-Cantor correction
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, PartialOrd, Ord)]
-/// Levenshtein distance with Jukes-Cantor correction, meaningful for DNA sequences
 pub struct LevenshteinDNACorrected;
 
 impl EvolutionaryDistance for LevenshteinDNACorrected {
+    /// Calculate the evolutionary distance between two DNA sequences using the Levenshtein distance
+    /// with Jukes-Cantor correction.
+    ///
+    /// The Levenshtein distance is the minimum number of single-character edits (insertions, deletions, or
+    /// substitutions) required to transform one sequence into the other (e.g. the raw Levenshtein distance between
+    /// `AGT` and `ACTT` is 2).
+    ///
+    /// This implementation applies a Jukes-Cantor model-based correction to the raw Levenshtein distance, based on
+    /// formula 1.6 from "Computational Molecular Evolution" by Ziheng Yang (2006):
+    ///     d̂ = -3/4 * ln(1 - (4/3) * p̂),
+    /// where p̂ is the observed proportion of differing sites (here, Levenshtein distance / max sequence length).
+    /// To avoid infinite distances when the sequences are unrelated (i.e., when p̂ approaches 3/4), the proportion
+    /// of differing sites is capped at p̂ <= 3/4 - ε.
+    ///
+    /// # Example:
+    /// ```
+    /// use phyne::evolutionary_distances::{EvolutionaryDistance, LevenshteinDNACorrected};
+    /// use phyne::record;
+    ///
+    /// let a = record!("a", None, b"AGT");
+    /// let b = record!("b", None, b"ACTT");
+    /// assert_eq!(LevenshteinDNACorrected.dist(&a, &b), 0.8239592165010822);
+    /// ```
     fn dist(&self, a: &Record, b: &Record) -> f64 {
-        // Distance formula corrected using the Jukes-Cantor model
-        // Formula 1.6 from "Computational Molecular Evolution" by Ziheng Yang (2006)
-        //     d = -3/4 * ln(1 - (4/3) * p)
-        // where p is the proportion of differing sites (here, Levenshtein distance / max length).
-        // To avoid infinite distance when all characters are different, the maximum
-        // proportion of different characters is capped to 3/4=0.75.
         let seq_i = a.seq();
         let seq_j = b.seq();
         let dist = levenshtein(seq_i, seq_j) as f64;
