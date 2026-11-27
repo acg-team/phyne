@@ -1,3 +1,38 @@
+//! Ancestral sequence reconstruction module.
+//!
+//! Provides the `AncestralSequenceReconstruction` trait for reconstructing ancestral sequences
+//! given a multiple sequence alignment and a phylogenetic tree.
+//! If the provided alignment already contains ancestral sequences, they will be ignored and reconstructed anew.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use phyne::alignment::{Alignment, AncestralAlignment, MASA};
+//! use phyne::asr::AncestralSequenceReconstruction;
+//! use phyne::parsimony_presence_absence::ParsimonyPresenceAbsence;
+//! use phyne::phylo_info::{PhyloInfo, PhyloInfoBuilder};
+//!
+//! # use phyne::Result;
+//! # fn main() -> Result<()> {
+//! let input = PhyloInfoBuilder::with_attrs(
+//!     "./examples/data/sequences_DNA_small.fasta",
+//!     "./examples/data/tree_with_ancestral_ids.newick",
+//! )
+//! .build()?;
+//!
+//! let result: PhyloInfo<MASA> = AncestralSequenceReconstruction::reconstruct_ancestral_seqs(
+//!     &ParsimonyPresenceAbsence {},
+//!     input.clone()
+//! )?;
+//!
+//! assert_eq!(result.msa.seq_count(), input.msa.seq_count());
+//! assert_eq!(
+//!     result.msa.seq_count() + result.msa.ancestral_seqs().len(),
+//!     input.tree.len()
+//! );
+//! assert_eq!(result.msa.len(), input.msa.len());
+//! # Ok(()) }
+//! ```
 use crate::alignment::{Alignment, AncestralAlignment};
 use crate::phylo_info::{set_missing_tree_node_ids, PhyloInfo};
 use crate::{bail, Result};
